@@ -1,0 +1,56 @@
+version: '3.7'
+
+services:
+  backend:
+    build: webapp
+    environment:
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - CELERY_BROKER_URL=${CELERY_REDIS_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_REDIS_URL}
+      - SOCKET_MESSAGE_QUEUE=${SOCKET_REDIS_URL}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+    volumes:
+      - backend-data:/tmp
+
+  celery:
+    build: workers
+    environment:
+      - KHEOPS_BASE_URL=${KHEOPS_BASE_URL}
+      - KHEOPS_TOKEN=${KHEOPS_TOKEN}
+      - CELERY_BROKER_URL=${CELERY_REDIS_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_REDIS_URL}
+      - SOCKET_MESSAGE_QUEUE=${SOCKET_REDIS_URL}
+    volumes:
+      - backend-data:/tmp
+
+  db:
+    image: mysql:5.6
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+
+  phpmyadmin:
+    image:                 phpmyadmin/phpmyadmin
+    environment:
+      PMA_ARBITRARY:       1
+      PMA_HOST:            db
+      PMA_PORT:            3306
+    volumes:
+      - /sessions
+    ports:
+      - 8888:80
+    depends_on:
+      - db
+
+  redis:
+    image: redis
+
+  redis-socket:
+    image: redis
+
+volumes:
+  backend-data:

@@ -1,0 +1,41 @@
+# Code formatter
+black
+
+# Eventlet
+eventlet
+
+# Debug
+pydevd-pycharm~=192.5728.105
+
+# Flask
+Flask
+Flask-SQLAlchemy
+Flask-CORS
+Flask-SocketIO
+
+# Celery
+Celery
+
+# Redis
+redis
+
+# HTTP requests handler
+requests
+
+# SQLAlchemy
+SQLAlchemy
+
+# MySQL
+mysqlclient
+
+# Hashing
+passlib
+
+# JSON
+simplejson
+
+# Serialization
+jsonpickle
+
+# Numpy
+numpy

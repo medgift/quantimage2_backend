@@ -1,0 +1,30 @@
+version: '3.7'
+
+services:
+  backend:
+    volumes:
+      - ./webapp:/usr/src/app
+      - ./shared/imaginebackend_common/:/usr/local/lib/python3.6/imaginebackend_common
+      - /data/imagine-data:/tmp
+    ports:
+      - 5000:5000
+    environment:
+      - DEBUGGER_IP=${DEBUGGER_IP}
+      - DEBUGGER_PORT=${DEBUGGER_PORT}
+      - GEVENT_SUPPORT=True
+    command:
+      ["python", "-u", "app.py"]
+
+  celery:
+    volumes:
+      - ./workers:/usr/src/app
+      - ./shared/imaginebackend_common/:/usr/local/lib/python3.6/imaginebackend_common
+      - /data/imagine-data:/tmp
+
+  redis:
+    ports:
+      - 6379:6379
+
+  redis-socket:
+    ports:
+      - 6380:6379

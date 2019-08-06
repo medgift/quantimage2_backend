@@ -1,0 +1,29 @@
+# Code formatter
+black
+
+# Debug
+pydevd-pycharm~=192.5728.105
+
+# HTTP requests handler
+requests
+
+# Multipart handler
+requests-toolbelt
+
+# Flask-SocketIO
+Flask-SocketIO
+
+# Celery
+Celery
+
+# Redis
+redis
+
+# JSON
+simplejson
+
+# Serialization
+jsonpickle
+
+# Computation modules (should disappear)
+pyradiomics
