@@ -90,6 +90,7 @@ def run_extraction(self, feature_id, study_uid, features_dir, features_path):
         },
     )
     return {
+        "feature_id": feature_id,
         "current": 3,
         "total": 3,
         "status": FeatureStatus.COMPLETE,
@@ -99,6 +100,7 @@ def run_extraction(self, feature_id, study_uid, features_dir, features_path):
 
 def update_progress(task, feature_id, current_step, steps, status_message):
     meta = {
+        "feature_id": feature_id,
         "current": current_step,
         "total": steps,
         "status": FeatureStatus.IN_PROGRESS,

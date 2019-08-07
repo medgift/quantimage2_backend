@@ -1,7 +1,9 @@
 import eventlet
-from celery import Celery
 
 eventlet.monkey_patch()
+
+from celery import Celery
+from celery.result import AsyncResult
 
 import celery
 
@@ -111,14 +113,6 @@ def create_app():
                 status_object = feature_status(feature.task_id).json
                 result = status_object["result"]
 
-                # Update the feature status in the DB if the celery task is COMPLETE
-                if (
-                    feature.status != FeatureStatus.COMPLETE
-                    and status_object["status"] == "SUCCESS"
-                ):
-                    feature.status = FeatureStatus.COMPLETE
-                    db.session.commit()
-
                 # Get the status message for the task
                 status_message = task_status_message(result)
 
@@ -173,17 +167,11 @@ def create_app():
         task = celery.send_task(
             "imaginetasks.extract",
             args=[feature.id, study_uid, features_dir, features_path],
+            countdown=5,
         )
 
-        # Send Socket.IO message (for testing)
-        socketio.emit(
-            "feature-status",
-            {
-                "feature_id": feature.id,
-                "status": FeatureStatus.IN_PROGRESS,
-                "status_message": "Starting...",
-            },
-        )
+        # Follow the progress on the server (in the background)
+        eventlet.spawn(follow_task_status, task)
 
         # Assign the task to the feature
         feature.task_id = task.id
@@ -198,6 +186,26 @@ def create_app():
         return response
 
     return app
+
+
+def follow_task_status(task):
+    result = task.get(on_message=task_status_update, propagate=False)
+    return result
+
+
+def task_status_update(body):
+
+    feature_id = body["result"]["feature_id"]
+    feature_status = body["status"]
+
+    app.app_context().push()
+
+    # When the process ends, set the feature status to complete
+    feature = Feature.find_by_id(feature_id)
+    feature.status = (FeatureStatus.IN_PROGRESS, FeatureStatus.COMPLETE)[
+        feature_status == "SUCCESS"
+    ]
+    db.session.commit()
 
 
 def sanitize_features_object(feature_object):
@@ -249,10 +257,6 @@ def setup_sockets(socketio):
     @socketio.on("disconnect")
     def disconnection():
         print("client " + request.sid + " disconnected!")
-
-
-def make_celery(app):
-    pass
 
 
 """ 
