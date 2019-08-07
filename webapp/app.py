@@ -1,4 +1,7 @@
 import eventlet
+from kombu import uuid
+
+from imaginebackend_common import utils
 
 eventlet.monkey_patch()
 
@@ -163,18 +166,24 @@ def create_app():
             feature = Feature(feature_name, features_path, user_id, study.id)
             feature.save_to_db()
 
-        # Start Celery task
+        # Generate UUID for the task
+        task_id = uuid()
+
+        # Result
+        result = AsyncResult(task_id)
+
+        # Spawn thread to follow the task's status
+        eventlet.spawn(follow_task, result)
+
+        # Start Celery
         task = celery.send_task(
             "imaginetasks.extract",
+            task_id=task_id,
             args=[feature.id, study_uid, features_dir, features_path],
-            countdown=5,
         )
 
-        # Follow the progress on the server (in the background)
-        eventlet.spawn(follow_task_status, task)
-
         # Assign the task to the feature
-        feature.task_id = task.id
+        feature.task_id = task_id
         db.session.commit()
 
         return jsonify(feature.to_dict())
@@ -188,24 +197,44 @@ def create_app():
     return app
 
 
-def follow_task_status(task):
-    result = task.get(on_message=task_status_update, propagate=False)
+def follow_task(result):
+    print("STARTING TO LISTEN FOR EVENTS!")
+    exc = result.get(on_message=task_status_update, propagate=False)
     return result
 
 
 def task_status_update(body):
 
     feature_id = body["result"]["feature_id"]
-    feature_status = body["status"]
+    feature_status = (FeatureStatus.IN_PROGRESS, FeatureStatus.COMPLETE)[
+        body["status"] == "SUCCESS"
+    ]
 
-    app.app_context().push()
+    socketio_body = {
+        "feature_id": feature_id,
+        "status": int(feature_status),
+        "status_message": utils.task_status_message(body["result"]),
+    }
 
     # When the process ends, set the feature status to complete
-    feature = Feature.find_by_id(feature_id)
-    feature.status = (FeatureStatus.IN_PROGRESS, FeatureStatus.COMPLETE)[
-        feature_status == "SUCCESS"
-    ]
-    db.session.commit()
+    if feature_status == FeatureStatus.COMPLETE:
+
+        with app.app_context():
+            feature = Feature.find_by_id(feature_id)
+            feature.status = feature_status
+            print("Committing feature with status " + str(feature.status) + " to DB")
+            db.session.commit()
+            print(
+                "DONE - Committing feature with status "
+                + str(feature.status)
+                + " to DB"
+            )
+
+        # Set the new updated date when complete
+        socketio_body["updated_at"] = feature.updated_at.isoformat() + "Z"
+
+    # Send Socket.IO message to clients
+    socketio.emit("feature-status", socketio_body)
 
 
 def sanitize_features_object(feature_object):
@@ -288,7 +317,7 @@ if __name__ == "__main__":
         async_mode="eventlet",
         logger=True,
         engineio_logger=True,
-        message_queue=os.environ["SOCKET_MESSAGE_QUEUE"],
+        # message_queue=os.environ["SOCKET_MESSAGE_QUEUE"],
     )
 
     # the app is passed to make_celery function, this function sets up celery in order to integrate with the flask application

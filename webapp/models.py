@@ -10,16 +10,16 @@ from imaginebackend_common.misc_enums import FeatureStatus
 
 def alchemyencoder(obj):
     if isinstance(obj, datetime.date):
-        return obj.isoformat()
+        return obj.isoformat() + "Z"
     elif isinstance(obj, decimal.Decimal):
         return float(obj)
 
 
 class BaseModel(object):
     id = db.Column(db.Integer, primary_key=True)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.now)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
-        db.DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
 
     @classmethod

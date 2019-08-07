@@ -9,8 +9,6 @@ import pathlib
 from celery import Celery
 from requests_toolbelt.multipart import decoder
 
-from flask_socketio import SocketIO
-
 from config_worker import dicomFields, endpoints, token
 
 from radiomics import featureextractor
@@ -24,10 +22,6 @@ celery = Celery(
     "tasks",
     backend=os.environ["CELERY_RESULT_BACKEND"],
     broker=os.environ["CELERY_BROKER_URL"],
-)
-
-socketio = SocketIO(
-    message_queue=os.environ["SOCKET_MESSAGE_QUEUE"], async_mode="threading"
 )
 
 
@@ -81,14 +75,6 @@ def run_extraction(self, feature_id, study_uid, features_dir, features_path):
     fh.close()
 
     status_message = "Extraction COMPLETE"
-    socketio.emit(
-        "feature-status",
-        {
-            "feature_id": feature_id,
-            "status": int(FeatureStatus.COMPLETE),
-            "status_message": status_message,
-        },
-    )
     return {
         "feature_id": feature_id,
         "current": 3,
@@ -108,14 +94,6 @@ def update_progress(task, feature_id, current_step, steps, status_message):
     }
 
     task.update_state(state="PROGRESS", meta=meta)
-    socketio.emit(
-        "feature-status",
-        {
-            "feature_id": feature_id,
-            "status": int(FeatureStatus.IN_PROGRESS),
-            "status_message": task_status_message(meta),
-        },
-    )
 
 
 def get_token_header():
