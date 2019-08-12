@@ -75,11 +75,22 @@ class Feature(BaseModel, db.Model):
         return feature
 
     @classmethod
+    def find_by_user(cls, user_id):
+        query_results = cls.query.join(Study).filter(cls.user_id == user_id).all()
+
+        return query_results
+
+    @classmethod
     def find_by_user_and_study_uid(cls, user_id, study_uid):
 
+        study = Study.find_by_uid(study_uid)
+
+        if study is None:
+            return None
+
         query_results = (
-            cls.query.join(Study, study_uid == Study.uid)
-            .filter(cls.user_id == user_id, Study.uid == study_uid)
+            cls.query.join(Study)
+            .filter(cls.user_id == user_id, Study.id == study.id)
             .all()
         )
 

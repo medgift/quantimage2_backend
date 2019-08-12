@@ -65,7 +65,7 @@ def create_app():
         + os.environ["MYSQL_DATABASE"]
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    # app.config["SQLALCHEMY_ECHO"] = True
+    app.config["SQLALCHEMY_ECHO"] = False
     app.config["SECRET-KEY"] = "cookies are delicious!"
 
     app.config["CELERY_BROKER_URL"] = os.environ["CELERY_BROKER_URL"]
@@ -83,7 +83,7 @@ def create_app():
     @app.route("/feature/<task_id>/status")
     def feature_status(task_id):
 
-        task = celery.AsyncResult(task_id)
+        task = fetch_task_result(task_id)
 
         if task.status == "PENDING":
             abort(404)
@@ -96,45 +96,28 @@ def create_app():
     def feature_types():
         return jsonify(FEATURE_TYPES)
 
+    @app.route("/features")
+    def features_by_user():
+        # Get user from headers (for now)
+        user_id = request.headers["X-User-ID"]
+
+        # Find all computed features for this user
+        features_of_user = Feature.find_by_user(user_id)
+
+        feature_list = format_features(features_of_user)
+
+        return jsonify(feature_list)
+
     @app.route("/features/<study_uid>")
-    def features(study_uid):
+    def features_by_study(study_uid):
 
         # Get user from headers (for now)
         user_id = request.headers["X-User-ID"]
 
         # Find all computed features for this study
-        features = Feature.find_by_user_and_study_uid(user_id, study_uid)
+        features_of_study = Feature.find_by_user_and_study_uid(user_id, study_uid)
 
-        # Gather the features
-        feature_list = []
-        for feature in features:
-
-            status_message = ""
-
-            # Get the feature status & update the status if necessary!
-            if feature.task_id:
-                status_object = feature_status(feature.task_id).json
-                result = status_object["result"]
-
-                # Get the status message for the task
-                status_message = task_status_message(result)
-
-            # Read the features file (if available)
-            sanitized_object = {}
-            if feature.path:
-                feature_object = jsonpickle.decode(open(feature.path).read())
-                sanitized_object = sanitize_features_object(feature_object)
-
-            feature_list.append(
-                {
-                    "id": feature.id,
-                    "name": feature.name,
-                    "updated_at": feature.updated_at.strftime(DATE_FORMAT),
-                    "status": feature.status,
-                    "status_message": status_message,
-                    "payload": sanitized_object,
-                }
-            )
+        feature_list = format_features(features_of_study)
 
         return jsonify(feature_list)
 
@@ -180,6 +163,7 @@ def create_app():
             "imaginetasks.extract",
             task_id=task_id,
             args=[feature.id, study_uid, features_dir, features_path],
+            countdown=1,
         )
 
         # Assign the task to the feature
@@ -197,6 +181,45 @@ def create_app():
     return app
 
 
+def fetch_task_result(task_id):
+    task = celery.AsyncResult(task_id)
+
+    return task
+
+
+def format_features(features):
+    # Gather the features
+    feature_list = []
+    for feature in features:
+
+        status_message = ""
+
+        # Get the feature status & update the status if necessary!
+        if feature.task_id:
+            status_object = fetch_task_result(feature.task_id)
+            result = status_object.result
+
+            # Get the status message for the task
+            status_message = task_status_message(result)
+
+        # Read the features file (if available)
+        sanitized_object = read_feature_file(feature.path)
+
+        feature_list.append(
+            {
+                "id": feature.id,
+                "name": feature.name,
+                "updated_at": feature.updated_at.strftime(DATE_FORMAT),
+                "status": feature.status,
+                "status_message": status_message,
+                "payload": sanitized_object,
+                "study_uid": feature.study.uid,
+            }
+        )
+
+    return feature_list
+
+
 def follow_task(result):
     print("STARTING TO LISTEN FOR EVENTS!")
     exc = result.get(on_message=task_status_update, propagate=False)
@@ -204,6 +227,14 @@ def follow_task(result):
 
 
 def task_status_update(body):
+
+    status = body["status"]
+
+    if status == "PENDING":
+        return
+
+    print("Got status update!")
+    print(f"Status: {body['status']}, Message: {body['result']['status_message']}")
 
     feature_id = body["result"]["feature_id"]
     feature_status = (FeatureStatus.IN_PROGRESS, FeatureStatus.COMPLETE)[
@@ -222,19 +253,26 @@ def task_status_update(body):
         with app.app_context():
             feature = Feature.find_by_id(feature_id)
             feature.status = feature_status
-            print("Committing feature with status " + str(feature.status) + " to DB")
             db.session.commit()
-            print(
-                "DONE - Committing feature with status "
-                + str(feature.status)
-                + " to DB"
-            )
 
-        # Set the new updated date when complete
-        socketio_body["updated_at"] = feature.updated_at.isoformat() + "Z"
+            # Set the new updated date when complete
+            socketio_body["updated_at"] = feature.updated_at.isoformat() + "Z"
+
+            # Set the new feature payload when complete
+            socketio_body["payload"] = read_feature_file(feature.path)
 
     # Send Socket.IO message to clients
     socketio.emit("feature-status", socketio_body)
+
+
+def read_feature_file(feature_path):
+
+    sanitized_object = {}
+    if feature_path:
+        feature_object = jsonpickle.decode(open(feature_path).read())
+        sanitized_object = sanitize_features_object(feature_object)
+
+    return sanitized_object
 
 
 def sanitize_features_object(feature_object):
@@ -242,7 +280,6 @@ def sanitize_features_object(feature_object):
 
     for feature_name in feature_object:
         if is_jsonable(feature_object[feature_name]):
-            print(feature_object[feature_name])
             sanitized_object[feature_name] = feature_object[feature_name]
         else:
             # Numpy NDArrays
@@ -315,8 +352,8 @@ if __name__ == "__main__":
         app,
         cors_allowed_origins=[os.environ["CORS_ALLOWED_ORIGINS"]],
         async_mode="eventlet",
-        logger=True,
-        engineio_logger=True,
+        logger=False,
+        engineio_logger=False,
         # message_queue=os.environ["SOCKET_MESSAGE_QUEUE"],
     )
 
