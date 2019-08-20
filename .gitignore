@@ -70,6 +70,10 @@ fabric.properties
 # PyCache
 __pycache__/
 
+# Keycloak config & log
+keycloak.json
+keycloak.log
+
 # Virtual Environment
 venv
 

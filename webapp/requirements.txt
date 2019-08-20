@@ -22,6 +22,9 @@ redis
 # HTTP requests handler
 requests
 
+# Keycloak
+python-keycloak
+
 # SQLAlchemy
 SQLAlchemy
 

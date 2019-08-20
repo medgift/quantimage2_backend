@@ -1,11 +1,12 @@
-import decimal, datetime
-
+import decimal, datetime, time
 import json
 
-from app import db
+from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import ForeignKey
 
 from imaginebackend_common.misc_enums import FeatureStatus
+
+db = SQLAlchemy()
 
 
 def alchemyencoder(obj):
@@ -111,7 +112,6 @@ class Feature(BaseModel, db.Model):
 
     def to_json(self):
         return json.dumps(self.to_dict(), default=alchemyencoder)
-
 
 def get_or_create(model, **kwargs):
     instance = db.session.query(model).filter_by(**kwargs).one_or_none()

@@ -11,6 +11,13 @@ services:
       - CELERY_RESULT_BACKEND=${CELERY_REDIS_URL}
       - SOCKET_MESSAGE_QUEUE=${SOCKET_REDIS_URL}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - KEYCLOAK_IMAGINE_CLIENT_ID=${KEYCLOAK_IMAGINE_CLIENT_ID}
+      - KEYCLOAK_IMAGINE_CLIENT_SECRET=${KEYCLOAK_IMAGINE_CLIENT_SECRET}
+      - KEYCLOAK_REALM_NAME=${KEYCLOAK_REALM_NAME}
+      - KEYCLOAK_REALM_PUBLIC_KEY=${KEYCLOAK_REALM_PUBLIC_KEY}
+      - KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL}
+      - KHEOPS_BASE_URL=${KHEOPS_BASE_URL}
+      - KHEOPS_TOKEN=${KHEOPS_TOKEN}
     volumes:
       - backend-data:/tmp
 
@@ -51,6 +58,46 @@ services:
 
   redis-socket:
     image: redis
+
+  keycloak:
+    image: jboss/keycloak
+    ports:
+      - 8081:8080
+    environment:
+      - KEYCLOAK_USER=${KEYCLOAK_USER}
+      - KEYCLOAK_PASSWORD=${KEYCLOAK_PASSWORD}
+      - DB_VENDOR=mysql
+      - DB_ADDR=keycloak-db
+      - DB_DATABASE=${KEYCLOAK_DB}
+      - DB_USER=${KEYCLOAK_DB_USER}
+      - DB_PASSWORD=${KEYCLOAK_DB_PASSWORD}
+    volumes:
+      - ./keycloak_theme:/opt/jboss/keycloak/themes/imagine
+    depends_on:
+      - keycloak-db
+
+  keycloak-db:
+    image: mysql:5.7
+    environment:
+      - MYSQL_ROOT_PASSWORD=${KEYCLOAK_DB_ROOT_PASSWORD}
+      - MYSQL_USER=${KEYCLOAK_DB_USER}
+      - MYSQL_PASSWORD=${KEYCLOAK_DB_PASSWORD}
+      - MYSQL_DATABASE=${KEYCLOAK_DB}
+
+  keycloak-phpmyadmin:
+    image:                 phpmyadmin/phpmyadmin
+    environment:
+      PMA_ARBITRARY:       1
+      PMA_HOST:            keycloak-db
+      PMA_PORT:            3306
+    volumes:
+      - /sessions
+    ports:
+      - 8889:80
+    depends_on:
+      - keycloak-db
+
+
 
 volumes:
   backend-data:

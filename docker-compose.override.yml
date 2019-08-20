@@ -4,7 +4,7 @@ services:
   backend:
     volumes:
       - ./webapp:/usr/src/app
-      - ./shared/imaginebackend_common/:/usr/local/lib/python3.6/imaginebackend_common
+      - ./shared/imaginebackend_common/:/usr/local/lib/python3.6/site-packages/imaginebackend_common
       - /data/imagine-data:/tmp
     ports:
       - 5000:5000
@@ -12,10 +12,16 @@ services:
       - DEBUGGER_IP=${DEBUGGER_IP}
       - DEBUGGER_PORT=${DEBUGGER_PORT}
       - GEVENT_SUPPORT=True
+      - AUTHLIB_INSECURE_TRANSPORT=1
+    extra_hosts:
+      - "roger:153.109.130.143"
     command:
-      ["python", "-u", "app.py"]
+      ["flask", "run"]
+      #["python", "-u", "app.py"]
 
   celery:
+    extra_hosts:
+      - "roger:153.109.130.143"
     volumes:
       - ./workers:/usr/src/app
       - ./shared/imaginebackend_common/:/usr/local/lib/python3.6/imaginebackend_common
