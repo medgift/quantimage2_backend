@@ -76,6 +76,7 @@ def make_socketio(app):
         app,
         cors_allowed_origins=[os.environ["CORS_ALLOWED_ORIGINS"]],
         async_mode="eventlet",
+        async_handlers=True,
         logger=False,
         engineio_logger=False,
         # message_queue=os.environ["SOCKET_MESSAGE_QUEUE"],

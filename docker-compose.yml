@@ -18,6 +18,7 @@ services:
       - KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL}
       - KHEOPS_BASE_URL=${KHEOPS_BASE_URL}
       - KHEOPS_TOKEN=${KHEOPS_TOKEN}
+      - PYTHONUNBUFFERED=TRUE
     volumes:
       - backend-data:/tmp
 

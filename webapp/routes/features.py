@@ -37,7 +37,7 @@ def before_request():
         if not validate_request(request):
             abort(401)
         else:
-            g.user = kheops_userid_from_token(request.headers["Authorization"])
+            g.user = userid_from_token(request.headers["Authorization"])
         pass
 
     pass
@@ -132,7 +132,7 @@ def extract(study_uid, feature_name):
     result = AsyncResult(task_id)
 
     # Spawn thread to follow the task's status
-    eventlet.spawn(follow_task, result)
+    eventlet.spawn(follow_task, result, feature.id)
 
     # Start Celery
     from ..app import my_celery
@@ -190,9 +190,10 @@ def fetch_task_result(task_id):
     return task
 
 
-def follow_task(result):
-    print("STARTING TO LISTEN FOR EVENTS!")
-    exc = result.get(on_message=task_status_update, propagate=False)
+def follow_task(result, feature_id):
+    print(f"Feature {feature_id} - STARTING TO LISTEN FOR EVENTS!")
+    result = result.get(on_message=task_status_update, propagate=False)
+    print(f"Feature {feature_id} - DONE!")
     return result
 
 
@@ -200,16 +201,15 @@ def task_status_update(body):
 
     status = body["status"]
 
-    if status == "PENDING":
+    if not body["result"] or status == "PENDING":
         return
 
-    print("Got status update!")
-    print(f"Status: {body['status']}, Message: {body['result']['status_message']}")
-
     feature_id = body["result"]["feature_id"]
-    feature_status = (FeatureStatus.IN_PROGRESS, FeatureStatus.COMPLETE)[
-        body["status"] == "SUCCESS"
-    ]
+    feature_status = body["result"]["status"]
+
+    print(
+        f"Feature {feature_id} - Status: {body['result']['status']}, Message: {body['result']['status_message']}"
+    )
 
     socketio_body = {
         "feature_id": feature_id,
@@ -280,20 +280,16 @@ def validate_request(request):
     return validated["active"]
 
 
-def kheops_userid_from_token(token):
+def userid_from_token(token):
     secret = f"-----BEGIN PUBLIC KEY-----\n{os.environ['KEYCLOAK_REALM_PUBLIC_KEY']}\n-----END PUBLIC KEY-----"
 
     # Verify signature & expiration
     options = {"verify_signature": True, "verify_aud": False, "exp": True}
     token_decoded = keycloak_client.decode_token(token, key=secret, options=options)
 
-    email = token_decoded["email"]
+    id = token_decoded["sub"]
 
-    user_ref_url = f"{KHEOPS_ENDPOINTS.users}{KHEOPS_ENDPOINTS.users_suffix}{email}"
-
-    user = requests.get(user_ref_url, headers=get_token_header()).json()
-
-    return user["sub"]
+    return id
 
 
 def get_token_header():
