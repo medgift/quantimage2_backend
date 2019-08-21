@@ -37,7 +37,7 @@ def before_request():
         if not validate_request(request):
             abort(401)
         else:
-            g.user = userid_from_token(request.headers["Authorization"])
+            g.user = userid_from_token(request.headers["Authorization"].split(" ")[1])
         pass
 
     pass
@@ -274,10 +274,15 @@ def read_feature_file(feature_path):
 
 
 def validate_request(request):
-    token = request.headers["Authorization"]
-    # rpt = keycloak_client.entitlement(token, "resource_id")
-    validated = keycloak_client.introspect(token)
-    return validated["active"]
+    authorization = request.headers["Authorization"]
+
+    if not authorization.startswith("Bearer"):
+        abort(400)
+    else:
+        token = authorization.split(" ")[1]
+        # rpt = keycloak_client.entitlement(token, "resource_id")
+        validated = keycloak_client.introspect(token)
+        return validated["active"]
 
 
 def userid_from_token(token):
