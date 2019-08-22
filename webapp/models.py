@@ -4,8 +4,6 @@ import json
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import ForeignKey
 
-from imaginebackend_common.misc_enums import FeatureStatus
-
 db = SQLAlchemy()
 
 
@@ -65,7 +63,6 @@ class Feature(BaseModel, db.Model):
     path = db.Column(db.String(255), nullable=False)
     user_id = db.Column(db.String(255), nullable=False)
     study_id = db.Column(db.Integer, ForeignKey("study.id"))
-    status = db.Column(db.Enum(FeatureStatus), default=FeatureStatus.IN_PROGRESS)
     task_id = db.Column(db.String(255), nullable=True)
 
     @classmethod
@@ -106,12 +103,12 @@ class Feature(BaseModel, db.Model):
             "path": self.path,
             "user_id": self.user_id,
             "study_id": self.study_id,
-            "status": self.status,
             "task_id": self.task_id,
         }
 
     def to_json(self):
         return json.dumps(self.to_dict(), default=alchemyencoder)
+
 
 def get_or_create(model, **kwargs):
     instance = db.session.query(model).filter_by(**kwargs).one_or_none()

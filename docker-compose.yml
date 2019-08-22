@@ -33,6 +33,12 @@ services:
     volumes:
       - backend-data:/tmp
 
+  flower:
+    image: mher/flower
+    command: ["flower", "--broker=redis://redis:6379/0", "--port=8888"]
+    ports:
+        - 9999:8888
+
   db:
     image: mysql:5.7
     environment:

@@ -7,14 +7,14 @@ eventlet.monkey_patch()
 
 import os
 
-from celery import Celery
-
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, current_app
 from flask_cors import CORS
 from flask_socketio import SocketIO
 
 import logging
 import pydevd_pycharm
+
+from celery import Celery
 
 # Import rest of the app files
 from .routes.features import bp as features_bp
@@ -107,9 +107,11 @@ This is necessary to properly integrate Celery with Flask.
 """
 
 
-def make_celery(app):
+def make_celery(app=None):
+
+    app = app or create_app()
     celery = Celery(
-        "tasks",
+        app.import_name,
         backend=app.config["CELERY_RESULT_BACKEND"],
         broker=app.config["CELERY_BROKER_URL"],
     )
@@ -121,14 +123,14 @@ def make_celery(app):
 # Create the Flask app
 app = create_app()
 
-# Setup celery
+# Setup the app
+setup_app(app)
+
+# Celery
 my_celery = make_celery(app)
 
 # Setup Socket.IO
 my_socketio = make_socketio(app)
-
-# Setup the app
-setup_app(app)
 
 # Run the app (through socket.io)
 my_socketio.run(app, host="0.0.0.0")

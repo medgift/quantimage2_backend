@@ -7,13 +7,13 @@ import flask
 import jsonpickle
 import requests
 
+import celery.states as celery_states
 from celery.result import AsyncResult
-from flask import Blueprint, abort, jsonify, request, g
+from flask import Blueprint, abort, jsonify, request, g, current_app
 from kombu import uuid
 from numpy.core.records import ndarray
 
 from imaginebackend_common import utils
-from imaginebackend_common.misc_enums import FeatureStatus
 from imaginebackend_common.utils import task_status_message, InvalidUsage
 
 from ..config import (
@@ -53,7 +53,7 @@ def feature_status(task_id):
 
     task = fetch_task_result(task_id)
 
-    if task.status == "PENDING":
+    if task.status == celery_states.PENDING:
         abort(404)
 
     response = {"status": task.status, "result": task.result}
@@ -119,9 +119,7 @@ def extract(study_uid, feature_name):
     feature = Feature.find_by_path(features_path)
 
     # If feature exists, set it to "in progress" again
-    if feature:
-        feature.status = FeatureStatus.IN_PROGRESS
-    else:
+    if not feature:
         feature = Feature(feature_name, features_path, user_id, study.id)
         feature.save_to_db()
 
@@ -148,16 +146,29 @@ def extract(study_uid, feature_name):
     feature.task_id = task_id
     db.session.commit()
 
-    return jsonify(feature.to_dict())
+    formatted_feature = format_feature(feature, celery_states.STARTED)
+
+    return jsonify(formatted_feature)
 
 
 def format_features(features):
     # Gather the features
     feature_list = []
-    for feature in features:
 
-        status_message = ""
+    if features:
+        for feature in features:
+            formatted_feature = format_feature(feature)
+            feature_list.append(formatted_feature)
 
+    return feature_list
+
+
+def format_feature(feature, status=None):
+    status_message = ""
+
+    if status:
+        final_status = status
+    else:
         # Get the feature status & update the status if necessary!
         if feature.task_id:
             status_object = fetch_task_result(feature.task_id)
@@ -166,25 +177,24 @@ def format_features(features):
             # Get the status message for the task
             status_message = task_status_message(result)
 
-        # Read the features file (if available)
-        sanitized_object = read_feature_file(feature.path)
+            final_status = status_object.status
 
-        feature_list.append(
-            {
-                "id": feature.id,
-                "name": feature.name,
-                "updated_at": feature.updated_at.strftime(DATE_FORMAT),
-                "status": feature.status,
-                "status_message": status_message,
-                "payload": sanitized_object,
-                "study_uid": feature.study.uid,
-            }
-        )
+    # Read the features file (if available)
+    sanitized_object = read_feature_file(feature.path)
 
-    return feature_list
+    return {
+        "id": feature.id,
+        "name": feature.name,
+        "updated_at": feature.updated_at.strftime(DATE_FORMAT),
+        "status": final_status,
+        "status_message": status_message,
+        "payload": sanitized_object,
+        "study_uid": feature.study.uid,
+    }
 
 
 def fetch_task_result(task_id):
+    print(f"Getting result for task {task_id}")
     task = AsyncResult(task_id)
 
     return task
@@ -192,7 +202,7 @@ def fetch_task_result(task_id):
 
 def follow_task(result, feature_id):
     print(f"Feature {feature_id} - STARTING TO LISTEN FOR EVENTS!")
-    result = result.get(on_message=task_status_update, propagate=False)
+    exc = result.get(on_message=task_status_update, propagate=False)
     print(f"Feature {feature_id} - DONE!")
     return result
 
@@ -201,31 +211,28 @@ def task_status_update(body):
 
     status = body["status"]
 
-    if not body["result"] or status == "PENDING":
+    if status == celery_states.PENDING:
         return
 
     feature_id = body["result"]["feature_id"]
-    feature_status = body["result"]["status"]
 
     print(
-        f"Feature {feature_id} - Status: {body['result']['status']}, Message: {body['result']['status_message']}"
+        f"Feature {feature_id} - Status: {status}, Message: {body['result']['status_message']}"
     )
 
     socketio_body = {
         "feature_id": feature_id,
-        "status": int(feature_status),
+        "status": status,
         "status_message": utils.task_status_message(body["result"]),
     }
 
     # When the process ends, set the feature status to complete
-    if feature_status == FeatureStatus.COMPLETE:
+    if status == celery_states.SUCCESS:
 
         from ..app import app
 
         with app.app_context():
             feature = Feature.find_by_id(feature_id)
-            feature.status = feature_status
-            db.session.commit()
 
             # Set the new updated date when complete
             socketio_body["updated_at"] = feature.updated_at.isoformat() + "Z"
@@ -267,8 +274,11 @@ def read_feature_file(feature_path):
 
     sanitized_object = {}
     if feature_path:
-        feature_object = jsonpickle.decode(open(feature_path).read())
-        sanitized_object = sanitize_features_object(feature_object)
+        try:
+            feature_object = jsonpickle.decode(open(feature_path).read())
+            sanitized_object = sanitize_features_object(feature_object)
+        except FileNotFoundError:
+            print(f"{feature_path} does not exist!")
 
     return sanitized_object
 

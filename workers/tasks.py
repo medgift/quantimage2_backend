@@ -13,9 +13,6 @@ from config_worker import dicomFields, endpoints, token
 
 from radiomics import featureextractor
 
-from imaginebackend_common.misc_enums import FeatureStatus
-from imaginebackend_common.utils import task_status_message
-
 from okapy.dicomconverter.dicom_walker import DicomWalker
 
 celery = Celery(
@@ -61,17 +58,6 @@ def run_extraction(self, feature_id, study_uid, features_dir, features_path):
 
     features = extract_features(file_paths)
 
-    # Extraction is complete
-    status_message = "Extraction COMPLETE"
-    update_progress(
-        self,
-        feature_id,
-        current_step,
-        steps,
-        status_message,
-        status=FeatureStatus.COMPLETE,
-    )
-
     # Delete download DIR
     shutil.rmtree(dicom_dir, True)
 
@@ -85,33 +71,24 @@ def run_extraction(self, feature_id, study_uid, features_dir, features_path):
     fh.write(json_features)
     fh.close()
 
-    return
-    # return {
-    #     "feature_id": feature_id,
-    #     "current": 3,
-    #     "total": 3,
-    #     "status": FeatureStatus.COMPLETE,
-    #     "status_message": status_message,
-    # }
+    # Extraction is complete
+    status_message = "Extraction COMPLETE"
+
+    return {
+        "feature_id": feature_id,
+        "current": 3,
+        "total": 3,
+        "status_message": status_message,
+    }
 
 
-def update_progress(
-    task,
-    feature_id,
-    current_step,
-    steps,
-    status_message,
-    status=FeatureStatus.IN_PROGRESS,
-):
-    print(
-        f"Feature {feature_id} - {current_step}/{steps} - Updating status ({status}), message ({status_message})"
-    )
+def update_progress(task, feature_id, current_step, steps, status_message):
+    print(f"Feature {feature_id} - {current_step}/{steps} - {status_message}")
 
     meta = {
         "feature_id": feature_id,
         "current": current_step,
         "total": steps,
-        "status": status,
         "status_message": status_message,
     }
 
