@@ -1,14 +1,11 @@
 import os, sys, json
-import traceback
 from collections import OrderedDict
 
 import eventlet
-import flask
 import jsonpickle
-import requests
 
 import celery.states as celery_states
-from celery.result import AsyncResult
+from celery import Celery
 from flask import Blueprint, abort, jsonify, request, g, current_app
 from kombu import uuid
 from numpy.core.records import ndarray
@@ -23,9 +20,15 @@ from ..config import (
     KHEOPS_ENDPOINTS,
     token,
 )
-from ..models import db, Feature, get_or_create, Study
+from ..models import db, Feature, Study, get_or_create
 
+from ..app import my_socketio
+
+# Define blueprint
 bp = Blueprint(__name__, "features")
+
+# Create celery
+my_celery = Celery(__name__)
 
 # Constants
 DATE_FORMAT = "%d.%m.%Y %H:%M"
@@ -127,14 +130,12 @@ def extract(study_uid, feature_name):
     task_id = uuid()
 
     # Result
-    result = AsyncResult(task_id)
+    result = my_celery.AsyncResult(task_id)
 
     # Spawn thread to follow the task's status
     eventlet.spawn(follow_task, result, feature.id)
 
     # Start Celery
-    from ..app import my_celery
-
     my_celery.send_task(
         "imaginetasks.extract",
         task_id=task_id,
@@ -195,7 +196,7 @@ def format_feature(feature, status=None):
 
 def fetch_task_result(task_id):
     print(f"Getting result for task {task_id}")
-    task = AsyncResult(task_id)
+    task = my_celery.AsyncResult(task_id)
 
     return task
 
@@ -229,9 +230,7 @@ def task_status_update(body):
     # When the process ends, set the feature status to complete
     if status == celery_states.SUCCESS:
 
-        from ..app import app
-
-        with app.app_context():
+        with current_app.app_context():
             feature = Feature.find_by_id(feature_id)
 
             # Set the new updated date when complete
@@ -241,8 +240,6 @@ def task_status_update(body):
             socketio_body["payload"] = read_feature_file(feature.path)
 
     # Send Socket.IO message to clients
-    from ..app import my_socketio
-
     my_socketio.emit("feature-status", socketio_body)
 
 

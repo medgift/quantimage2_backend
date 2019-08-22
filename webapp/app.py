@@ -1,25 +1,28 @@
 # Important to monkey-patch in the beginning!
 import eventlet
-
-from imaginebackend_common.utils import InvalidUsage
+from celery import Celery
 
 eventlet.monkey_patch()
 
-import os
+# System packages
+import os, logging
 
-from flask import Flask, request, jsonify, current_app
+# Flask
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_socketio import SocketIO
 
-import logging
+# Debugging
 import pydevd_pycharm
 
-from celery import Celery
+# Common imports
+from imaginebackend_common.utils import InvalidUsage
 
 # Import rest of the app files
 from .routes.features import bp as features_bp
-from .models import *
+from .models import db
 
+# Setup Debugger
 if "DEBUGGER_IP" in os.environ:
     try:
         pydevd_pycharm.settrace(
@@ -32,7 +35,7 @@ if "DEBUGGER_IP" in os.environ:
     except ConnectionRefusedError:
         logging.warning("No debug server running")
 
-
+# App factory
 def create_app():
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
@@ -57,23 +60,38 @@ def create_app():
         response.status_code = error.status_code
         return response
 
+    # Setup plugins etc.
+    setup_app(app)
+
     return app
 
 
 def setup_app(app):
-    CORS(app)
+
+    # CORS
+    CORS.init_app(app)
 
     # Init SQLAlchemy & create all tables
     db.init_app(app)
     db.create_all(app=app)
 
+    # Celery
+    from .routes.features import my_celery
+    # set broker url and result backend from app config
+    my_celery.conf.broker_url = app.config['CELERY_BROKER_URL']
+    my_celery.conf.result_backend = app.config['CELERY_RESULT_BACKEND']
+
+    # SocketIO
+    SocketIO.init_app(app)
+
     # Register routes
     app.register_blueprint(features_bp)
 
 
-def make_socketio(app):
+def make_socketio():
+
     socketio = SocketIO(
-        app,
+        app=None,
         cors_allowed_origins=[os.environ["CORS_ALLOWED_ORIGINS"]],
         async_mode="eventlet",
         async_handlers=True,
@@ -106,31 +124,11 @@ This function:
 This is necessary to properly integrate Celery with Flask. 
 """
 
-
-def make_celery(app=None):
-
-    app = app or create_app()
-    celery = Celery(
-        app.import_name,
-        backend=app.config["CELERY_RESULT_BACKEND"],
-        broker=app.config["CELERY_BROKER_URL"],
-    )
-    celery.conf.update(app.config)
-
-    return celery
-
+# Setup Socket.IO
+my_socketio = make_socketio()
 
 # Create the Flask app
 app = create_app()
-
-# Setup the app
-setup_app(app)
-
-# Celery
-my_celery = make_celery(app)
-
-# Setup Socket.IO
-my_socketio = make_socketio(app)
 
 # Run the app (through socket.io)
 my_socketio.run(app, host="0.0.0.0")
