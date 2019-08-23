@@ -3,6 +3,7 @@ import json
 
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import ForeignKey
+from sqlalchemy.orm import joinedload
 
 db = SQLAlchemy()
 
@@ -68,7 +69,9 @@ class Feature(BaseModel, db.Model):
     @classmethod
     def find_by_path(cls, path):
 
-        feature = cls.query.filter_by(path=path).one_or_none()
+        feature = (
+            cls.query.options(joinedload("study")).filter_by(path=path).one_or_none()
+        )
 
         return feature
 

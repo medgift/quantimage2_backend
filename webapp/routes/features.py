@@ -6,9 +6,7 @@ import jsonpickle
 
 import celery.states as celery_states
 import requests
-from celery import Celery
 from flask import Blueprint, abort, jsonify, request, g, current_app
-from kombu import uuid
 from numpy.core.records import ndarray
 
 from imaginebackend_common import utils
@@ -128,9 +126,13 @@ def extract(study_uid, feature_name):
     # Start Celery
     result = my_celery.send_task(
         "imaginetasks.extract",
+        countdown=0.1,
         args=[feature.id, study_uid, features_dir, features_path],
-        countdown=1,
     )
+
+    # follow_task(result, feature.id)
+    eventlet.spawn(follow_task, current_app._get_current_object(), result, feature.id)
+    # result.get(on_message=task_status_update, propagate=False)
 
     # Assign the task to the feature
     feature.task_id = result.id
@@ -142,10 +144,6 @@ def extract(study_uid, feature_name):
     # eventlet.spawn(follow_task, result, feature.id)
 
     # follow_task(result, feature.id)
-
-    with current_app.app_context():
-        follow_task(result, feature.id)
-        # result.get(on_message=task_status_update, propagate=False)
 
     return jsonify(formatted_feature)
 
@@ -218,25 +216,26 @@ def fetch_task_result(task_id):
         return task
 
 
-def follow_task(result, feature_id):
+def follow_task(app, result, feature_id):
     print(f"Feature {feature_id} - STARTING TO LISTEN FOR EVENTS!")
     exc = result.get(on_message=task_status_update, propagate=False)
     print(f"Feature {feature_id} - DONE!")
 
     # When the process ends, set the feature status to complete
     # if status == celery_states.SUCCESS:
-    feature = Feature.find_by_id(feature_id)
-    feature.save_to_db()
+    with app.app_context():
+        feature = Feature.find_by_id(feature_id)
+        feature.save_to_db()
 
-    socketio_body = get_socketio_body(
-        feature_id,
-        celery_states.SUCCESS,
-        "Extraction complete",
-        feature.updated_at.isoformat() + "Z",
-        read_feature_file(feature.path),
-    )
+        socketio_body = get_socketio_body(
+            feature_id,
+            celery_states.SUCCESS,
+            "Extraction complete",
+            feature.updated_at.isoformat() + "Z",
+            read_feature_file(feature.path),
+        )
 
-    my_socketio.emit("feature-status", socketio_body)
+        my_socketio.emit("feature-status", socketio_body)
 
     return result
 
