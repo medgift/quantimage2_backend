@@ -1,4 +1,4 @@
-import decimal, datetime, time
+import decimal, datetime
 import json
 
 from flask_sqlalchemy import SQLAlchemy

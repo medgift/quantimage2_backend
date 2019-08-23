@@ -132,7 +132,6 @@ def extract(study_uid, feature_name):
 
     # follow_task(result, feature.id)
     eventlet.spawn(follow_task, current_app._get_current_object(), result, feature.id)
-    # result.get(on_message=task_status_update, propagate=False)
 
     # Assign the task to the feature
     feature.task_id = result.id

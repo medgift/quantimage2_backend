@@ -1,6 +1,5 @@
 # Important to monkey-patch in the beginning!
 import eventlet
-from celery import Celery
 
 eventlet.monkey_patch()
 
@@ -8,19 +7,12 @@ eventlet.monkey_patch()
 import os, logging
 
 # Flask
-from flask import Flask, request, jsonify
 from flask_cors import CORS
-from flask_socketio import SocketIO
 
 # Debugging
 import pydevd_pycharm
 
-# Common imports
-from imaginebackend_common.utils import InvalidUsage
-
 # Import rest of the app files
-from .routes.features import bp as features_bp
-from .models import db
 from . import create_app, my_socketio
 
 # Setup Debugger
