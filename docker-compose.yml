@@ -34,10 +34,10 @@ services:
       - backend-data:/tmp
 
   flower:
-    image: mher/flower
-    command: ["flower", "--broker=redis://redis:6379/0", "--port=8888"]
+    build: ./flower
+    command: ["flower", "--broker=${CELERY_REDIS_URL}", "--result-backend=${CELERY_REDIS_URL}"]
     ports:
-        - 9999:8888
+        - 5555:5555
 
   db:
     image: mysql:5.7

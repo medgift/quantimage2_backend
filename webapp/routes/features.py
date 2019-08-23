@@ -5,6 +5,7 @@ import eventlet
 import jsonpickle
 
 import celery.states as celery_states
+import requests
 from celery import Celery
 from flask import Blueprint, abort, jsonify, request, g, current_app
 from kombu import uuid
@@ -22,13 +23,11 @@ from ..config import (
 )
 from ..models import db, Feature, Study, get_or_create
 
-from ..app import my_socketio
+from .. import my_socketio
+from .. import my_celery
 
 # Define blueprint
 bp = Blueprint(__name__, "features")
-
-# Create celery
-my_celery = Celery(__name__)
 
 # Constants
 DATE_FORMAT = "%d.%m.%Y %H:%M"
@@ -126,28 +125,27 @@ def extract(study_uid, feature_name):
         feature = Feature(feature_name, features_path, user_id, study.id)
         feature.save_to_db()
 
-    # Generate UUID for the task
-    task_id = uuid()
-
-    # Result
-    result = my_celery.AsyncResult(task_id)
-
-    # Spawn thread to follow the task's status
-    eventlet.spawn(follow_task, result, feature.id)
-
     # Start Celery
-    my_celery.send_task(
+    result = my_celery.send_task(
         "imaginetasks.extract",
-        task_id=task_id,
         args=[feature.id, study_uid, features_dir, features_path],
         countdown=1,
     )
 
     # Assign the task to the feature
-    feature.task_id = task_id
+    feature.task_id = result.id
     db.session.commit()
 
     formatted_feature = format_feature(feature, celery_states.STARTED)
+
+    # Spawn thread to follow the task's status
+    # eventlet.spawn(follow_task, result, feature.id)
+
+    # follow_task(result, feature.id)
+
+    with current_app.app_context():
+        follow_task(result, feature.id)
+        # result.get(on_message=task_status_update, propagate=False)
 
     return jsonify(formatted_feature)
 
@@ -166,6 +164,7 @@ def format_features(features):
 
 def format_feature(feature, status=None):
     status_message = ""
+    final_status = celery_states.SUCCESS
 
     if status:
         final_status = status
@@ -194,17 +193,51 @@ def format_feature(feature, status=None):
     }
 
 
+class CustomResult(object):
+    pass
+
+
 def fetch_task_result(task_id):
     print(f"Getting result for task {task_id}")
-    task = my_celery.AsyncResult(task_id)
 
-    return task
+    response = requests.get("http://flower:5555/api/task/result/" + task_id)
+
+    # task = my_celery.AsyncResult(task_id)
+
+    task = CustomResult()
+
+    if response.ok:
+        body = response.json()
+        task.status = body["state"]
+        task.result = body["result"]
+        return task
+    else:
+        task = CustomResult()
+        task.status = celery_states.PENDING
+        task.result = None
+        return task
 
 
 def follow_task(result, feature_id):
     print(f"Feature {feature_id} - STARTING TO LISTEN FOR EVENTS!")
     exc = result.get(on_message=task_status_update, propagate=False)
     print(f"Feature {feature_id} - DONE!")
+
+    # When the process ends, set the feature status to complete
+    # if status == celery_states.SUCCESS:
+    feature = Feature.find_by_id(feature_id)
+    feature.save_to_db()
+
+    socketio_body = get_socketio_body(
+        feature_id,
+        celery_states.SUCCESS,
+        "Extraction complete",
+        feature.updated_at.isoformat() + "Z",
+        read_feature_file(feature.path),
+    )
+
+    my_socketio.emit("feature-status", socketio_body)
+
     return result
 
 
@@ -212,7 +245,8 @@ def task_status_update(body):
 
     status = body["status"]
 
-    if status == celery_states.PENDING:
+    # Don't send a message about pending or successful tasks (this is handled elsewhere)
+    if status == celery_states.PENDING or status == celery_states.SUCCESS:
         return
 
     feature_id = body["result"]["feature_id"]
@@ -221,26 +255,32 @@ def task_status_update(body):
         f"Feature {feature_id} - Status: {status}, Message: {body['result']['status_message']}"
     )
 
-    socketio_body = {
-        "feature_id": feature_id,
-        "status": status,
-        "status_message": utils.task_status_message(body["result"]),
-    }
-
-    # When the process ends, set the feature status to complete
-    if status == celery_states.SUCCESS:
-
-        with current_app.app_context():
-            feature = Feature.find_by_id(feature_id)
-
-            # Set the new updated date when complete
-            socketio_body["updated_at"] = feature.updated_at.isoformat() + "Z"
-
-            # Set the new feature payload when complete
-            socketio_body["payload"] = read_feature_file(feature.path)
+    socketio_body = get_socketio_body(
+        feature_id, status, utils.task_status_message(body["result"])
+    )
 
     # Send Socket.IO message to clients
     my_socketio.emit("feature-status", socketio_body)
+
+
+def get_socketio_body(
+    feature_id, status, status_message, updated_at=None, payload=None
+):
+    socketio_body = {
+        "feature_id": feature_id,
+        "status": status,
+        "status_message": status_message,
+    }
+
+    if updated_at:
+        # Set the new updated date when complete
+        socketio_body["updated_at"] = updated_at
+
+    if payload:
+        # Set the new feature payload when complete
+        socketio_body["payload"] = payload
+
+    return socketio_body
 
 
 def is_jsonable(x):
