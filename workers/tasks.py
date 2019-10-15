@@ -1,15 +1,18 @@
-import os
+import os, logging
 import shutil
 import tempfile
 
+import json
 import jsonpickle
 import requests
 import pathlib
 
+import pydevd_pycharm
+
 from celery import Celery
 from requests_toolbelt.multipart import decoder
 
-from config_worker import dicomFields, endpoints, token
+from config_worker import dicomFields, endpoints
 
 from radiomics import featureextractor
 
@@ -23,7 +26,20 @@ celery = Celery(
 
 
 @celery.task(name="imaginetasks.extract", bind=True)
-def run_extraction(self, feature_id, study_uid, features_dir, features_path):
+def run_extraction(self, token, feature_id, study_uid, features_dir, features_path):
+    # Setup Debugger
+    if "DEBUGGER_IP" in os.environ:
+        try:
+            logging.warning("SETTING UP PYCHARM TRACE")
+            pydevd_pycharm.settrace(
+                os.environ["DEBUGGER_IP"],
+                port=int(os.environ["DEBUGGER_PORT_CELERY"]),
+                suspend=False,
+                stderrToServer=True,
+                stdoutToServer=True,
+            )
+        except ConnectionRefusedError:
+            logging.warning("No debug server running")
 
     current_step = 1
     steps = 3
@@ -33,10 +49,10 @@ def run_extraction(self, feature_id, study_uid, features_dir, features_path):
     update_progress(self, feature_id, current_step, steps, status_message)
 
     # Get the list of instance URLs
-    url_list = get_dicom_url_list(study_uid)
+    url_list = get_dicom_url_list(token, study_uid)
 
     # Download all the DICOM files
-    dicom_dir = download_dicom_urls(url_list)
+    dicom_dir = download_dicom_urls(token, url_list)
 
     # Status update - CONVERT
     current_step += 1
@@ -95,7 +111,7 @@ def update_progress(task, feature_id, current_step, steps, status_message):
     task.update_state(state="PROGRESS", meta=meta)
 
 
-def get_token_header():
+def get_token_header(token):
     return {"Authorization": "Bearer " + token}
 
 
@@ -110,13 +126,17 @@ def convert_dicom_to_nrrd(input_dir, labels=["GTV T"]):
     return output_dir
 
 
-def get_dicom_url_list(study_uid):
+def get_dicom_url_list(token, study_uid):
     # Get the metadata items of the study
     study_metadata_url = (
         endpoints.studies + "/" + study_uid + "/" + endpoints.studyMetadataSuffix
     )
 
-    study_metadata = requests.get(study_metadata_url, headers=get_token_header()).json()
+    access_token = get_token_header(token)
+    print("GOING TO RETRIEVE STUDY METADATA WITH URL : " + study_metadata_url)
+    print("AND USING THE FOLLOWING ACCESS TOKEN     : " + json.dumps(access_token))
+
+    study_metadata = requests.get(study_metadata_url, headers=access_token).json()
 
     # instance_urls = {"CT": [], "PET": []}
     instance_urls = []
@@ -153,12 +173,13 @@ def get_dicom_url_list(study_uid):
     return instance_urls
 
 
-def download_dicom_urls(urls):
+def download_dicom_urls(token, urls):
     tmp_dir = tempfile.mkdtemp()
 
+    access_token = get_token_header(token)
     for url in urls:
         filename = os.path.basename(url)
-        response = requests.get(url, headers=get_token_header())
+        response = requests.get(url, headers=access_token)
         # open(os.path.join(tmp_dir, filename), "wb").write(response.content)
         multipart_data = decoder.MultipartDecoder.from_response(response)
 

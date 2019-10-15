@@ -12,13 +12,7 @@ from numpy.core.records import ndarray
 from imaginebackend_common import utils
 from imaginebackend_common.utils import task_status_message, InvalidUsage
 
-from ..config import (
-    FEATURES_BASE_DIR,
-    keycloak_client,
-    FEATURE_TYPES,
-    KHEOPS_ENDPOINTS,
-    token,
-)
+from ..config import FEATURES_BASE_DIR, keycloak_client, FEATURE_TYPES
 from ..models import db, Feature, Study, get_or_create
 
 from .. import my_socketio
@@ -38,6 +32,7 @@ def before_request():
             abort(401)
         else:
             g.user = userid_from_token(request.headers["Authorization"].split(" ")[1])
+            g.token = request.headers["Authorization"].split(" ")[1]
         pass
 
     pass
@@ -127,7 +122,7 @@ def extract(study_uid, feature_name):
     result = my_celery.send_task(
         "imaginetasks.extract",
         countdown=0.1,
-        args=[feature.id, study_uid, features_dir, features_path],
+        args=[g.token, feature.id, study_uid, features_dir, features_path],
     )
 
     # follow_task(result, feature.id)
@@ -340,7 +335,3 @@ def userid_from_token(token):
     id = token_decoded["sub"]
 
     return id
-
-
-def get_token_header():
-    return {"Authorization": "Bearer " + token}

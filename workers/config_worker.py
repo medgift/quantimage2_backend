@@ -21,6 +21,7 @@ dicomFields.BULK_DATA_URI = "BulkDataURI"
 dicomFields.ALPHABETIC = "Alphabetic"
 dicomFields.DATE_FORMAT = "YYYYMMDD"
 
+# Backend client
 kheopsBaseURL = os.environ["KHEOPS_BASE_URL"]
 
 kheopsBaseEndpoint = kheopsBaseURL + "/api"
