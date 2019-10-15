@@ -7,8 +7,8 @@ def task_status_message(task_result):
     return f"{task_result['current']}/{task_result['total']} - {task_result['status_message']}"
 
 
-class InvalidUsage(Exception):
-    status_code = 400
+class CustomException(Exception):
+    status_code = 500
 
     def __init__(self, message, status_code=None, payload=None):
         Exception.__init__(self)
@@ -21,3 +21,13 @@ class InvalidUsage(Exception):
         rv = dict(self.payload or ())
         rv["message"] = self.message
         return rv
+
+
+class InvalidUsage(CustomException):
+    def __init__(self, message):
+        CustomException.__init__(self, message, 400)
+
+
+class ComputationError(CustomException):
+    def __init__(self, message):
+        CustomException.__init__(self, message, 500)

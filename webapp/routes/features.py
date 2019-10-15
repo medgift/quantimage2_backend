@@ -10,7 +10,11 @@ from flask import Blueprint, abort, jsonify, request, g, current_app
 from numpy.core.records import ndarray
 
 from imaginebackend_common import utils
-from imaginebackend_common.utils import task_status_message, InvalidUsage
+from imaginebackend_common.utils import (
+    task_status_message,
+    InvalidUsage,
+    ComputationError,
+)
 
 from ..config import FEATURES_BASE_DIR, keycloak_client, FEATURE_TYPES
 from ..models import db, Feature, Study, get_or_create
@@ -50,6 +54,9 @@ def feature_status(task_id):
 
     if task.status == celery_states.PENDING:
         abort(404)
+
+    if task.status == celery_states.FAILURE:
+        task.result
 
     response = {"status": task.status, "result": task.result}
 
@@ -212,7 +219,13 @@ def fetch_task_result(task_id):
 
 def follow_task(app, result, feature_id):
     print(f"Feature {feature_id} - STARTING TO LISTEN FOR EVENTS!")
-    exc = result.get(on_message=task_status_update, propagate=False)
+
+    try:
+        exc = result.get(on_message=task_status_update, propagate=True)
+    except Exception as e:
+        socketio_body = get_socketio_body(feature_id, celery_states.FAILURE, str(e))
+        my_socketio.emit("feature-status", socketio_body)
+
     print(f"Feature {feature_id} - DONE!")
 
     # When the process ends, set the feature status to complete
@@ -238,8 +251,14 @@ def task_status_update(body):
 
     status = body["status"]
 
+    print("Got an update : " + str(body))
+
     # Don't send a message about pending or successful tasks (this is handled elsewhere)
-    if status == celery_states.PENDING or status == celery_states.SUCCESS:
+    if (
+        status == celery_states.PENDING
+        or status == celery_states.SUCCESS
+        or status == celery_states.FAILURE
+    ):
         return
 
     feature_id = body["result"]["feature_id"]

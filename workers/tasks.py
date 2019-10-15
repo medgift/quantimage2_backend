@@ -1,15 +1,15 @@
-import os, logging
+import os, logging, traceback
 import shutil
 import tempfile
-
 import json
+from time import sleep
+
 import jsonpickle
 import requests
 import pathlib
 
-import pydevd_pycharm
-
 from celery import Celery
+from celery.exceptions import Ignore
 from requests_toolbelt.multipart import decoder
 
 from config_worker import dicomFields, endpoints
@@ -27,75 +27,88 @@ celery = Celery(
 
 @celery.task(name="imaginetasks.extract", bind=True)
 def run_extraction(self, token, feature_id, study_uid, features_dir, features_path):
-    # Setup Debugger
-    if "DEBUGGER_IP" in os.environ:
-        try:
-            logging.warning("SETTING UP PYCHARM TRACE")
-            pydevd_pycharm.settrace(
-                os.environ["DEBUGGER_IP"],
-                port=int(os.environ["DEBUGGER_PORT_CELERY"]),
-                suspend=False,
-                stderrToServer=True,
-                stdoutToServer=True,
-            )
-        except ConnectionRefusedError:
-            logging.warning("No debug server running")
 
-    current_step = 1
-    steps = 3
+    sleep(1)
 
-    # Status update - DOWNLOAD
-    status_message = "Downloading DICOM files"
-    update_progress(self, feature_id, current_step, steps, status_message)
+    try:
+        current_step = 1
+        steps = 3
 
-    # Get the list of instance URLs
-    url_list = get_dicom_url_list(token, study_uid)
+        # Status update - DOWNLOAD
+        status_message = "Downloading DICOM files"
+        update_progress(self, feature_id, current_step, steps, status_message)
 
-    # Download all the DICOM files
-    dicom_dir = download_dicom_urls(token, url_list)
+        # Get the list of instance URLs
+        url_list = get_dicom_url_list(token, study_uid)
 
-    # Status update - CONVERT
-    current_step += 1
-    status_message = "Converting DICOM files to NRRD volume"
-    update_progress(self, feature_id, current_step, steps, status_message)
+        # Download all the DICOM files
+        dicom_dir = download_dicom_urls(token, url_list)
 
-    # Use Valentin's DicomWalker to convert DICOM to NRRD
-    results_dir = convert_dicom_to_nrrd(dicom_dir)
+        # Status update - CONVERT
+        current_step += 1
+        status_message = "Converting DICOM files to NRRD volume"
+        update_progress(self, feature_id, current_step, steps, status_message)
 
-    # Go through results files and extract features
-    file_paths = [
-        str(filepath.absolute()) for filepath in pathlib.Path(results_dir).glob("**/*")
-    ]
+        # Use Valentin's DicomWalker to convert DICOM to NRRD
+        results_dir = convert_dicom_to_nrrd(dicom_dir)
 
-    # Status update - EXTRACT
-    current_step += 1
-    status_message = "Extracting features"
-    update_progress(self, feature_id, current_step, steps, status_message)
+        # Go through results files and extract features
+        file_paths = [
+            str(filepath.absolute())
+            for filepath in pathlib.Path(results_dir).glob("**/*")
+        ]
 
-    features = extract_features(file_paths)
+        # Status update - EXTRACT
+        current_step += 1
+        status_message = "Extracting features"
+        update_progress(self, feature_id, current_step, steps, status_message)
 
-    # Delete download DIR
-    shutil.rmtree(dicom_dir, True)
+        features = extract_features(file_paths)
 
-    # Delete results DIR
-    shutil.rmtree(results_dir, True)
+        # Delete download DIR
+        shutil.rmtree(dicom_dir, True)
 
-    # Save the features
-    json_features = jsonpickle.encode(features)
-    os.makedirs(features_dir, exist_ok=True)
-    fh = open(features_path, "w")
-    fh.write(json_features)
-    fh.close()
+        # Delete results DIR
+        shutil.rmtree(results_dir, True)
 
-    # Extraction is complete
-    status_message = "Extraction COMPLETE"
+        # Save the features
+        json_features = jsonpickle.encode(features)
+        os.makedirs(features_dir, exist_ok=True)
+        fh = open(features_path, "w")
+        fh.write(json_features)
+        fh.close()
 
-    return {
-        "feature_id": feature_id,
-        "current": 3,
-        "total": 3,
-        "status_message": status_message,
-    }
+        # Extraction is complete
+        status_message = "Extraction COMPLETE"
+
+        return {
+            "feature_id": feature_id,
+            "current": current_step + 1,
+            "total": steps,
+            "status_message": status_message,
+        }
+    except Exception as e:
+
+        logging.error("!!!!!AYAYAYAYAYYYYYYYYY")
+        logging.error(e)
+        logging.error("AYAYAYAYAYYYYYYYYY!!!!!")
+
+        # current_step = 0
+        # status_message = "Failure!"
+        # print(f"Feature {feature_id} - {current_step}/{steps} - {status_message}")
+        #
+        # meta = {
+        #     "exc_type": type(e).__name__,
+        #     "exc_message": traceback.format_exc().split("\n"),
+        #     "feature_id": feature_id,
+        #     "current": current_step,
+        #     "total": steps,
+        #     "status_message": status_message,
+        # }
+        #
+        # update_task_state(self, "FAILURE", meta)
+
+        raise e
 
 
 def update_progress(task, feature_id, current_step, steps, status_message):
@@ -108,7 +121,11 @@ def update_progress(task, feature_id, current_step, steps, status_message):
         "status_message": status_message,
     }
 
-    task.update_state(state="PROGRESS", meta=meta)
+    update_task_state(task, "PROGRESS", meta)
+
+
+def update_task_state(task, state, meta):
+    task.update_state(state=state, meta=meta)
 
 
 def get_token_header(token):
@@ -133,8 +150,6 @@ def get_dicom_url_list(token, study_uid):
     )
 
     access_token = get_token_header(token)
-    print("GOING TO RETRIEVE STUDY METADATA WITH URL : " + study_metadata_url)
-    print("AND USING THE FOLLOWING ACCESS TOKEN     : " + json.dumps(access_token))
 
     study_metadata = requests.get(study_metadata_url, headers=access_token).json()
 
