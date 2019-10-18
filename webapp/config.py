@@ -13,4 +13,4 @@ keycloak_client = KeycloakOpenID(
 
 # Features
 FEATURES_BASE_DIR = "/tmp/imagine/features"
-FEATURE_TYPES = ["pyradiomics", "okapy"]
+FEATURE_TYPES = ["intensity", "texture"]

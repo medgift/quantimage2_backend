@@ -27,6 +27,11 @@ class BaseModel(object):
         instance = cls.query.filter_by(id=id).one_or_none()
         return instance
 
+    @classmethod
+    def find_all(cls):
+        instances = cls.query.all()
+        return instances
+
     def save_to_db(self):
         db.session.add(self)
         db.session.commit()
@@ -43,7 +48,7 @@ class BaseModel(object):
 
 class Study(BaseModel, db.Model):
     uid = db.Column(db.String(255), nullable=False)
-    features = db.relationship("Feature", backref="study", lazy=True)
+    features = db.relationship("FeatureExtraction", backref="study", lazy=True)
 
     def __init__(self, uid):
         self.uid = uid
@@ -53,24 +58,55 @@ class Study(BaseModel, db.Model):
         return cls.query.filter_by(uid=uid).one_or_none()
 
 
-class Feature(BaseModel, db.Model):
-    def __init__(self, name, path, user_id, study_id):
+# Global family of features (Intensity, Texture, ...)
+class FeatureFamily(BaseModel, db.Model):
+    def __init__(self, name, config_path):
         self.name = name
-        self.path = path
+        self.config_path = config_path
+
+    # Name of the family
+    name = db.Column(db.String(255), nullable=False)
+
+    # Path to JSON configuration file of the family
+    config_path = db.Column(db.String(255), nullable=False)
+
+    # Extractions done for this family
+    extractions = db.relationship("FeatureExtraction")
+
+
+# One set of extracted features for a given feature family & configuration
+class FeatureExtraction(BaseModel, db.Model):
+    def __init__(self, features_path, config_path, user_id, study_id):
+        self.features_path = features_path
+        self.config_path = config_path
         self.user_id = user_id
         self.study_id = study_id
 
-    name = db.Column(db.String(255), nullable=False)
-    path = db.Column(db.String(255), nullable=False)
+    # Path to the extracted feature file
+    features_path = db.Column(db.String(255), nullable=False)
+
+    # Path of JSON file describing the selected features / parameters
+    config_path = db.Column(db.String(255), nullable=False)
+
+    # Keycloak ID of the user that extracted the features
     user_id = db.Column(db.String(255), nullable=False)
-    study_id = db.Column(db.Integer, ForeignKey("study.id"))
+
+    # Celery task ID to get information about the status etc.
     task_id = db.Column(db.String(255), nullable=True)
+
+    # Associate feature extraction with a Study in the DB
+    study_id = db.Column(db.Integer, ForeignKey("study.id"))
+
+    # Associate feature extraction with a FeatureFamily
+    feature_family_id = db.Column(db.Integer, ForeignKey("feature_family.id"))
 
     @classmethod
     def find_by_path(cls, path):
 
         feature = (
-            cls.query.options(joinedload("study")).filter_by(path=path).one_or_none()
+            cls.query.options(joinedload("study"), joinedload("feature_family"))
+            .filter_by(path=path)
+            .one_or_none()
         )
 
         return feature

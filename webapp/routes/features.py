@@ -1,4 +1,6 @@
-import os, sys, json
+import os
+import sys
+import json
 from collections import OrderedDict
 
 import eventlet
@@ -10,17 +12,15 @@ from flask import Blueprint, abort, jsonify, request, g, current_app
 from numpy.core.records import ndarray
 
 from imaginebackend_common import utils
-from imaginebackend_common.utils import (
-    task_status_message,
-    InvalidUsage,
-    ComputationError,
-)
+from imaginebackend_common.utils import task_status_message, InvalidUsage
 
-from ..config import FEATURES_BASE_DIR, keycloak_client, FEATURE_TYPES
-from ..models import db, Feature, Study, get_or_create
+from ..config import FEATURES_BASE_DIR
+from ..models import db, FeatureExtraction, Study, get_or_create, FeatureFamily
 
 from .. import my_socketio
 from .. import my_celery
+
+from .utils import validate_decorate
 
 # Define blueprint
 bp = Blueprint(__name__, "features")
@@ -31,15 +31,7 @@ DATE_FORMAT = "%d.%m.%Y %H:%M"
 
 @bp.before_request
 def before_request():
-    if request.method != "OPTIONS":
-        if not validate_request(request):
-            abort(401)
-        else:
-            g.user = userid_from_token(request.headers["Authorization"].split(" ")[1])
-            g.token = request.headers["Authorization"].split(" ")[1]
-        pass
-
-    pass
+    validate_decorate(request)
 
 
 @bp.route("/")
@@ -71,7 +63,7 @@ def features_by_user():
     user_id = g.user
 
     # Find all computed features for this user
-    features_of_user = Feature.find_by_user(user_id)
+    features_of_user = FeatureExtraction.find_by_user(user_id)
 
     feature_list = format_features(features_of_user)
 
@@ -80,7 +72,11 @@ def features_by_user():
 
 @bp.route("/features/types")
 def feature_types():
-    return jsonify(FEATURE_TYPES)
+    feature_families = FeatureFamily.find_all()
+
+    feature_family_names = map(lambda family: family.name, feature_families)
+
+    return jsonify(list(feature_family_names))
 
 
 @bp.route("/features/<study_uid>")
@@ -91,7 +87,7 @@ def features_by_study(study_uid):
     user_id = g.user
 
     # Find all computed features for this study
-    features_of_study = Feature.find_by_user_and_study_uid(user_id, study_uid)
+    features_of_study = FeatureExtraction.find_by_user_and_study_uid(user_id, study_uid)
 
     feature_list = format_features(features_of_study)
 
@@ -118,11 +114,11 @@ def extract(study_uid, feature_name):
     features_path = os.path.join(features_dir, features_filename)
 
     # Currently update any existing feature with the same path
-    feature = Feature.find_by_path(features_path)
+    feature = FeatureExtraction.find_by_path(features_path)
 
     # If feature exists, set it to "in progress" again
     if not feature:
-        feature = Feature(feature_name, features_path, user_id, study.id)
+        feature = FeatureExtraction(feature_name, features_path, user_id, study.id)
         feature.save_to_db()
 
     # Start Celery
@@ -221,7 +217,7 @@ def follow_task(app, result, feature_id):
     print(f"Feature {feature_id} - STARTING TO LISTEN FOR EVENTS!")
 
     try:
-        exc = result.get(on_message=task_status_update, propagate=True)
+        result.get(on_message=task_status_update, propagate=True)
     except Exception as e:
         socketio_body = get_socketio_body(feature_id, celery_states.FAILURE, str(e))
         my_socketio.emit("feature-status", socketio_body)
@@ -231,7 +227,7 @@ def follow_task(app, result, feature_id):
     # When the process ends, set the feature status to complete
     # if status == celery_states.SUCCESS:
     with app.app_context():
-        feature = Feature.find_by_id(feature_id)
+        feature = FeatureExtraction.find_by_id(feature_id)
         feature.save_to_db()
 
         socketio_body = get_socketio_body(
@@ -330,27 +326,3 @@ def read_feature_file(feature_path):
             print(f"{feature_path} does not exist!")
 
     return sanitized_object
-
-
-def validate_request(request):
-    authorization = request.headers["Authorization"]
-
-    if not authorization.startswith("Bearer"):
-        abort(400)
-    else:
-        token = authorization.split(" ")[1]
-        # rpt = keycloak_client.entitlement(token, "resource_id")
-        validated = keycloak_client.introspect(token)
-        return validated["active"]
-
-
-def userid_from_token(token):
-    secret = f"-----BEGIN PUBLIC KEY-----\n{os.environ['KEYCLOAK_REALM_PUBLIC_KEY']}\n-----END PUBLIC KEY-----"
-
-    # Verify signature & expiration
-    options = {"verify_signature": True, "verify_aud": False, "exp": True}
-    token_decoded = keycloak_client.decode_token(token, key=secret, options=options)
-
-    id = token_decoded["sub"]
-
-    return id

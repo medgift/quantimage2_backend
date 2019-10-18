@@ -4,7 +4,8 @@ import eventlet
 eventlet.monkey_patch()
 
 # System packages
-import os, logging
+import os
+import logging
 
 # Flask
 from flask_cors import CORS

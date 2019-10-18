@@ -6,6 +6,7 @@ eventlet
 
 # Debug
 pydevd-pycharm~=192.6817.19
+ptvsd
 
 # Flask
 Flask

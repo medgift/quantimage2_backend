@@ -61,6 +61,8 @@ def create_app():
     app.config["CELERY_BROKER_URL"] = os.environ["CELERY_BROKER_URL"]
     app.config["CELERY_RESULT_BACKEND"] = os.environ["CELERY_RESULT_BACKEND"]
 
+    app.config["UPLOAD_FOLDER"] = os.environ["UPLOAD_FOLDER"]
+
     @app.errorhandler(InvalidUsage)
     def handle_invalid_usage(error):
         response = jsonify(error.to_dict())
@@ -88,6 +90,8 @@ def setup_app(app):
 
     # Register routes
     from .routes.features import bp as features_bp
+    from .routes.feature_families import bp as feature_families_bp
 
     with app.app_context():
         app.register_blueprint(features_bp)
+        app.register_blueprint(feature_families_bp)
