@@ -1,5 +1,4 @@
 import decimal, datetime
-import json
 
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import ForeignKey
@@ -40,11 +39,6 @@ class BaseModel(object):
         db.session.query(type(self)).filter(type(self).id == self.id).update(**kwargs)
         db.session.commit()
 
-    # def to_json(self):
-    #    json_object = self.__dict__.copy()
-    #    del json_object["_sa_instance_state"]
-    #    return json.dumps(json_object, default=alchemyencoder)
-
 
 class Study(BaseModel, db.Model):
     uid = db.Column(db.String(255), nullable=False)
@@ -65,18 +59,35 @@ class FeatureFamily(BaseModel, db.Model):
         self.config_path = config_path
 
     # Name of the family
-    name = db.Column(db.String(255), nullable=False)
+    name = db.Column(db.String(255), nullable=False, unique=True)
 
     # Path to JSON configuration file of the family
-    config_path = db.Column(db.String(255), nullable=False)
+    config_path = db.Column(db.String(255), nullable=False, unique=True)
 
     # Extractions done for this family
     extractions = db.relationship("FeatureExtraction")
 
+    @classmethod
+    def find_by_name(cls, name):
+        instance = cls.query.filter_by(name=name).one_or_none()
+        return instance
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "name": self.name,
+            "config_path": self.config_path,
+        }
+
 
 # One set of extracted features for a given feature family & configuration
 class FeatureExtraction(BaseModel, db.Model):
-    def __init__(self, features_path, config_path, user_id, study_id):
+    def __init__(
+        self, feature_family_id, features_path, config_path, user_id, study_id
+    ):
+        self.feature_family_id = feature_family_id
         self.features_path = features_path
         self.config_path = config_path
         self.user_id = user_id
@@ -99,13 +110,16 @@ class FeatureExtraction(BaseModel, db.Model):
 
     # Associate feature extraction with a FeatureFamily
     feature_family_id = db.Column(db.Integer, ForeignKey("feature_family.id"))
+    feature_family = db.relationship(
+        "FeatureFamily", back_populates="extractions", lazy="joined"
+    )
 
     @classmethod
-    def find_by_path(cls, path):
+    def find_by_features_path(cls, features_path):
 
         feature = (
             cls.query.options(joinedload("study"), joinedload("feature_family"))
-            .filter_by(path=path)
+            .filter_by(features_path=features_path)
             .one_or_none()
         )
 
@@ -144,9 +158,6 @@ class FeatureExtraction(BaseModel, db.Model):
             "study_id": self.study_id,
             "task_id": self.task_id,
         }
-
-    def to_json(self):
-        return json.dumps(self.to_dict(), default=alchemyencoder)
 
 
 def get_or_create(model, **kwargs):

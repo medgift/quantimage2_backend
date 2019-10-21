@@ -19,7 +19,7 @@ def before_request():
 
 
 @bp.route("/feature-families", methods=("GET", "POST"))
-def create_feature_family():
+def feature_families():
     if request.method == "POST":
         # print(request)
 
@@ -27,20 +27,58 @@ def create_feature_family():
             abort(400)
 
         file = request.files["file"]
+
+        file_path = save_feature_config(file)
+
         name = request.form["name"]
 
-        file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], file.filename)
-
-        file.save(file_path)
-
         # Create FeatureFamily object and send it back
+        feature_family = FeatureFamily(name, file_path)
+        feature_family.save_to_db()
 
-        return jsonify("ok")
+        return jsonify(feature_family.to_dict())
 
     if request.method == "GET":
-        families = FeatureFamily.find_all()
-        return jsonify(families)
+        feature_families = FeatureFamily.find_all()
+
+        serialized_families = map(lambda family: family.to_dict(), feature_families)
+
+        return jsonify(list(serialized_families))
+
+
+@bp.route("/feature-families/<feature_family_id>", methods=("GET", "PATCH"))
+def feature_family(feature_family_id):
+
+    if request.method == "PATCH":
+
+        feature_family = FeatureFamily.find_by_id(feature_family_id)
+
+        feature_family.name = request.form["name"]
+
+        if request.files.get("file") is not None:
+            file = request.files["file"]
+
+            file_path = save_feature_config(file)
+
+            feature_family.config_path = file_path
+
+        feature_family.save_to_db()
+
+        return jsonify(feature_family.to_dict())
+
+    if request.method == "GET":
+        feature_family = FeatureFamily.find_by_id(feature_family_id)
+
+        return jsonify(feature_family.to_dict())
 
 
 def allowed_file(file):
     return file.content_type == "application/x-yaml"
+
+
+def save_feature_config(file):
+    file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], file.filename)
+
+    file.save(file_path)
+
+    return file_path

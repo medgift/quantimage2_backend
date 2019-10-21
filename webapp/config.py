@@ -11,6 +11,7 @@ keycloak_client = KeycloakOpenID(
     realm_name=os.environ["KEYCLOAK_REALM_NAME"],
 )
 
-# Features
-FEATURES_BASE_DIR = "/tmp/imagine/features"
-FEATURE_TYPES = ["intensity", "texture"]
+# Extractions
+EXTRACTIONS_BASE_DIR = "/tmp/imagine/extractions"
+FEATURES_SUBDIR = "features"
+CONFIGS_SUBDIR = "configs"

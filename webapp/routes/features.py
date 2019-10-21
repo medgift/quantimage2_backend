@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 from collections import OrderedDict
 
 import eventlet
@@ -10,11 +11,12 @@ import celery.states as celery_states
 import requests
 from flask import Blueprint, abort, jsonify, request, g, current_app
 from numpy.core.records import ndarray
+from pathlib import Path
 
 from imaginebackend_common import utils
 from imaginebackend_common.utils import task_status_message, InvalidUsage
 
-from ..config import FEATURES_BASE_DIR
+from ..config import EXTRACTIONS_BASE_DIR, FEATURES_SUBDIR, CONFIGS_SUBDIR
 from ..models import db, FeatureExtraction, Study, get_or_create, FeatureFamily
 
 from .. import my_socketio
@@ -70,15 +72,6 @@ def features_by_user():
     return jsonify(feature_list)
 
 
-@bp.route("/features/types")
-def feature_types():
-    feature_families = FeatureFamily.find_all()
-
-    feature_family_names = map(lambda family: family.name, feature_families)
-
-    return jsonify(list(feature_family_names))
-
-
 @bp.route("/features/<study_uid>")
 def features_by_study(study_uid):
     if not g.user:
@@ -101,31 +94,52 @@ def extract(study_uid, feature_name):
 
     user_id = g.user
 
-    # Only support pyradiomics (for now)
-    if feature_name != "pyradiomics":
-        raise InvalidUsage("This feature is not supported yet!")
-
     # Get the associated study from DB
     study = get_or_create(Study, uid=study_uid)
 
     # Define features path for storing the results
-    features_dir = os.path.join(FEATURES_BASE_DIR, user_id, study_uid)
+    features_dir = os.path.join(
+        EXTRACTIONS_BASE_DIR, FEATURES_SUBDIR, user_id, study_uid
+    )
     features_filename = feature_name + ".json"
     features_path = os.path.join(features_dir, features_filename)
 
+    # Define config path for storing the extraction configuration
+    # current_time_millis = str(int(round(time.time() * 1000)))
+    config_dir = os.path.join(EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, user_id, study_uid)
+    config_filename = (
+        feature_name + ".json"
+    )  # current_time_millis + "-" + feature_name + ".json"
+    config_path = os.path.join(config_dir, config_filename)
+
+    # Get the feature family for the given feature name
+    feature_family = FeatureFamily.find_by_name(feature_name)
+
+    # TODO - Currently just copying the feature family config, will be customizable in the future
+    feature_config = Path(feature_family.config_path).read_text()
+
     # Currently update any existing feature with the same path
-    feature = FeatureExtraction.find_by_path(features_path)
+    feature = FeatureExtraction.find_by_features_path(features_path)
 
     # If feature exists, set it to "in progress" again
     if not feature:
-        feature = FeatureExtraction(feature_name, features_path, user_id, study.id)
+        feature = FeatureExtraction(
+            feature_family.id, features_path, config_path, user_id, study.id
+        )
         feature.save_to_db()
 
     # Start Celery
     result = my_celery.send_task(
         "imaginetasks.extract",
         countdown=0.1,
-        args=[g.token, feature.id, study_uid, features_dir, features_path],
+        args=[
+            g.token,
+            feature.id,
+            study_uid,
+            features_path,
+            config_path,
+            feature_config,
+        ],
     )
 
     # follow_task(result, feature.id)
@@ -175,16 +189,17 @@ def format_feature(feature, status=None):
             final_status = status_object.status
 
     # Read the features file (if available)
-    sanitized_object = read_feature_file(feature.path)
+    sanitized_object = read_feature_file(feature.features_path)
 
     return {
         "id": feature.id,
-        "name": feature.name,
         "updated_at": feature.updated_at.strftime(DATE_FORMAT),
         "status": final_status,
         "status_message": status_message,
         "payload": sanitized_object,
         "study_uid": feature.study.uid,
+        # "feature_family_id": feature.feature_family_id,
+        "feature_family": feature.feature_family.to_dict(),
     }
 
 
@@ -235,7 +250,7 @@ def follow_task(app, result, feature_id):
             celery_states.SUCCESS,
             "Extraction complete",
             feature.updated_at.isoformat() + "Z",
-            read_feature_file(feature.path),
+            read_feature_file(feature.features_path),
         )
 
         my_socketio.emit("feature-status", socketio_body)

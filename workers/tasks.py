@@ -11,6 +11,7 @@ import pathlib
 from celery import Celery
 from celery.exceptions import Ignore
 from requests_toolbelt.multipart import decoder
+from pathlib import Path
 
 from config_worker import dicomFields, endpoints
 
@@ -26,7 +27,9 @@ celery = Celery(
 
 
 @celery.task(name="imaginetasks.extract", bind=True)
-def run_extraction(self, token, feature_id, study_uid, features_dir, features_path):
+def run_extraction(
+    self, token, feature_id, study_uid, features_path, config_path, feature_config
+):
 
     sleep(1)
 
@@ -73,17 +76,19 @@ def run_extraction(self, token, feature_id, study_uid, features_dir, features_pa
 
         # Save the features
         json_features = jsonpickle.encode(features)
-        os.makedirs(features_dir, exist_ok=True)
-        fh = open(features_path, "w")
-        fh.write(json_features)
-        fh.close()
+        os.makedirs(os.path.dirname(features_path), exist_ok=True)
+        Path(features_path).write_text(json_features)
+
+        # Save the config
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        Path(config_path).write_text(feature_config)
 
         # Extraction is complete
         status_message = "Extraction COMPLETE"
 
         return {
             "feature_id": feature_id,
-            "current": current_step + 1,
+            "current": steps,
             "total": steps,
             "status_message": status_message,
         }
