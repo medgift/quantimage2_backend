@@ -66,7 +66,11 @@ def run_extraction(
         status_message = "Extracting features"
         update_progress(self, feature_id, current_step, steps, status_message)
 
-        features = extract_features(file_paths)
+        # Save the config
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        Path(config_path).write_text(feature_config)
+
+        features = extract_features(file_paths, config_path)
 
         # Delete download DIR
         shutil.rmtree(dicom_dir, True)
@@ -78,10 +82,6 @@ def run_extraction(
         json_features = jsonpickle.encode(features)
         os.makedirs(os.path.dirname(features_path), exist_ok=True)
         Path(features_path).write_text(json_features)
-
-        # Save the config
-        os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        Path(config_path).write_text(feature_config)
 
         # Extraction is complete
         status_message = "Extraction COMPLETE"
@@ -213,7 +213,7 @@ def download_dicom_urls(token, urls):
     return tmp_dir
 
 
-def extract_features(file_paths):
+def extract_features(file_paths, config_path):
     ct_path = None
     labels_path = None
     for file_path in file_paths:
@@ -223,7 +223,10 @@ def extract_features(file_paths):
         if not labels_path and "rtstruct" in file_path:
             labels_path = file_path
 
-    extractor = featureextractor.RadiomicsFeatureExtractor()
+    if config_path:
+        extractor = featureextractor.RadiomicsFeatureExtractor(config_path)
+    else:
+        extractor = featureextractor.RadiomicsFeatureExtractor()
 
     result = extractor.execute(ct_path, labels_path)
 

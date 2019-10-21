@@ -108,7 +108,7 @@ def extract(study_uid, feature_name):
     # current_time_millis = str(int(round(time.time() * 1000)))
     config_dir = os.path.join(EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, user_id, study_uid)
     config_filename = (
-        feature_name + ".json"
+        feature_name + ".yml"
     )  # current_time_millis + "-" + feature_name + ".json"
     config_path = os.path.join(config_dir, config_filename)
 
@@ -236,6 +236,7 @@ def follow_task(app, result, feature_id):
     except Exception as e:
         socketio_body = get_socketio_body(feature_id, celery_states.FAILURE, str(e))
         my_socketio.emit("feature-status", socketio_body)
+        return
 
     print(f"Feature {feature_id} - DONE!")
 

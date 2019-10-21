@@ -20,4 +20,4 @@ RUN pip install --index-url https://test.pypi.org/simple/ --no-deps okapy==0.1.2
 COPY . .
 
 # Start app
-CMD ["celery", "worker", "--app=tasks", "--loglevel=DEBUG"]
+CMD ["celery", "worker", "--app=tasks", "--loglevel=INFO"]
