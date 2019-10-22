@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from flask import Blueprint, abort, jsonify, request, g, current_app
 
@@ -41,7 +42,9 @@ def feature_families():
     if request.method == "GET":
         feature_families = FeatureFamily.find_all()
 
-        serialized_families = map(lambda family: family.to_dict(), feature_families)
+        serialized_families = map(
+            lambda family: format_family(family), feature_families
+        )
 
         return jsonify(list(serialized_families))
 
@@ -82,3 +85,11 @@ def save_feature_config(file):
     file.save(file_path)
 
     return file_path
+
+
+def format_family(family):
+    formatted_dict = family.to_dict()
+
+    formatted_dict["config"] = Path(family.config_path).read_text()
+
+    return formatted_dict
