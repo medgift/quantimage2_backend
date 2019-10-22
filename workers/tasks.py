@@ -37,6 +37,10 @@ def run_extraction(
         current_step = 1
         steps = 3
 
+        # Save the config
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        Path(config_path).write_text(feature_config)
+
         # Status update - DOWNLOAD
         status_message = "Downloading DICOM files"
         update_progress(self, feature_id, current_step, steps, status_message)
@@ -65,10 +69,6 @@ def run_extraction(
         current_step += 1
         status_message = "Extracting features"
         update_progress(self, feature_id, current_step, steps, status_message)
-
-        # Save the config
-        os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        Path(config_path).write_text(feature_config)
 
         features = extract_features(file_paths, config_path)
 

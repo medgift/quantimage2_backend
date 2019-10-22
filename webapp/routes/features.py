@@ -87,7 +87,7 @@ def features_by_study(study_uid):
     return jsonify(feature_list)
 
 
-@bp.route("/extract/<study_uid>/<feature_name>")
+@bp.route("/extract/<study_uid>/<feature_name>", methods=["POST"])
 def extract(study_uid, feature_name):
     if not g.user:
         abort(400)
@@ -104,6 +104,9 @@ def extract(study_uid, feature_name):
     features_filename = feature_name + ".json"
     features_path = os.path.join(features_dir, features_filename)
 
+    # Define the feature configuration
+    feature_config = request.json["feature_config"]
+
     # Define config path for storing the extraction configuration
     # current_time_millis = str(int(round(time.time() * 1000)))
     config_dir = os.path.join(EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, user_id, study_uid)
@@ -116,7 +119,7 @@ def extract(study_uid, feature_name):
     feature_family = FeatureFamily.find_by_name(feature_name)
 
     # TODO - Currently just copying the feature family config, will be customizable in the future
-    feature_config = Path(feature_family.config_path).read_text()
+    # feature_config = Path(feature_family.config_path).read_text()
 
     # Currently update any existing feature with the same path
     feature = FeatureExtraction.find_by_features_path(features_path)
@@ -138,7 +141,7 @@ def extract(study_uid, feature_name):
             study_uid,
             features_path,
             config_path,
-            feature_config,
+            feature_config.replace("null", ""),
         ],
     )
 
@@ -191,6 +194,9 @@ def format_feature(feature, status=None):
     # Read the features file (if available)
     sanitized_object = read_feature_file(feature.features_path)
 
+    # Read the config file (if available)
+    config = read_config_file(feature.config_path)
+
     return {
         "id": feature.id,
         "updated_at": feature.updated_at.strftime(DATE_FORMAT),
@@ -200,6 +206,7 @@ def format_feature(feature, status=None):
         "study_uid": feature.study.uid,
         # "feature_family_id": feature.feature_family_id,
         "feature_family": feature.feature_family.to_dict(),
+        "config": config,
     }
 
 
@@ -342,3 +349,11 @@ def read_feature_file(feature_path):
             print(f"{feature_path} does not exist!")
 
     return sanitized_object
+
+
+def read_config_file(config_path):
+    try:
+        config = Path(config_path).read_text()
+        return config
+    except FileNotFoundError:
+        print(f"{config_path} does not exist!")
