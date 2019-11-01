@@ -12,6 +12,6 @@ keycloak_client = KeycloakOpenID(
 )
 
 # Extractions
-EXTRACTIONS_BASE_DIR = "/tmp/imagine/extractions"
+EXTRACTIONS_BASE_DIR = "/imagine-data/extractions"
 FEATURES_SUBDIR = "features"
 CONFIGS_SUBDIR = "configs"

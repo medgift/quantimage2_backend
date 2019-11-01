@@ -23,11 +23,13 @@ services:
       - KHEOPS_TOKEN=${KHEOPS_TOKEN}
       - PYTHONUNBUFFERED=TRUE
     volumes:
-      - backend-data:/tmp
+      - backend-data:/imagine-data
       - /data/imagine-data/imagine/feature-families:/uploads
 
   celery:
-    build: workers
+    build:
+      context: .
+      dockerfile: ./workers/Dockerfile
     environment:
       - KHEOPS_BASE_URL=${KHEOPS_BASE_URL}
       - KHEOPS_TOKEN=${KHEOPS_TOKEN}
@@ -39,13 +41,13 @@ services:
       - CELERY_RESULT_BACKEND=${CELERY_REDIS_URL}
       - SOCKET_MESSAGE_QUEUE=${SOCKET_REDIS_URL}
     volumes:
-      - backend-data:/tmp
+      - backend-data:/imagine-data
 
   flower:
     build: ./flower
     command: ["flower", "--broker=${CELERY_REDIS_URL}", "--result-backend=${CELERY_REDIS_URL}"]
     ports:
-        - 5555:5555
+      - 5555:5555
 
   db:
     image: mysql:5.7
@@ -75,44 +77,46 @@ services:
     image: redis
 
   keycloak:
-    image: jboss/keycloak
+    image: jboss/keycloak:6.0.1
     ports:
       - 8081:8080
     environment:
+      - KEYCLOAK_REALM_NAME=${KEYCLOAK_REALM_NAME}
       - KEYCLOAK_USER=${KEYCLOAK_USER}
       - KEYCLOAK_PASSWORD=${KEYCLOAK_PASSWORD}
-      - DB_VENDOR=mysql
+      - DB_VENDOR=POSTGRES
       - DB_ADDR=keycloak-db
       - DB_DATABASE=${KEYCLOAK_DB}
       - DB_USER=${KEYCLOAK_DB_USER}
       - DB_PASSWORD=${KEYCLOAK_DB_PASSWORD}
+      - DB_SCHEMA=public
     volumes:
       - ./keycloak_theme:/opt/jboss/keycloak/themes/imagine
+      - ./createRealmsLocal.sh:/createRealmsLocal.sh
     depends_on:
       - keycloak-db
 
   keycloak-db:
-    image: mysql:5.7
+    image: postgres
     environment:
-      - MYSQL_ROOT_PASSWORD=${KEYCLOAK_DB_ROOT_PASSWORD}
-      - MYSQL_USER=${KEYCLOAK_DB_USER}
-      - MYSQL_PASSWORD=${KEYCLOAK_DB_PASSWORD}
-      - MYSQL_DATABASE=${KEYCLOAK_DB}
-
-  keycloak-phpmyadmin:
-    image:                 phpmyadmin/phpmyadmin
-    environment:
-      PMA_ARBITRARY:       1
-      PMA_HOST:            keycloak-db
-      PMA_PORT:            3306
+      - POSTGRES_USER=${KEYCLOAK_DB_USER}
+      - POSTGRES_PASSWORD=${KEYCLOAK_DB_PASSWORD}
+      - POSTGRES_DB=${KEYCLOAK_DB}
     volumes:
-      - /sessions
+      - pgdata:/var/lib/postgresql
+
+  keycloak-db-admin:
+    image:                 dpage/pgadmin4
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD}
+    volumes:
+      - /var/lib/pgadmin
     ports:
       - 8889:80
     depends_on:
       - keycloak-db
 
-
-
 volumes:
   backend-data:
+  pgdata:
