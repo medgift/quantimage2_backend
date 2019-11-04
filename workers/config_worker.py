@@ -1,7 +1,5 @@
 import os
 
-token = os.environ["KHEOPS_TOKEN"]
-
 
 class DicomFields(object):
     pass
