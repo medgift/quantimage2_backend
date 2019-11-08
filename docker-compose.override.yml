@@ -4,7 +4,7 @@ services:
   backend:
     volumes:
       - ./webapp:/usr/src/app
-      - ./shared/imaginebackend_common/:/usr/local/lib/python3.6/site-packages/imaginebackend_common
+      - ./shared/imaginebackend_common/:/usr/local/lib/python3.7/site-packages/imaginebackend_common
       - /data/imagine-data:/imagine-data
     ports:
       - 5000:5000
@@ -25,8 +25,14 @@ services:
       - "roger:153.109.130.143"
     volumes:
       - ./workers:/usr/src/app
-      - ./shared/imaginebackend_common/:/usr/local/lib/python3.6/imaginebackend_common
+      - ./shared/imaginebackend_common/:/usr/local/lib/python3.7/imaginebackend_common
       - /data/imagine-data:/imagine-data
+    environment:
+      - CELERY_RDB_HOST=0.0.0.0
+      - CELERY_RDB_PORT=34000
+      - PYTHON_ENV=nodebug
+    ports:
+      - 34000-34100:34000-34100
 
   redis:
     ports:

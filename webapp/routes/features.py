@@ -111,15 +111,12 @@ def extract(study_uid, feature_name):
     # current_time_millis = str(int(round(time.time() * 1000)))
     config_dir = os.path.join(EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, user_id, study_uid)
     config_filename = (
-        feature_name + ".yml"
+        feature_name + ".json"
     )  # current_time_millis + "-" + feature_name + ".json"
     config_path = os.path.join(config_dir, config_filename)
 
     # Get the feature family for the given feature name
     feature_family = FeatureFamily.find_by_name(feature_name)
-
-    # TODO - Currently just copying the feature family config, will be customizable in the future
-    # feature_config = Path(feature_family.config_path).read_text()
 
     # Currently update any existing feature with the same path
     feature = FeatureExtraction.find_by_features_path(features_path)
@@ -141,7 +138,7 @@ def extract(study_uid, feature_name):
             study_uid,
             features_path,
             config_path,
-            feature_config.replace("null", ""),
+            feature_config,
         ],
     )
 
@@ -206,7 +203,7 @@ def format_feature(feature, status=None):
         "study_uid": feature.study.uid,
         # "feature_family_id": feature.feature_family_id,
         "feature_family": feature.feature_family.to_dict(),
-        "config": config,
+        "config": json.loads(config),
     }
 
 

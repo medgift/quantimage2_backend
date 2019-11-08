@@ -43,3 +43,6 @@ jsonpickle
 
 # Numpy
 numpy
+
+# PyYAML
+pyyaml

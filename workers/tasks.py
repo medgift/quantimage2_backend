@@ -2,13 +2,20 @@ import os, logging, traceback
 import shutil
 import tempfile
 import json
+import asyncio
 from time import sleep
 
 import jsonpickle
 import requests
-import pathlib
 
+import pathlib
+import warnings
+
+warnings.filterwarnings("ignore", message="Failed to parse headers")
+
+import yaml
 from celery import Celery
+from celery.contrib import rdb
 from celery.exceptions import Ignore
 from requests_toolbelt.multipart import decoder
 from pathlib import Path
@@ -18,6 +25,8 @@ from config_worker import dicomFields, endpoints
 from radiomics import featureextractor
 
 from okapy.dicomconverter.dicom_walker import DicomWalker
+
+from imaginebackend_common.feature_backends import feature_backends_map
 
 celery = Celery(
     "tasks",
@@ -37,9 +46,9 @@ def run_extraction(
         current_step = 1
         steps = 3
 
-        # Save the config
+        # Save the customized config
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        Path(config_path).write_text(feature_config)
+        Path(config_path).write_text(json.dumps(feature_config))
 
         # Status update - DOWNLOAD
         status_message = "Downloading DICOM files"
@@ -51,32 +60,17 @@ def run_extraction(
         # Download all the DICOM files
         dicom_dir = download_dicom_urls(token, url_list)
 
-        # Status update - CONVERT
-        current_step += 1
-        status_message = "Converting DICOM files to NRRD volume"
-        update_progress(self, feature_id, current_step, steps, status_message)
-
-        # Use Valentin's DicomWalker to convert DICOM to NRRD
-        results_dir = convert_dicom_to_nrrd(dicom_dir)
-
-        # Go through results files and extract features
-        file_paths = [
-            str(filepath.absolute())
-            for filepath in pathlib.Path(results_dir).glob("**/*")
-        ]
-
-        # Status update - EXTRACT
-        current_step += 1
-        status_message = "Extracting features"
-        update_progress(self, feature_id, current_step, steps, status_message)
-
-        features = extract_features(file_paths, config_path)
+        features = extract_all_features(
+            self,
+            dicom_dir,
+            config_path,
+            feature_id=feature_id,
+            current_step=current_step,
+            steps=steps,
+        )
 
         # Delete download DIR
         shutil.rmtree(dicom_dir, True)
-
-        # Delete results DIR
-        shutil.rmtree(results_dir, True)
 
         # Save the features
         json_features = jsonpickle.encode(features)
@@ -137,17 +131,6 @@ def get_token_header(token):
     return {"Authorization": "Bearer " + token}
 
 
-def convert_dicom_to_nrrd(input_dir, labels=["GTV T"]):
-    output_dir = tempfile.mkdtemp()
-
-    walker = DicomWalker(input_dir, output_dir, list_labels=labels)
-    walker.walk()
-    walker.fill_images()
-    walker.convert()
-
-    return output_dir
-
-
 def get_dicom_url_list(token, study_uid):
     # Get the metadata items of the study
     study_metadata_url = (
@@ -199,8 +182,13 @@ def download_dicom_urls(token, urls):
     access_token = get_token_header(token)
     for url in urls:
         filename = os.path.basename(url)
+
+        import logging
+
+        logging.getLogger("urllib3").setLevel(logging.ERROR)
         response = requests.get(url, headers=access_token)
         # open(os.path.join(tmp_dir, filename), "wb").write(response.content)
+
         multipart_data = decoder.MultipartDecoder.from_response(response)
 
         # Get first part, with the content
@@ -213,21 +201,43 @@ def download_dicom_urls(token, urls):
     return tmp_dir
 
 
-def extract_features(file_paths, config_path):
-    ct_path = None
-    labels_path = None
-    for file_path in file_paths:
-        if not ct_path and "ct" in file_path:
-            ct_path = file_path
+def extract_all_features(
+    task, dicom_dir, config_path, feature_id=None, current_step=None, steps=None
+):
+    config = json.loads(Path(config_path).read_text()) if config_path else None
 
-        if not labels_path and "rtstruct" in file_path:
-            labels_path = file_path
+    features_dict = {}
 
-    if config_path:
-        extractor = featureextractor.RadiomicsFeatureExtractor(config_path)
-    else:
-        extractor = featureextractor.RadiomicsFeatureExtractor()
+    # Status update - CONVERT
+    current_step += 1
+    status_message = "Pre-processing data"
+    update_progress(task, feature_id, current_step, steps, status_message)
 
-    result = extractor.execute(ct_path, labels_path)
+    backend_inputs = {}
+    for backend in config["backends"]:
+        # if some features were selected for this backend
+        if len(config["backends"][backend]["features"]) > 0:
+            # get extractor from feature backends
+            extractor = feature_backends_map[backend](config["backends"][backend])
+            backend_inputs[backend] = extractor.pre_process_data(dicom_dir)
+
+    # Status update - EXTRACT
+    current_step += 1
+    status_message = "Extracting features"
+    update_progress(task, feature_id, current_step, steps, status_message)
+
+    for backend in config["backends"]:
+        # if there is pre-processed data for this backend
+        if backend in backend_inputs.keys():
+            # get extractor from feature backends
+            extractor = feature_backends_map[backend](config["backends"][backend])
+            print("CONFIG!!!!")
+            print(config["backends"][backend])
+            print("FEATURES!!!")
+            features = extractor.extract_features(backend_inputs[backend])
+            print(features)
+            features_dict.update(features)
+
+    result = features_dict
 
     return result

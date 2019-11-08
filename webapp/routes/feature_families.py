@@ -1,10 +1,12 @@
 import os
 from pathlib import Path
 
-from flask import Blueprint, abort, jsonify, request, g, current_app
+import yaml
+from flask import Blueprint, abort, jsonify, request, current_app
 
 from ..models import FeatureFamily
 from .utils import validate_decorate
+from imaginebackend_common.feature_backends import feature_backends_map
 
 
 # Define blueprint
@@ -42,11 +44,11 @@ def feature_families():
     if request.method == "GET":
         feature_families = FeatureFamily.find_all()
 
-        serialized_families = map(
-            lambda family: format_family(family), feature_families
+        serialized_families = list(
+            map(lambda family: format_family(family), feature_families)
         )
 
-        return jsonify(list(serialized_families))
+        return jsonify(serialized_families)
 
 
 @bp.route("/feature-families/<feature_family_id>", methods=("GET", "PATCH"))
@@ -90,6 +92,18 @@ def save_feature_config(file):
 def format_family(family):
     formatted_dict = family.to_dict()
 
-    formatted_dict["config"] = Path(family.config_path).read_text()
+    feature_config_yaml = yaml.load(
+        Path(family.config_path).read_text(), Loader=yaml.FullLoader
+    )
+
+    config = {"backends": {}}
+
+    for feature_backend in feature_config_yaml["backends"]:
+        feature_backend_object = feature_backends_map[feature_backend](
+            feature_config_yaml["backends"][feature_backend]
+        )
+        config["backends"][feature_backend] = feature_backend_object.format_config()
+
+    formatted_dict["config"] = config
 
     return formatted_dict
