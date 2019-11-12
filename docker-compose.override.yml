@@ -35,6 +35,22 @@ services:
     ports:
       - 34000-34100:34000-34100
 
+  flower:
+    ports:
+      - 5555:5555
+
+  phpmyadmin:
+    ports:
+      - 8888:80
+
+  keycloak:
+    ports:
+      - 8081:8080
+
+  keycloak-db-admin:
+    ports:
+      - 8889:80
+
   redis:
     ports:
       - 6379:6379

@@ -8,9 +8,23 @@ services:
       - "traefik.frontend.rule=Host:${TRAEFIK_URL_FLASKAPP}"
       - "traefik.enable=true"
 
+  phpmyadmin:
+    labels:
+      - "traefik.backend=${TRAEFIK_BACKEND_PHPMYADMIN}"
+      - "traefik.docker.network=prod"
+      - "traefik.frontend.rule=Host:${TRAEFIK_URL_PHPMYADMIN}"
+      - "traefik.enable=true"
+
   keycloak:
     labels:
       - "traefik.backend=${TRAEFIK_BACKEND_KEYCLOAK}"
       - "traefik.docker.network=prod"
       - "traefik.frontend.rule=Host:${TRAEFIK_URL_KEYCLOAK}"
+      - "traefik.enable=true"
+
+  keycloak-db-admin:
+    labels:
+      - "traefik.backend=${TRAEFIK_BACKEND_KEYCLOAK_DB_ADMIN}"
+      - "traefik.docker.network=prod"
+      - "traefik.frontend.rule=Host:${TRAEFIK_URL_KEYCLOAK_DB_ADMIN}"
       - "traefik.enable=true"

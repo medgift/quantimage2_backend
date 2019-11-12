@@ -45,8 +45,6 @@ services:
   flower:
     build: ./flower
     command: ["flower", "--broker=${CELERY_REDIS_URL}", "--result-backend=${CELERY_REDIS_URL}"]
-    ports:
-      - 5555:5555
 
   db:
     image: mysql:5.7
@@ -64,8 +62,6 @@ services:
       PMA_PORT:            3306
     volumes:
       - /sessions
-    ports:
-      - 8888:80
     depends_on:
       - db
 
@@ -76,9 +72,7 @@ services:
     image: redis
 
   keycloak:
-    image: jboss/keycloak:6.0.1
-    ports:
-      - 8081:8080
+    image: jboss/keycloak
     environment:
       - KEYCLOAK_REALM_NAME=${KEYCLOAK_REALM_NAME}
       - KEYCLOAK_USER=${KEYCLOAK_USER}
@@ -113,8 +107,6 @@ services:
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD}
     volumes:
       - /var/lib/pgadmin
-    ports:
-      - 8889:80
     depends_on:
       - keycloak-db
 
