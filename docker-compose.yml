@@ -23,7 +23,6 @@ services:
       - PYTHONUNBUFFERED=TRUE
     volumes:
       - backend-data:/imagine-data
-      - /data/imagine-data/imagine/feature-families:/uploads
 
   celery:
     build:
