@@ -7,6 +7,9 @@ services:
       - "traefik.docker.network=prod"
       - "traefik.frontend.rule=Host:${TRAEFIK_URL_FLASKAPP}"
       - "traefik.enable=true"
+    networks:
+      - default
+      - prod
 
   phpmyadmin:
     labels:
@@ -14,6 +17,9 @@ services:
       - "traefik.docker.network=prod"
       - "traefik.frontend.rule=Host:${TRAEFIK_URL_PHPMYADMIN}"
       - "traefik.enable=true"
+    networks:
+      - default
+      - prod
 
   keycloak:
     labels:
@@ -21,6 +27,9 @@ services:
       - "traefik.docker.network=prod"
       - "traefik.frontend.rule=Host:${TRAEFIK_URL_KEYCLOAK}"
       - "traefik.enable=true"
+    networks:
+      - default
+      - prod
 
   keycloak-db-admin:
     labels:
@@ -28,3 +37,11 @@ services:
       - "traefik.docker.network=prod"
       - "traefik.frontend.rule=Host:${TRAEFIK_URL_KEYCLOAK_DB_ADMIN}"
       - "traefik.enable=true"
+    networks:
+      - default
+      - prod
+
+networks:
+  prod:
+    external: true
+    name: ${TRAEFIK_NETWORK}
