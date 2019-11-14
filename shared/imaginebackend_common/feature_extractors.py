@@ -3,6 +3,7 @@ import json
 import os
 from radiomics import featureextractor
 import subprocess
+from subprocess import PIPE
 from celery.contrib import rdb
 
 
@@ -27,7 +28,7 @@ class QuantImageFeatureExtractor:
 
         completed_matlab_process = subprocess.run(
             ["bin/QuantImage_Radiomics_WebService", zip_path, json.dumps(self.config)],
-            capture_output=True,
+            stdout=PIPE,
             encoding="utf-8",
         )
         print("MATLAB STDOUT!!!!!!!!!!!!!!")
