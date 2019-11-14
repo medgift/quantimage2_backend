@@ -17,7 +17,7 @@ import pydevd_pycharm
 from . import create_app, my_socketio
 
 # Setup Debugger
-if "DEBUGGER_IP" in os.environ:
+if "DEBUGGER_IP" in os.environ and os.environ["DEBUGGER_IP"] != "":
     try:
         pydevd_pycharm.settrace(
             os.environ["DEBUGGER_IP"],

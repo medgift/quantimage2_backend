@@ -6,10 +6,17 @@ services:
       - "traefik.backend=${TRAEFIK_BACKEND_FLASKAPP}"
       - "traefik.docker.network=prod"
       - "traefik.frontend.rule=Host:${TRAEFIK_URL_FLASKAPP}"
+      - "traefik.port=5000"
       - "traefik.enable=true"
     networks:
       - default
       - prod
+    volumes:
+      - ./shared/imaginebackend_common/:/usr/local/lib/python3.7/imaginebackend_common
+
+  celery:
+    volumes:
+      - ./shared/imaginebackend_common/:/usr/local/lib/python3.7/imaginebackend_common
 
   phpmyadmin:
     labels:
@@ -22,6 +29,8 @@ services:
       - prod
 
   keycloak:
+    environment:
+      - PROXY_ADDRESS_FORWARDING=true
     labels:
       - "traefik.backend=${TRAEFIK_BACKEND_KEYCLOAK}"
       - "traefik.docker.network=prod"
