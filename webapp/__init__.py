@@ -11,9 +11,15 @@ from .models import db
 
 def make_socketio():
 
+    allowed_origins = (
+        os.environ["CORS_ALLOWED_ORIGINS"]
+        if "," not in os.environ["CORS_ALLOWED_ORIGINS"]
+        else os.environ["CORS_ALLOWED_ORIGINS"].split(",")
+    )
+
     socketio = SocketIO(
         app=None,
-        cors_allowed_origins=[os.environ["CORS_ALLOWED_ORIGINS"]],
+        cors_allowed_origins=allowed_origins,
         async_mode="eventlet",
         async_handlers=True,
         logger=False,
