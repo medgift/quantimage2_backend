@@ -5,7 +5,6 @@ services:
     volumes:
       - ./webapp:/usr/src/app
       - /data/imagine-data:/imagine-data
-      - /data/imagine-data/feature-families:/uploads
     ports:
       - 5000:5000
       - 5678:5678
