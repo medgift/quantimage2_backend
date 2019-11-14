@@ -1,3 +1,9 @@
+# Important to monkey-patch in the beginning!
+print("Monkey Patching!")
+import eventlet
+
+eventlet.monkey_patch()
+
 import os
 
 from celery import Celery

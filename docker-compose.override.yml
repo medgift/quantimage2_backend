@@ -4,7 +4,6 @@ services:
   backend:
     volumes:
       - ./webapp:/usr/src/app
-      - ./shared/imaginebackend_common/:/usr/local/lib/python3.7/site-packages/imaginebackend_common
       - /data/imagine-data:/imagine-data
       - /data/imagine-data/feature-families:/uploads
     ports:
@@ -26,7 +25,6 @@ services:
       - "roger:153.109.130.143"
     volumes:
       - ./workers:/usr/src/app
-      - ./shared/imaginebackend_common/:/usr/local/lib/python3.7/imaginebackend_common
       - /data/imagine-data:/imagine-data
     environment:
       - CELERY_RDB_HOST=0.0.0.0

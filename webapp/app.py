@@ -1,7 +1,4 @@
-# Important to monkey-patch in the beginning!
-import eventlet
-
-eventlet.monkey_patch()
+print("App is Starting!")
 
 # System packages
 import os

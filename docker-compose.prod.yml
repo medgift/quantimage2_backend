@@ -11,12 +11,6 @@ services:
     networks:
       - default
       - prod
-    volumes:
-      - ./shared/imaginebackend_common/:/usr/local/lib/python3.7/imaginebackend_common
-
-  celery:
-    volumes:
-      - ./shared/imaginebackend_common/:/usr/local/lib/python3.7/imaginebackend_common
 
   phpmyadmin:
     labels:
