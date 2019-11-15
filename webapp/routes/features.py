@@ -115,6 +115,10 @@ def extract(study_uid, feature_name):
     )  # current_time_millis + "-" + feature_name + ".json"
     config_path = os.path.join(config_dir, config_filename)
 
+    # Save the customized config
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
+    Path(config_path).write_text(json.dumps(feature_config))
+
     # Get the feature family for the given feature name
     feature_family = FeatureFamily.find_by_name(feature_name)
 
@@ -132,14 +136,7 @@ def extract(study_uid, feature_name):
     result = my_celery.send_task(
         "imaginetasks.extract",
         countdown=0.1,
-        args=[
-            g.token,
-            feature.id,
-            study_uid,
-            features_path,
-            config_path,
-            feature_config,
-        ],
+        args=[g.token, feature.id, study_uid, features_path, config_path],
     )
 
     # follow_task(result, feature.id)

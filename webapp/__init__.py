@@ -75,6 +75,9 @@ def create_app():
 
     app.config["UPLOAD_FOLDER"] = "/imagine-data/feature-families"
 
+    # Create feature-families folder (if necessary)
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+
     @app.errorhandler(InvalidUsage)
     def handle_invalid_usage(error):
         response = jsonify(error.to_dict())

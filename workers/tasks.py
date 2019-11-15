@@ -36,19 +36,13 @@ celery = Celery(
 
 
 @celery.task(name="imaginetasks.extract", bind=True)
-def run_extraction(
-    self, token, feature_id, study_uid, features_path, config_path, feature_config
-):
+def run_extraction(self, token, feature_id, study_uid, features_path, config_path):
 
     sleep(1)
 
     try:
         current_step = 1
         steps = 3
-
-        # Save the customized config
-        os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        Path(config_path).write_text(json.dumps(feature_config))
 
         # Status update - DOWNLOAD
         status_message = "Downloading DICOM files"
