@@ -1,19 +1,15 @@
-import os, logging, traceback
+import os, logging
 import shutil
 import tempfile
 import json
-import asyncio
-from time import sleep
 
 import jsonpickle
 import requests
 
-import pathlib
 import warnings
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
 
-import yaml
 from celery import Celery
 from celery.contrib import rdb
 from celery.exceptions import Ignore
@@ -38,14 +34,12 @@ celery = Celery(
 @celery.task(name="imaginetasks.extract", bind=True)
 def run_extraction(self, token, feature_id, study_uid, features_path, config_path):
 
-    sleep(1)
-
     try:
         current_step = 1
         steps = 3
 
         # Status update - DOWNLOAD
-        status_message = "Downloading DICOM files"
+        status_message = "Fetching DICOM files"
         update_progress(self, feature_id, current_step, steps, status_message)
 
         # Get the list of instance URLs
