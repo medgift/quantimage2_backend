@@ -5,7 +5,7 @@ black
 eventlet
 
 # Debug
-pydevd-pycharm==192.7142.42
+pydevd-pycharm==192.7142.56
 ptvsd
 
 # Flask

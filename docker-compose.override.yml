@@ -48,6 +48,10 @@ services:
     ports:
       - 8889:80
 
+  ohif:
+    ports:
+      - 4567:80
+
   redis:
     ports:
       - 6379:6379

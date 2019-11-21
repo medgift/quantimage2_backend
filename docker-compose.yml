@@ -111,6 +111,9 @@ services:
     depends_on:
       - keycloak-db
 
+  ohif:
+    image: ohif/viewer
+
 volumes:
   backend-data:
   pgdata:

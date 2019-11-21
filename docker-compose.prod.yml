@@ -44,6 +44,16 @@ services:
       - default
       - prod
 
+  ohif:
+    labels:
+      - "traefik.backend=${TRAEFIK_BACKEND_OHIF}"
+      - "traefik.docker.network=prod"
+      - "traefik.frontend.rule=Host:${TRAEFIK_URL_OHIF}"
+      - "traefik.enable=true"
+    networks:
+      - default
+      - prod
+
 networks:
   prod:
     external: true
