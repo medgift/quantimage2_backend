@@ -93,7 +93,7 @@ services:
       - keycloak-db
 
   keycloak-db:
-    image: postgres:11
+    image: postgres
     environment:
       - POSTGRES_USER=${KEYCLOAK_DB_USER}
       - POSTGRES_PASSWORD=${KEYCLOAK_DB_PASSWORD}
