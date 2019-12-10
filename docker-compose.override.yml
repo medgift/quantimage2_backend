@@ -26,11 +26,11 @@ services:
       - ./workers:/usr/src/app
       - /data/imagine-data:/imagine-data
     environment:
-      - CELERY_RDB_HOST=0.0.0.0
-      - CELERY_RDB_PORT=34000
+      #- CELERY_RDB_HOST=0.0.0.0
+      #- CELERY_RDB_PORT=34000
       - PYTHON_ENV=nodebug
-    ports:
-      - 34000-34100:34000-34100
+    #ports:
+      #- 34000-34100:34000-34100
 
   flower:
     ports:
