@@ -27,10 +27,10 @@ if "DEBUGGER_IP" in os.environ and os.environ["DEBUGGER_IP"] != "":
         logging.warning("No debug server running")
 
 # Create the Flask app
-app = create_app()
+flask_app = create_app()
 
 # CORS
-CORS(app)
+CORS(flask_app)
 
 # Run the app (through socket.io)
-my_socketio.run(app, host="0.0.0.0")
+my_socketio.run(flask_app, host="0.0.0.0")

@@ -106,7 +106,9 @@ def setup_app(app):
     # Register routes
     from .routes.features import bp as features_bp
     from .routes.feature_families import bp as feature_families_bp
+    from .routes.tasks import bp as tasks_bp
 
     with app.app_context():
         app.register_blueprint(features_bp)
         app.register_blueprint(feature_families_bp)
+        app.register_blueprint(tasks_bp)
