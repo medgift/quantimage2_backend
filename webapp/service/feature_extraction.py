@@ -4,7 +4,7 @@ import traceback
 from pathlib import Path
 
 import eventlet
-from eventlet import tpool
+
 from celery import group
 
 from ..routes.utils import (
@@ -37,13 +37,13 @@ def run_feature_extraction(
     feature_extraction = FeatureExtraction(user_id, album_id, study_uid)
     feature_extraction.save_to_db()
 
-    extraction_status = fetch_extraction_result(feature_extraction.result_id)
+    # extraction_status = fetch_extraction_result(feature_extraction.result_id)
 
     # Send a Socket.IO message to inform that the extraction has started
-    socketio_body = get_socketio_body_extraction(
-        feature_extraction.id, vars(extraction_status)
-    )
-    my_socketio.emit(MessageType.EXTRACTION_STATUS.value, socketio_body)
+    # socketio_body = get_socketio_body_extraction(
+    #     feature_extraction.id, vars(extraction_status)
+    # )
+    # my_socketio.emit(MessageType.EXTRACTION_STATUS.value, socketio_body)
 
     # For each feature family, create the association with the extraction
     # as well as the feature extraction task
@@ -111,7 +111,11 @@ def run_feature_extraction(
     feature_extraction.save_to_db()
 
     # Spawn green thread to follow the job's progress
-    eventlet.spawn(follow_job, group_result, feature_extraction.id)
+    # eventlet.spawn(follow_job, group_result, feature_extraction.id)
+    # eventlet.spawn(follow_job, group_result, feature_extraction.id)
+    # _thread.start_new_thread(follow_job, (group_result, feature_extraction.id))
+
+    # follow_job(group_result, feature_extraction.id)
 
     # TODO - Remove these alternative ways to spawn a thread to follow the job
     # my_socketio.start_background_task(follow_job, group_result, feature_extraction.id)
@@ -214,9 +218,16 @@ def follow_job(group_result, feature_extraction_id):
     try:
         # Proxy the group result with the eventlet thread pool
         # This is to ensure that the "get" method will not be interrupted
-        proxy = tpool.Proxy(group_result)
-        proxy.get(on_message=task_status_update)
-        print(f"Feature extraction {feature_extraction_id} - DONE!")
+        # proxy = tpool.Proxy(group_result)
+        # proxy.get(on_message=task_status_update)
+        # print(f"Feature extraction {feature_extraction_id} - DONE!")
+        # group_result.get(on_message=task_status_update)
+
+        while not group_result.ready():
+            print(
+                f"Feature extraction {feature_extraction_id} - Completed tasks : {group_result.completed_count()}"
+            )
+            eventlet.sleep(1)
 
         # When the process ends, send Socket.IO message informing of the end
         extraction_status = fetch_extraction_result(group_result.id)

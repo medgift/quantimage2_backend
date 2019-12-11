@@ -24,13 +24,11 @@ def make_socketio():
     )
 
     socketio = SocketIO(
-        app=None,
         cors_allowed_origins=allowed_origins,
         async_mode="eventlet",
         async_handlers=True,
         logger=False,
         engineio_logger=False,
-        # message_queue=os.environ["SOCKET_MESSAGE_QUEUE"],
     )
 
     setup_sockets(socketio)
@@ -101,7 +99,9 @@ def setup_app(app):
     my_celery.conf.update(app.config)
 
     # Socket.IO
-    my_socketio.init_app(app)
+    my_socketio.init_app(
+        app, message_queue=os.environ["SOCKET_MESSAGE_QUEUE"],
+    )
 
     # Register routes
     from .routes.features import bp as features_bp

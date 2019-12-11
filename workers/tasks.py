@@ -1,4 +1,4 @@
-import os, logging
+import os
 import shutil
 import tempfile
 import json
@@ -9,6 +9,7 @@ import requests
 
 import warnings
 
+from flask_socketio import SocketIO
 from requests_toolbelt import NonMultipartContentTypeException
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
@@ -27,12 +28,13 @@ celery = Celery(
     broker=os.environ["CELERY_BROKER_URL"],
 )
 
+socketio = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
+
 
 @celery.task(name="imaginetasks.extract", bind=True)
 def run_extraction(
     self, token, feature_extraction_task_id, study_uid, features_path, config_path
 ):
-
     try:
         current_step = 1
         steps = 3
