@@ -10,8 +10,16 @@ requests
 # Multipart handler
 requests-toolbelt
 
-# Flask-SocketIO
+# Flask
+Flask
+Flask-SQLAlchemy
 Flask-SocketIO
+
+# MySQL
+mysqlclient
+
+# SQLAlchemy
+SQLAlchemy
 
 # Celery
 Celery

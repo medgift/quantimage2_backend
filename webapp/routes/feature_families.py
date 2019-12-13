@@ -4,7 +4,7 @@ from pathlib import Path
 import yaml
 from flask import Blueprint, abort, jsonify, request, current_app
 
-from ..models import FeatureFamily
+from imaginebackend_common.models import FeatureFamily
 from .utils import validate_decorate
 from imaginebackend_common.feature_backends import feature_backends_map
 

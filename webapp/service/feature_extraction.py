@@ -1,24 +1,22 @@
 import json
 import os
-import traceback
 from pathlib import Path
 
-import eventlet
+from celery import group, chord, states as celerystates
 
-from celery import group
-
+from imaginebackend_common.utils import (
+    task_status_message_from_result,
+    MessageType,
+    get_socketio_body_extraction,
+    StatusMessage)
 from ..routes.utils import (
     fetch_task_result,
     read_feature_file,
     DATE_FORMAT,
-    task_status_update,
-    task_status_message,
-    get_socketio_body_extraction,
-    MessageType,
     fetch_extraction_result,
-)
+    read_config_file)
 from ..config import EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, FEATURES_SUBDIR
-from ..models import (
+from imaginebackend_common.models import (
     FeatureExtraction,
     FeatureFamily,
     FeatureExtractionFamily,
@@ -37,17 +35,8 @@ def run_feature_extraction(
     feature_extraction = FeatureExtraction(user_id, album_id, study_uid)
     feature_extraction.save_to_db()
 
-    # extraction_status = fetch_extraction_result(feature_extraction.result_id)
-
-    # Send a Socket.IO message to inform that the extraction has started
-    # socketio_body = get_socketio_body_extraction(
-    #     feature_extraction.id, vars(extraction_status)
-    # )
-    # my_socketio.emit(MessageType.EXTRACTION_STATUS.value, socketio_body)
-
     # For each feature family, create the association with the extraction
     # as well as the feature extraction task
-
     task_signatures = []
 
     for feature_family_id in feature_families_map:
@@ -98,28 +87,35 @@ def run_feature_extraction(
                 config_path,
             ],
             kwargs={},
+            link=my_celery.signature(
+                "imaginetasks.finalize_extraction_task",
+                args=[feature_extraction_task.id],
+            ),
         )
 
         task_signatures.append(task_signature)
 
-    # Start the tasks as a group
-    job = group(task_signatures)
-    group_result = job.apply_async(countdown=1)
-    group_result.save()
+    finalize_signature = my_celery.signature(
+        "imaginetasks.finalize_extraction", args=[feature_extraction.id],
+    )
 
-    feature_extraction.result_id = group_result.id
+    # Start the tasks as a group
+    group_tasks = group(task_signatures)
+    job = chord(group_tasks, finalize_signature).apply_async()
+    job.parent.save()
+    # group_result = job.apply_async(countdown=1)
+    # group_result.save()
+
+    feature_extraction.result_id = job.parent.id
     feature_extraction.save_to_db()
 
-    # Spawn green thread to follow the job's progress
-    # eventlet.spawn(follow_job, group_result, feature_extraction.id)
-    # eventlet.spawn(follow_job, group_result, feature_extraction.id)
-    # _thread.start_new_thread(follow_job, (group_result, feature_extraction.id))
+    extraction_status = fetch_extraction_result(feature_extraction.result_id)
 
-    # follow_job(group_result, feature_extraction.id)
-
-    # TODO - Remove these alternative ways to spawn a thread to follow the job
-    # my_socketio.start_background_task(follow_job, group_result, feature_extraction.id)
-    # tpool.execute(follow_job, group_result, feature_extraction.id)
+    # Send a Socket.IO message to inform that the extraction has started
+    socketio_body = get_socketio_body_extraction(
+        feature_extraction.id, vars(extraction_status)
+    )
+    my_socketio.emit(MessageType.EXTRACTION_STATUS.value, socketio_body)
 
     feature_extraction = FeatureExtraction.find_by_id(feature_extraction.id)
 
@@ -129,6 +125,23 @@ def run_feature_extraction(
 def job_done():
     print("awesome!")
 
+def format_feature_families(families):
+    # Gather the feature families
+    families_list = []
+
+    if families:
+        for family in families:
+            formatted_family = format_family(family)
+            families_list.append(formatted_family)
+
+    return families_list
+
+def format_family(family):
+    config_str = read_config_file(family.family_config_path)
+
+    config = json.loads(config_str)
+
+    return {**family.to_dict(), 'config': config}
 
 def format_feature_tasks(feature_tasks):
     # Gather the feature tasks
@@ -143,8 +156,8 @@ def format_feature_tasks(feature_tasks):
 
 
 def format_feature_task(feature_task):
-    status = ""
-    status_message = ""
+    status = celerystates.PENDING
+    status_message = StatusMessage.WAITING_TO_START.value
     sanitized_object = {}
 
     # Get the feature status & update the status if necessary!
@@ -152,10 +165,13 @@ def format_feature_task(feature_task):
         status_object = fetch_task_result(feature_task.task_id)
         result = status_object.result
 
-        # Get the status message for the task
-        status_message = task_status_message(result)
+        print(f"Got Task n°{feature_task.id} Result (task id {feature_task.task_id}) : {result}")
 
-        status = status_object.status
+        # If the task is in progress, show the corresponding message
+        # Otherwise it is still pending
+        if result:
+            status = status_object.status
+            status_message = task_status_message_from_result(result)
 
         # Read the features file (if available)
         sanitized_object = read_feature_file(feature_task.features_path)
@@ -208,46 +224,3 @@ def save_config(
     Path(config_path).write_text(json.dumps(feature_config))
 
     return config_path
-
-
-def follow_job(group_result, feature_extraction_id):
-    print(
-        f"Feature extraction {feature_extraction_id} - STARTING TO LISTEN FOR EVENTS!"
-    )
-
-    try:
-        # Proxy the group result with the eventlet thread pool
-        # This is to ensure that the "get" method will not be interrupted
-        # proxy = tpool.Proxy(group_result)
-        # proxy.get(on_message=task_status_update)
-        # print(f"Feature extraction {feature_extraction_id} - DONE!")
-        # group_result.get(on_message=task_status_update)
-
-        while not group_result.ready():
-            print(
-                f"Feature extraction {feature_extraction_id} - Completed tasks : {group_result.completed_count()}"
-            )
-            eventlet.sleep(1)
-
-        # When the process ends, send Socket.IO message informing of the end
-        extraction_status = fetch_extraction_result(group_result.id)
-
-        socketio_body = get_socketio_body_extraction(
-            feature_extraction_id, vars(extraction_status),
-        )
-
-        # Handle updating the extraction via Socket.IO
-        my_socketio.emit(MessageType.EXTRACTION_STATUS.value, socketio_body)
-
-        return group_result
-
-    except Exception as e:
-        print(e)
-        traceback.print_exception(type(e), e, e.__traceback__)
-        return None
-
-    # TODO - Deal with errors in different tasks, how it should affect the job overall
-    # socketio_body = get_socketio_body(result.id, celery_states.FAILURE, str(e))
-    # my_socketio.emit("feature-status", socketio_body)
-    #    print(e)
-    #    return

@@ -1,7 +1,9 @@
+import logging
 import os
 import shutil
 import tempfile
 import json
+import time
 import traceback
 
 import jsonpickle
@@ -12,9 +14,21 @@ import warnings
 from flask_socketio import SocketIO
 from requests_toolbelt import NonMultipartContentTypeException
 
+from imaginebackend_common.flask_init import create_app
+from imaginebackend_common.models import FeatureExtractionTask, FeatureExtraction, db
+from imaginebackend_common.utils import (
+    get_socketio_body_feature_task,
+    MessageType,
+    task_status_message,
+    ExtractionStatus,
+    get_socketio_body_extraction,
+)
+
 warnings.filterwarnings("ignore", message="Failed to parse headers")
 
 from celery import Celery
+from celery.signals import worker_process_init
+from celery import states as celerystates
 from requests_toolbelt.multipart import decoder
 from pathlib import Path
 
@@ -30,14 +44,36 @@ celery = Celery(
 
 socketio = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
 
+flask_app = create_app()
+flask_app.app_context().push()
 
 @celery.task(name="imaginetasks.extract", bind=True)
 def run_extraction(
     self, token, feature_extraction_task_id, study_uid, features_path, config_path
 ):
     try:
+
         current_step = 1
         steps = 3
+
+        db.session.commit()
+
+        all_tasks = FeatureExtractionTask.query.order_by(db.desc(FeatureExtractionTask.id)).all()
+        print(f"There are {len(all_tasks)} tasks in the table")
+        print(f"The latest task has id {all_tasks[0].id}")
+
+        # Affect celery task ID to task (if needed)
+        print(f"Getting Feature Extraction Task with id {feature_extraction_task_id}")
+        feature_extraction_task = FeatureExtractionTask.find_by_id(
+            feature_extraction_task_id
+        )
+
+        if not feature_extraction_task:
+            raise Exception("Didn't find the task in the DB!!!")
+
+        if not feature_extraction_task.task_id:
+            feature_extraction_task.task_id = self.request.id
+            feature_extraction_task.save_to_db()
 
         # Status update - DOWNLOAD
         status_message = "Fetching DICOM files"
@@ -71,6 +107,14 @@ def run_extraction(
         # Extraction is complete
         status_message = "Extraction Complete"
 
+        # Check if parent is done - TODO Find a better way to do this, not from the task level hopefully
+        extraction_status = fetch_extraction_result(
+            feature_extraction_task.feature_extraction.result_id
+        )
+
+        print("Checking on parent status!")
+        print(vars(extraction_status))
+
         return {
             "feature_extraction_task_id": feature_extraction_task_id,
             "current": steps,
@@ -100,6 +144,40 @@ def run_extraction(
 
         raise e
 
+    finally:
+        db.session.remove()
+
+
+@celery.task(name="imaginetasks.finalize_extraction", bind=True)
+def finalize_extraction(task, results, feature_extraction_id):
+    feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
+    extraction_status = fetch_extraction_result(feature_extraction.result_id)
+
+    # Send Socket.IO message
+    socketio_body = get_socketio_body_extraction(
+        feature_extraction_id, vars(extraction_status)
+    )
+
+    socketio.emit(MessageType.EXTRACTION_STATUS.value, socketio_body)
+
+    db.session.remove()
+
+
+@celery.task(name="imaginetasks.finalize_extraction_task", bind=True)
+def finalize_extraction_task(task, result, feature_extraction_task_id):
+
+    # Send Socket.IO message
+    socketio_body = get_socketio_body_feature_task(
+        task.request.id,
+        feature_extraction_task_id,
+        celerystates.SUCCESS,
+        "Extraction Complete",
+    )
+
+    socketio.emit(MessageType.FEATURE_TASK_STATUS.value, socketio_body)
+
+    db.session.remove()
+
 
 def update_progress(
     task, feature_extraction_task_id, current_step, steps, status_message
@@ -107,6 +185,8 @@ def update_progress(
     print(
         f"Feature extraction task {feature_extraction_task_id} - {current_step}/{steps} - {status_message}"
     )
+
+    status = "PROGRESS"
 
     meta = {
         "task_id": task.request.id,
@@ -116,11 +196,41 @@ def update_progress(
         "status_message": status_message,
     }
 
-    update_task_state(task, "PROGRESS", meta)
+    # Update task state in Celery
+    update_task_state(task, status, meta)
+
+    # Send Socket.IO message
+    socketio_body = get_socketio_body_feature_task(
+        task.request.id,
+        feature_extraction_task_id,
+        status,
+        task_status_message(current_step, steps, status_message),
+    )
+
+    # Send Socket.IO message to clients
+    socketio.emit(MessageType.FEATURE_TASK_STATUS.value, socketio_body)
 
 
 def update_task_state(task, state, meta):
     task.update_state(state=state, meta=meta)
+
+
+def fetch_extraction_result(result_id):
+    status = ExtractionStatus()
+
+    if result_id is not None:
+        print(f"Getting result for extraction result {result_id}")
+
+        result = celery.GroupResult.restore(result_id)
+
+        status = ExtractionStatus(
+            result.ready(),
+            result.successful(),
+            result.failed(),
+            result.completed_count(),
+        )
+
+    return status
 
 
 def get_token_header(token):

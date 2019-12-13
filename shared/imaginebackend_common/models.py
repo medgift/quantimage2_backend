@@ -3,6 +3,7 @@ import decimal, datetime
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import ForeignKey
 
+
 db = SQLAlchemy()
 
 
@@ -23,12 +24,12 @@ class BaseModel(object):
 
     @classmethod
     def find_by_id(cls, id):
-        instance = cls.query.filter_by(id=id).one_or_none()
+        instance = db.session.query(cls).filter_by(id=id).one_or_none()
         return instance
 
     @classmethod
     def find_all(cls):
-        instances = cls.query.all()
+        instances = db.session.query(cls).all()
         return instances
 
     def save_to_db(self):

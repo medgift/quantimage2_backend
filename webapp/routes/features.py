@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request, g
-from ..service.feature_extraction import run_feature_extraction, format_feature_tasks
+from ..service.feature_extraction import run_feature_extraction, format_feature_tasks, format_feature_families
 
-from ..models import FeatureExtraction
+from imaginebackend_common.models import FeatureExtraction
 
 from .utils import validate_decorate, fetch_extraction_result
 
@@ -56,8 +56,10 @@ def format_extraction(extraction):
     status = fetch_extraction_result(extraction.result_id)
     extraction_dict["status"] = vars(status)
 
+    formatted_families = {"families": format_feature_families(extraction.families)}
     formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks)}
 
+    dict.update(extraction_dict, formatted_families)
     dict.update(extraction_dict, formatted_tasks)
 
     return extraction_dict
@@ -69,6 +71,7 @@ def features_by_album(album_uid):
     pass
 
 
+# Feature extraction for a study
 @bp.route("/extract/study/<study_uid>", methods=["POST"])
 def extract_study(study_uid):
     user_id = g.user
