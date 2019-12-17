@@ -1,5 +1,9 @@
 from flask import Blueprint, jsonify, request, g
-from ..service.feature_extraction import run_feature_extraction, format_feature_tasks, format_feature_families
+from ..service.feature_extraction import (
+    run_feature_extraction,
+    format_feature_tasks,
+    format_feature_families,
+)
 
 from imaginebackend_common.models import FeatureExtraction
 
@@ -80,7 +84,7 @@ def extract_study(study_uid):
 
     # Define feature families to extract
     feature_extraction = run_feature_extraction(
-        g.token, user_id, None, feature_families_map, study_uid
+        user_id, None, feature_families_map, study_uid
     )
 
     return jsonify(format_extraction(feature_extraction))

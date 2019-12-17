@@ -12,6 +12,7 @@ import requests
 import warnings
 
 from flask_socketio import SocketIO
+from keycloak.realm import KeycloakRealm
 from requests_toolbelt import NonMultipartContentTypeException
 
 from imaginebackend_common.flask_init import create_app
@@ -42,14 +43,25 @@ celery = Celery(
     broker=os.environ["CELERY_BROKER_URL"],
 )
 
+# Backend client
+realm = KeycloakRealm(
+    server_url=os.environ["KEYCLOAK_BASE_URL"],
+    realm_name=os.environ["KEYCLOAK_REALM_NAME"],
+)
+oidc_client = realm.open_id_connect(
+    client_id=os.environ["KEYCLOAK_KHEOPS_AUTH_CLIENT_ID"],
+    client_secret=os.environ["KEYCLOAK_KHEOPS_AUTH_CLIENT_SECRET"],
+)
+
 socketio = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
 
 flask_app = create_app()
 flask_app.app_context().push()
 
+
 @celery.task(name="imaginetasks.extract", bind=True)
 def run_extraction(
-    self, token, feature_extraction_task_id, study_uid, features_path, config_path
+    self, user_id, feature_extraction_task_id, study_uid, features_path, config_path
 ):
     try:
 
@@ -58,7 +70,9 @@ def run_extraction(
 
         db.session.commit()
 
-        all_tasks = FeatureExtractionTask.query.order_by(db.desc(FeatureExtractionTask.id)).all()
+        all_tasks = FeatureExtractionTask.query.order_by(
+            db.desc(FeatureExtractionTask.id)
+        ).all()
         print(f"There are {len(all_tasks)} tasks in the table")
         print(f"The latest task has id {all_tasks[0].id}")
 
@@ -80,6 +94,13 @@ def run_extraction(
         update_progress(
             self, feature_extraction_task_id, current_step, steps, status_message
         )
+
+        # Get a token for the given user (possible thanks to token exchange in Keycloak)
+        token = oidc_client.token_exchange(
+            requested_token_type="urn:ietf:params:oauth:token-type:access_token",
+            audience=os.environ["KEYCLOAK_KHEOPS_AUTH_CLIENT_ID"],
+            requested_subject=user_id,
+        )["access_token"]
 
         # Get the list of instance URLs
         url_list = get_dicom_url_list(token, study_uid)
