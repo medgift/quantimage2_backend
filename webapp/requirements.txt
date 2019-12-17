@@ -46,3 +46,6 @@ numpy
 
 # PyYAML
 pyyaml
+
+# Timing
+ttictoc
