@@ -95,6 +95,7 @@ services:
       - ./createRealmsLocal.sh:/createRealmsLocal.sh
     depends_on:
       - keycloak-db
+    command: ["-b", "0.0.0.0","-Dkeycloak.profile=preview"]
 
   keycloak-db:
     image: postgres
