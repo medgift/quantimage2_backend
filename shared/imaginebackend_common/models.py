@@ -36,6 +36,10 @@ class BaseModel(object):
         db.session.add(self)
         db.session.commit()
 
+    def flush_to_db(self):
+        db.session.add(self)
+        db.session.flush()
+
     def update(self, **kwargs):
         db.session.query(type(self)).filter(type(self).id == self.id).update(**kwargs)
         db.session.commit()
@@ -50,6 +54,10 @@ class BaseModelAssociation(object):
     def save_to_db(self):
         db.session.add(self)
         db.session.commit()
+
+    def flush_to_db(self):
+        db.session.add(self)
+        db.session.flush()
 
 
 # Link between a feature extraction and feature families
@@ -136,10 +144,6 @@ class FeatureExtraction(BaseModel, db.Model):
 
     # Tasks for this feature extraction
     tasks = db.relationship("FeatureExtractionTask")
-
-    def save_to_db(self):
-        db.session.add(self)
-        db.session.commit()
 
     def to_dict(self):
         return {
