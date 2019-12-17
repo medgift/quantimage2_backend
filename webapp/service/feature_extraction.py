@@ -2,42 +2,55 @@ import json
 import os
 from pathlib import Path
 
+from ttictoc import TicToc
+
 from celery import group, chord, states as celerystates
 
 from imaginebackend_common.utils import (
     task_status_message_from_result,
     MessageType,
     get_socketio_body_extraction,
-    StatusMessage)
+    StatusMessage,
+)
 from ..routes.utils import (
     fetch_task_result,
     read_feature_file,
     DATE_FORMAT,
     fetch_extraction_result,
-    read_config_file)
+    read_config_file,
+)
 from ..config import EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, FEATURES_SUBDIR
 from imaginebackend_common.models import (
     FeatureExtraction,
     FeatureFamily,
     FeatureExtractionFamily,
     FeatureExtractionTask,
+    db,
 )
 
 from .. import my_socketio
 from .. import my_celery
 
 
-def run_feature_extraction(
-    token, user_id, album_id, feature_families_map, study_uid=None
-):
+def run_feature_extraction(user_id, album_id, feature_families_map, study_uid=None):
+
+    t = TicToc(print_toc=True)
+
+    t.tic()
 
     # Create Feature Extraction object
     feature_extraction = FeatureExtraction(user_id, album_id, study_uid)
-    feature_extraction.save_to_db()
+    feature_extraction.flush_to_db()
+
+    print(f"Creating the feature extraction object")
+    t.toc()
+    print(f"---------------------------------------------------------")
 
     # For each feature family, create the association with the extraction
     # as well as the feature extraction task
     task_signatures = []
+
+    t.tic()
 
     for feature_family_id in feature_families_map:
 
@@ -66,7 +79,7 @@ def run_feature_extraction(
         )
 
         # Save the association to the DB
-        feature_extraction_family.save_to_db()
+        feature_extraction_family.flush_to_db()
 
         # Create extraction task and run it
         features_path = get_features_path(user_id, study_uid, feature_family.name)
@@ -74,19 +87,20 @@ def run_feature_extraction(
         feature_extraction_task = FeatureExtractionTask(
             feature_extraction.id, study_uid, feature_family_id_int, None, features_path
         )
-        feature_extraction_task.save_to_db()
+        feature_extraction_task.flush_to_db()
 
         # Create new task signature
         task_signature = my_celery.signature(
             "imaginetasks.extract",
             args=[
-                token,
+                user_id,
                 feature_extraction_task.id,
                 study_uid,
                 features_path,
                 config_path,
             ],
             kwargs={},
+            countdown=1,
             link=my_celery.signature(
                 "imaginetasks.finalize_extraction_task",
                 args=[feature_extraction_task.id],
@@ -95,9 +109,20 @@ def run_feature_extraction(
 
         task_signatures.append(task_signature)
 
+    print(f"Creating the task signatures (and FeatureExtractionTasks)")
+    t.toc()
+    print(f"---------------------------------------------------------")
+
     finalize_signature = my_celery.signature(
         "imaginetasks.finalize_extraction", args=[feature_extraction.id],
     )
+
+    t.tic()
+    db.session.commit()
+
+    print(f"Committing the session")
+    t.toc()
+    print(f"---------------------------------------------------------")
 
     # Start the tasks as a group
     group_tasks = group(task_signatures)
@@ -106,10 +131,22 @@ def run_feature_extraction(
     # group_result = job.apply_async(countdown=1)
     # group_result.save()
 
+    t.tic()
+
     feature_extraction.result_id = job.parent.id
-    feature_extraction.save_to_db()
 
     extraction_status = fetch_extraction_result(feature_extraction.result_id)
+
+    print(f"Getting the extraction status")
+    t.toc()
+    print(f"---------------------------------------------------------")
+
+    t.tic()
+    db.session.commit()
+
+    print(f"Committing the session (again)")
+    t.toc()
+    print(f"---------------------------------------------------------")
 
     # Send a Socket.IO message to inform that the extraction has started
     socketio_body = get_socketio_body_extraction(
@@ -122,9 +159,6 @@ def run_feature_extraction(
     return feature_extraction
 
 
-def job_done():
-    print("awesome!")
-
 def format_feature_families(families):
     # Gather the feature families
     families_list = []
@@ -136,12 +170,14 @@ def format_feature_families(families):
 
     return families_list
 
+
 def format_family(family):
     config_str = read_config_file(family.family_config_path)
 
     config = json.loads(config_str)
 
-    return {**family.to_dict(), 'config': config}
+    return {**family.to_dict(), "config": config}
+
 
 def format_feature_tasks(feature_tasks):
     # Gather the feature tasks
@@ -165,7 +201,9 @@ def format_feature_task(feature_task):
         status_object = fetch_task_result(feature_task.task_id)
         result = status_object.result
 
-        print(f"Got Task n°{feature_task.id} Result (task id {feature_task.task_id}) : {result}")
+        print(
+            f"Got Task n°{feature_task.id} Result (task id {feature_task.task_id}) : {result}"
+        )
 
         # If the task is in progress, show the corresponding message
         # Otherwise it is still pending
