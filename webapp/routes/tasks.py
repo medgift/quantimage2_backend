@@ -1,7 +1,8 @@
 from flask import Blueprint, abort, jsonify, request, g
 
 from imaginebackend_common.models import FeatureExtractionTask
-from .utils import validate_decorate, fetch_task_result
+from imaginebackend_common.utils import fetch_task_result
+from .utils import validate_decorate
 import celery.states as celery_states
 
 # Define blueprint

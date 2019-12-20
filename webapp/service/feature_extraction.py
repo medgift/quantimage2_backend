@@ -2,22 +2,16 @@ import json
 import os
 from pathlib import Path
 
+import requests
 from ttictoc import TicToc
 
-from celery import group, chord, states as celerystates
+from celery import group, chord
 
+from imaginebackend_common.kheops_utils import endpoints, get_token_header, dicomFields
 from imaginebackend_common.utils import (
-    task_status_message_from_result,
     MessageType,
     get_socketio_body_extraction,
-    StatusMessage,
-)
-from ..routes.utils import (
-    fetch_task_result,
-    read_feature_file,
-    DATE_FORMAT,
     fetch_extraction_result,
-    read_config_file,
 )
 from ..config import EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, FEATURES_SUBDIR
 from imaginebackend_common.models import (
@@ -32,7 +26,9 @@ from .. import my_socketio
 from .. import my_celery
 
 
-def run_feature_extraction(user_id, album_id, feature_families_map, study_uid=None):
+def run_feature_extraction(
+    user_id, album_id, feature_families_map, study_uid=None, token=None
+):
 
     t = TicToc(print_toc=True)
 
@@ -52,8 +48,23 @@ def run_feature_extraction(user_id, album_id, feature_families_map, study_uid=No
 
     t.tic()
 
-    for feature_family_id in feature_families_map:
+    # Assemble study UIDs (multiple for albums, single if study given directly)
+    study_uids = []
+    if album_id:
+        album_studies = get_study_uids_from_album(album_id, token)
+        study_uids = list(
+            map(
+                lambda study: study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
+                album_studies,
+            )
+        )
+        print(study_uids)
+    else:
+        study_uids = [study_uid]
 
+    # Go through each study assembled above
+
+    for feature_family_id in feature_families_map:
         # Convert feature family ID to int
         feature_family_id_int = int(feature_family_id)
 
@@ -82,32 +93,38 @@ def run_feature_extraction(user_id, album_id, feature_families_map, study_uid=No
         feature_extraction_family.flush_to_db()
 
         # Create extraction task and run it
-        features_path = get_features_path(user_id, study_uid, feature_family.name)
+        for study_uid in study_uids:
+            features_path = get_features_path(user_id, study_uid, feature_family.name)
 
-        feature_extraction_task = FeatureExtractionTask(
-            feature_extraction.id, study_uid, feature_family_id_int, None, features_path
-        )
-        feature_extraction_task.flush_to_db()
-
-        # Create new task signature
-        task_signature = my_celery.signature(
-            "imaginetasks.extract",
-            args=[
-                user_id,
-                feature_extraction_task.id,
+            feature_extraction_task = FeatureExtractionTask(
+                feature_extraction.id,
                 study_uid,
+                feature_family_id_int,
+                None,
                 features_path,
-                config_path,
-            ],
-            kwargs={},
-            countdown=1,
-            link=my_celery.signature(
-                "imaginetasks.finalize_extraction_task",
-                args=[feature_extraction_task.id],
-            ),
-        )
+            )
+            feature_extraction_task.flush_to_db()
 
-        task_signatures.append(task_signature)
+            # Create new task signature
+            task_signature = my_celery.signature(
+                "imaginetasks.extract",
+                args=[
+                    feature_extraction.id,
+                    user_id,
+                    feature_extraction_task.id,
+                    study_uid,
+                    features_path,
+                    config_path,
+                ],
+                kwargs={},
+                countdown=1,
+                link=my_celery.signature(
+                    "imaginetasks.finalize_extraction_task",
+                    args=[feature_extraction.id, feature_extraction_task.id],
+                ),
+            )
+
+            task_signatures.append(task_signature)
 
     print(f"Creating the task signatures (and FeatureExtractionTasks)")
     t.toc()
@@ -135,7 +152,7 @@ def run_feature_extraction(user_id, album_id, feature_families_map, study_uid=No
 
     feature_extraction.result_id = job.parent.id
 
-    extraction_status = fetch_extraction_result(feature_extraction.result_id)
+    extraction_status = fetch_extraction_result(my_celery, feature_extraction.result_id)
 
     print(f"Getting the extraction status")
     t.toc()
@@ -149,85 +166,26 @@ def run_feature_extraction(user_id, album_id, feature_families_map, study_uid=No
     print(f"---------------------------------------------------------")
 
     # Send a Socket.IO message to inform that the extraction has started
-    socketio_body = get_socketio_body_extraction(
-        feature_extraction.id, vars(extraction_status)
-    )
-    my_socketio.emit(MessageType.EXTRACTION_STATUS.value, socketio_body)
+    if not album_id:
+        socketio_body = get_socketio_body_extraction(
+            feature_extraction.id, vars(extraction_status)
+        )
+
+        my_socketio.emit(MessageType.EXTRACTION_STATUS.value, socketio_body)
 
     feature_extraction = FeatureExtraction.find_by_id(feature_extraction.id)
 
     return feature_extraction
 
 
-def format_feature_families(families):
-    # Gather the feature families
-    families_list = []
+def get_study_uids_from_album(album_id, token):
+    album_studies_url = f"{endpoints.studies}?{endpoints.album_parameter}={album_id}"
 
-    if families:
-        for family in families:
-            formatted_family = format_family(family)
-            families_list.append(formatted_family)
+    access_token = get_token_header(token)
 
-    return families_list
+    album_studies = requests.get(album_studies_url, headers=access_token).json()
 
-
-def format_family(family):
-    config_str = read_config_file(family.family_config_path)
-
-    config = json.loads(config_str)
-
-    return {**family.to_dict(), "config": config}
-
-
-def format_feature_tasks(feature_tasks):
-    # Gather the feature tasks
-    feature_task_list = []
-
-    if feature_tasks:
-        for feature_task in feature_tasks:
-            formatted_feature_task = format_feature_task(feature_task)
-            feature_task_list.append(formatted_feature_task)
-
-    return feature_task_list
-
-
-def format_feature_task(feature_task):
-    status = celerystates.PENDING
-    status_message = StatusMessage.WAITING_TO_START.value
-    sanitized_object = {}
-
-    # Get the feature status & update the status if necessary!
-    if feature_task.task_id:
-        status_object = fetch_task_result(feature_task.task_id)
-        result = status_object.result
-
-        print(
-            f"Got Task n°{feature_task.id} Result (task id {feature_task.task_id}) : {result}"
-        )
-
-        # If the task is in progress, show the corresponding message
-        # Otherwise it is still pending
-        if result:
-            status = status_object.status
-            status_message = task_status_message_from_result(result)
-
-        # Read the features file (if available)
-        sanitized_object = read_feature_file(feature_task.features_path)
-
-    # Read the config file (if available)
-    # config = read_config_file(feature.config_path)
-
-    return {
-        "id": feature_task.id,
-        "updated_at": feature_task.updated_at.strftime(DATE_FORMAT),
-        "status": status,
-        "status_message": status_message,
-        "payload": sanitized_object,
-        "study_uid": feature_task.study_uid,
-        # "feature_family_id": feature.feature_family_id,
-        "feature_family": feature_task.feature_family.to_dict(),
-        # "config": json.loads(config),
-    }
+    return album_studies
 
 
 def get_features_path(user_id, study_uid, feature_family_name):

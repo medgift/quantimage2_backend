@@ -1,9 +1,7 @@
-import logging
 import os
 import shutil
 import tempfile
 import json
-import time
 import traceback
 
 import jsonpickle
@@ -17,25 +15,24 @@ from requests_toolbelt import NonMultipartContentTypeException
 
 from imaginebackend_common.flask_init import create_app
 from imaginebackend_common.models import FeatureExtractionTask, FeatureExtraction, db
+from imaginebackend_common.kheops_utils import get_token_header, dicomFields
 from imaginebackend_common.utils import (
     get_socketio_body_feature_task,
     MessageType,
     task_status_message,
-    ExtractionStatus,
-    get_socketio_body_extraction,
+    fetch_extraction_result,
+    send_extraction_status_message,
 )
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
 
 from celery import Celery
-from celery.signals import worker_process_init
 from celery import states as celerystates
 from requests_toolbelt.multipart import decoder
 from pathlib import Path
 
-from config_worker import dicomFields, endpoints
-
 from imaginebackend_common.feature_backends import feature_backends_map
+from imaginebackend_common.kheops_utils import endpoints
 
 celery = Celery(
     "tasks",
@@ -61,7 +58,13 @@ flask_app.app_context().push()
 
 @celery.task(name="imaginetasks.extract", bind=True)
 def run_extraction(
-    self, user_id, feature_extraction_task_id, study_uid, features_path, config_path
+    self,
+    feature_extraction_id,
+    user_id,
+    feature_extraction_task_id,
+    study_uid,
+    features_path,
+    config_path,
 ):
     try:
 
@@ -92,7 +95,12 @@ def run_extraction(
         # Status update - DOWNLOAD
         status_message = "Fetching DICOM files"
         update_progress(
-            self, feature_extraction_task_id, current_step, steps, status_message
+            self,
+            feature_extraction_id,
+            feature_extraction_task_id,
+            current_step,
+            steps,
+            status_message,
         )
 
         # Get a token for the given user (possible thanks to token exchange in Keycloak)
@@ -112,6 +120,7 @@ def run_extraction(
             self,
             dicom_dir,
             config_path,
+            feature_extraction_id,
             feature_extraction_task_id=feature_extraction_task_id,
             current_step=current_step,
             steps=steps,
@@ -130,7 +139,7 @@ def run_extraction(
 
         # Check if parent is done - TODO Find a better way to do this, not from the task level hopefully
         extraction_status = fetch_extraction_result(
-            feature_extraction_task.feature_extraction.result_id
+            celery, feature_extraction_task.feature_extraction.result_id
         )
 
         print("Checking on parent status!")
@@ -140,6 +149,7 @@ def run_extraction(
             "feature_extraction_task_id": feature_extraction_task_id,
             "current": steps,
             "total": steps,
+            "completed": steps,
             "status_message": status_message,
         }
     except Exception as e:
@@ -171,21 +181,16 @@ def run_extraction(
 
 @celery.task(name="imaginetasks.finalize_extraction", bind=True)
 def finalize_extraction(task, results, feature_extraction_id):
-    feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
-    extraction_status = fetch_extraction_result(feature_extraction.result_id)
-
-    # Send Socket.IO message
-    socketio_body = get_socketio_body_extraction(
-        feature_extraction_id, vars(extraction_status)
+    send_extraction_status_message(
+        feature_extraction_id, celery, socketio, send_extraction=True
     )
-
-    socketio.emit(MessageType.EXTRACTION_STATUS.value, socketio_body)
-
     db.session.remove()
 
 
 @celery.task(name="imaginetasks.finalize_extraction_task", bind=True)
-def finalize_extraction_task(task, result, feature_extraction_task_id):
+def finalize_extraction_task(
+    task, result, feature_extraction_id, feature_extraction_task_id
+):
 
     # Send Socket.IO message
     socketio_body = get_socketio_body_feature_task(
@@ -195,13 +200,22 @@ def finalize_extraction_task(task, result, feature_extraction_task_id):
         "Extraction Complete",
     )
 
+    # Send Socket.IO message to clients about task
     socketio.emit(MessageType.FEATURE_TASK_STATUS.value, socketio_body)
+
+    # Send Socket.IO message to clients about extraction
+    send_extraction_status_message(feature_extraction_id, celery, socketio)
 
     db.session.remove()
 
 
 def update_progress(
-    task, feature_extraction_task_id, current_step, steps, status_message
+    task,
+    feature_extraction_id,
+    feature_extraction_task_id,
+    current_step,
+    steps,
+    status_message,
 ):
     print(
         f"Feature extraction task {feature_extraction_task_id} - {current_step}/{steps} - {status_message}"
@@ -214,6 +228,7 @@ def update_progress(
         "feature_extraction_task_id": feature_extraction_task_id,
         "current": current_step,
         "total": steps,
+        "completed": current_step - 1,
         "status_message": status_message,
     }
 
@@ -228,34 +243,15 @@ def update_progress(
         task_status_message(current_step, steps, status_message),
     )
 
-    # Send Socket.IO message to clients
+    # Send Socket.IO message to clients about task
     socketio.emit(MessageType.FEATURE_TASK_STATUS.value, socketio_body)
+
+    # Send Socket.IO message to clients about extraction
+    send_extraction_status_message(feature_extraction_id, celery, socketio)
 
 
 def update_task_state(task, state, meta):
     task.update_state(state=state, meta=meta)
-
-
-def fetch_extraction_result(result_id):
-    status = ExtractionStatus()
-
-    if result_id is not None:
-        print(f"Getting result for extraction result {result_id}")
-
-        result = celery.GroupResult.restore(result_id)
-
-        status = ExtractionStatus(
-            result.ready(),
-            result.successful(),
-            result.failed(),
-            result.completed_count(),
-        )
-
-    return status
-
-
-def get_token_header(token):
-    return {"Authorization": "Bearer " + token}
 
 
 def get_dicom_url_list(token, study_uid):
@@ -280,6 +276,8 @@ def get_dicom_url_list(token, study_uid):
             modality = "PET"
         elif entry[dicomFields.MODALITY][dicomFields.VALUE][0] == "CT":
             modality = "CT"
+        elif entry[dicomFields.MODALITY][dicomFields.VALUE][0] == "MR":
+            modality = "MRI"
         elif entry[dicomFields.MODALITY][dicomFields.VALUE][0] == "RTSTRUCT":
             modality = "RTSTRUCT"
 
@@ -336,6 +334,7 @@ def extract_all_features(
     task,
     dicom_dir,
     config_path,
+    feature_extraction_id,
     feature_extraction_task_id=None,
     current_step=None,
     steps=None,
@@ -348,7 +347,12 @@ def extract_all_features(
     current_step += 1
     status_message = "Pre-processing data"
     update_progress(
-        task, feature_extraction_task_id, current_step, steps, status_message
+        task,
+        feature_extraction_id,
+        feature_extraction_task_id,
+        current_step,
+        steps,
+        status_message,
     )
 
     backend_inputs = {}
@@ -363,7 +367,12 @@ def extract_all_features(
     current_step += 1
     status_message = "Extracting features"
     update_progress(
-        task, feature_extraction_task_id, current_step, steps, status_message
+        task,
+        feature_extraction_id,
+        feature_extraction_task_id,
+        current_step,
+        steps,
+        status_message,
     )
 
     for backend in config["backends"]:

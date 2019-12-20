@@ -93,7 +93,7 @@ class PyRadiomicsFeatureBackend(FeatureBackend):
 
         walker = DicomWalker(input_dir, output_dir, list_labels=labels)
         walker.walk()
-        walker.fill_images()
+        walker.fill_images()  # walker.fill_dicom_files()
         walker.convert()
 
         return output_dir

@@ -1,13 +1,13 @@
 from flask import Blueprint, jsonify, request, g
-from ..service.feature_extraction import (
-    run_feature_extraction,
-    format_feature_tasks,
-    format_feature_families,
-)
+
+from imaginebackend_common.utils import fetch_extraction_result, format_extraction
+from ..service.feature_extraction import run_feature_extraction
 
 from imaginebackend_common.models import FeatureExtraction
 
-from .utils import validate_decorate, fetch_extraction_result
+from .utils import validate_decorate
+
+from .. import my_celery
 
 # Define blueprint
 bp = Blueprint(__name__, "features")
@@ -31,7 +31,7 @@ def hello():
 def extraction_by_study(study_uid):
     user_id = g.user
 
-    # Find all feature extractions for this study
+    # Find latest feature extraction for this study
     latest_extraction_of_study = FeatureExtraction.find_latest_by_user_and_study_uid(
         user_id, study_uid
     )
@@ -42,37 +42,32 @@ def extraction_by_study(study_uid):
         return jsonify(None)
 
 
+# Extractions by album
+@bp.route("/extractions/album/<album_id>")
+def extractions_by_album(album_id):
+    user_id = g.user
+
+    # Find latest feature extraction for this album
+    latest_extraction_of_album = FeatureExtraction.find_latest_by_user_and_album_id(
+        user_id, album_id
+    )
+
+    if latest_extraction_of_album:
+        return jsonify(format_extraction(latest_extraction_of_album))
+    else:
+        return jsonify(None)
+
+
 # Status of a feature extraction
 @bp.route("/extractions/<extraction_id>/status")
 def extraction_status(extraction_id):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
-    status = fetch_extraction_result(extraction.result_id)
+    status = fetch_extraction_result(my_celery, extraction.result_id)
 
     response = vars(status)
 
     return jsonify(response)
-
-
-def format_extraction(extraction):
-    extraction_dict = extraction.to_dict()
-
-    status = fetch_extraction_result(extraction.result_id)
-    extraction_dict["status"] = vars(status)
-
-    formatted_families = {"families": format_feature_families(extraction.families)}
-    formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks)}
-
-    dict.update(extraction_dict, formatted_families)
-    dict.update(extraction_dict, formatted_tasks)
-
-    return extraction_dict
-
-
-# Extractions by album
-@bp.route("/extractions/album/<album_uid>")
-def features_by_album(album_uid):
-    pass
 
 
 # Feature extraction for a study
@@ -85,6 +80,22 @@ def extract_study(study_uid):
     # Define feature families to extract
     feature_extraction = run_feature_extraction(
         user_id, None, feature_families_map, study_uid
+    )
+
+    return jsonify(format_extraction(feature_extraction))
+
+
+# Feature extraction for an album
+@bp.route("/extract/album/<album_id>", methods=["POST"])
+def extract_album(album_id):
+    user_id = g.user
+    token = g.token
+
+    feature_families_map = request.json
+
+    # Define feature families to extract
+    feature_extraction = run_feature_extraction(
+        user_id, album_id, feature_families_map, None, token
     )
 
     return jsonify(format_extraction(feature_extraction))

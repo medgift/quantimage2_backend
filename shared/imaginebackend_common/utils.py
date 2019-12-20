@@ -1,8 +1,38 @@
 import json
+import os
+import sys
+from collections import OrderedDict
 from enum import Enum
 
 
 # Exceptions
+from functools import reduce
+from pathlib import Path
+
+import celery.states as celerystates
+import jsonpickle
+import requests
+from celery import Celery
+from flask import jsonify
+from numpy.core.records import ndarray
+
+from imaginebackend_common.models import FeatureExtraction
+
+# Constants
+DATE_FORMAT = "%d.%m.%Y %H:%M"
+
+# Celery instance
+celery = Celery(
+    "tasks",
+    backend=os.environ["CELERY_RESULT_BACKEND"],
+    broker=os.environ["CELERY_BROKER_URL"],
+)
+
+
+class CustomResult(object):
+    pass
+
+
 class CustomException(Exception):
     status_code = 500
 
@@ -33,6 +63,196 @@ class ComputationError(CustomException):
 class MessageType(Enum):
     FEATURE_TASK_STATUS = "feature-status"
     EXTRACTION_STATUS = "extraction-status"
+
+
+# Format feature extraction
+def format_extraction(extraction):
+    extraction_dict = extraction.to_dict()
+
+    status = fetch_extraction_result(celery, extraction.result_id)
+    extraction_dict["status"] = vars(status)
+
+    formatted_families = {"families": format_feature_families(extraction.families)}
+    formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks)}
+
+    dict.update(extraction_dict, formatted_families)
+    dict.update(extraction_dict, formatted_tasks)
+
+    return extraction_dict
+
+
+# Format feature families
+def format_feature_families(families):
+    # Gather the feature families
+    families_list = []
+
+    if families:
+        for family in families:
+            formatted_family = format_family(family)
+            families_list.append(formatted_family)
+
+    return families_list
+
+
+# Format feature family
+def format_family(family):
+    config_str = read_config_file(family.family_config_path)
+
+    config = json.loads(config_str)
+
+    return {**family.to_dict(), "config": config}
+
+
+# Format feature tasks
+def format_feature_tasks(feature_tasks):
+    # Gather the feature tasks
+    feature_task_list = []
+
+    if feature_tasks:
+        for feature_task in feature_tasks:
+            formatted_feature_task = format_feature_task(feature_task)
+            feature_task_list.append(formatted_feature_task)
+
+    return feature_task_list
+
+
+# Formate feature task
+def format_feature_task(feature_task):
+    status = celerystates.PENDING
+    status_message = StatusMessage.WAITING_TO_START.value
+    sanitized_object = {}
+
+    # Get the feature status & update the status if necessary!
+    if feature_task.task_id:
+        status_object = fetch_task_result(feature_task.task_id)
+        result = status_object.result
+
+        print(
+            f"Got Task n°{feature_task.id} Result (task id {feature_task.task_id}) : {result}"
+        )
+
+        # If the task is in progress, show the corresponding message
+        # Otherwise it is still pending
+        if result:
+            status = status_object.status
+            status_message = task_status_message_from_result(result)
+
+        # Read the features file (if available)
+        sanitized_object = read_feature_file(feature_task.features_path)
+
+    # Read the config file (if available)
+    # config = read_config_file(feature.config_path)
+
+    return {
+        "id": feature_task.id,
+        "updated_at": feature_task.updated_at.strftime(DATE_FORMAT),
+        "status": status,
+        "status_message": status_message,
+        "payload": sanitized_object,
+        "study_uid": feature_task.study_uid,
+        # "feature_family_id": feature.feature_family_id,
+        "feature_family": feature_task.feature_family.to_dict(),
+        # "config": json.loads(config),
+    }
+
+
+# Read Config File
+def read_config_file(config_path):
+    try:
+        config = Path(config_path).read_text()
+        return config
+    except FileNotFoundError:
+        print(f"{config_path} does not exist!")
+
+
+# Read Feature File
+def read_feature_file(feature_path):
+
+    sanitized_object = {}
+    if feature_path:
+        try:
+            feature_object = jsonpickle.decode(open(feature_path).read())
+            sanitized_object = sanitize_features_object(feature_object)
+        except FileNotFoundError:
+            print(f"{feature_path} does not exist!")
+
+    return sanitized_object
+
+
+# Sanitize features object
+def sanitize_features_object(feature_object):
+    sanitized_object = OrderedDict()
+
+    for feature_name in feature_object:
+        if is_jsonable(feature_object[feature_name]):
+            sanitized_object[feature_name] = feature_object[feature_name]
+        else:
+            # Numpy NDArrays
+            if type(feature_object[feature_name] is ndarray):
+                sanitized_object[feature_name] = feature_object[feature_name].tolist()
+            else:
+                print(feature_name + " is unsupported", file=sys.stderr)
+
+    return sanitized_object
+
+
+# Get Extraction Status
+def fetch_extraction_result(celery_app, result_id):
+    status = ExtractionStatus()
+
+    if result_id is not None:
+        print(f"Getting result for extraction result {result_id}")
+
+        result = celery_app.GroupResult.restore(result_id)
+
+        total_steps = sum(
+            [task.info["total"] for task in result.children if type(task.info) is dict]
+        )
+        completed_steps = sum(
+            [
+                task.info["completed"]
+                for task in result.children
+                if type(task.info) is dict
+            ]
+        )
+
+        status = ExtractionStatus(
+            result.ready(),
+            result.successful(),
+            result.failed(),
+            len(result.children),
+            result.completed_count(),
+            total_steps,
+            completed_steps,
+        )
+
+    return status
+
+
+# Get feature extraction task result
+def fetch_task_result(task_id):
+    print(f"Getting result for task {task_id}")
+
+    response = requests.get("http://flower:5555/api/task/result/" + task_id)
+
+    task = CustomResult()
+
+    if response.ok:
+        body = response.json()
+        task.status = body["state"]
+        task.result = body["result"]
+        print(f"State is : {body['state']}")
+        print(f"Result is : {body['result']}")
+        return task
+    else:
+        print(f"NO RESULT FOUND FOR TASK ID {task_id}, WHAT GIVES?!")
+        print(response.status_code)
+        print(response.text)
+        task = CustomResult()
+        task.status = celerystates.PENDING
+        task.result = None
+        return task
+
 
 # Status messages
 class StatusMessage(Enum):
@@ -74,6 +294,32 @@ def get_socketio_body_extraction(feature_extraction_id, status):
     return socketio_body
 
 
+def send_extraction_status_message(
+    feature_extraction_id, celery, socketio, send_extraction=False
+):
+    feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
+
+    if send_extraction:
+        socketio_body = format_extraction(feature_extraction)
+    else:
+        extraction_status = fetch_extraction_result(
+            celery, feature_extraction.result_id
+        )
+
+        # Send Socket.IO message
+        socketio_body = get_socketio_body_extraction(
+            feature_extraction_id, vars(extraction_status)
+        )
+
+    print(
+        "Emitting EXTRACTION STATUS WITH "
+        + json.dumps(jsonify(socketio_body).get_json())
+    )
+    socketio.emit(
+        MessageType.EXTRACTION_STATUS.value, jsonify(socketio_body).get_json()
+    )
+
+
 # Feature Tasks
 def task_status_message(current_step, total_steps, status_message):
     return f"{current_step}/{total_steps} - {status_message}"
@@ -90,13 +336,28 @@ class ExtractionStatus:
     ready = False
     successful = False
     failed = False
-    completed_count = 0
+    total_tasks = 0
+    completed_tasks = 0
+    total_steps = 0
+    completed_steps = 0
 
-    def __init__(self, ready=False, successful=False, failed=False, completed_count=0):
+    def __init__(
+        self,
+        ready=False,
+        successful=False,
+        failed=False,
+        total_tasks=0,
+        completed_tasks=0,
+        total_steps=0,
+        completed_steps=0,
+    ):
         self.ready = ready
         self.successful = successful
         self.failed = failed
-        self.completed_count = completed_count
+        self.total_tasks = total_tasks
+        self.completed_tasks = completed_tasks
+        self.total_steps = total_steps
+        self.completed_steps = completed_steps
 
 
 # Misc

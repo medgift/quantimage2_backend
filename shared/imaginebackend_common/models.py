@@ -187,6 +187,16 @@ class FeatureExtraction(BaseModel, db.Model):
         return query_result
 
     @classmethod
+    def find_latest_by_user_and_album_id(cls, user_id, album_id):
+        query_result = (
+            cls.query.filter(cls.user_id == user_id, cls.album_id == album_id)
+            .order_by(db.desc(FeatureExtraction.id))
+            .first()
+        )
+
+        return query_result
+
+    @classmethod
     def find_by_user(cls, user_id):
         query_results = cls.query.filter(cls.user_id == user_id).all()
 
