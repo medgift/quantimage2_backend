@@ -17,17 +17,17 @@ class PyRadiomicsFeatureExtractor:
         return result
 
 
-class QuantImageFeatureExtractor:
+class RieszFeatureExtractor:
     def __init__(self, config):
         self.config = config
 
-    def extract(self, zip_path):
+    def extract(self, images_path, labels_path):
 
         if os.environ["PYTHON_ENV"] == "development":
             rdb.set_trace()
 
         completed_matlab_process = subprocess.run(
-            ["bin/QuantImage_Radiomics_WebService", zip_path, json.dumps(self.config)],
+            ["bin/RieszExtractor", images_path, labels_path, json.dumps(self.config)],
             stdout=PIPE,
             encoding="utf-8",
         )
