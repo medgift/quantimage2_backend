@@ -5,7 +5,7 @@ from pathlib import Path
 import requests
 from ttictoc import TicToc
 
-from celery import group, chord
+from celery import chord
 
 from imaginebackend_common.kheops_utils import endpoints, get_token_header, dicomFields
 from imaginebackend_common.utils import (
@@ -141,12 +141,9 @@ def run_feature_extraction(
     t.toc()
     print(f"---------------------------------------------------------")
 
-    # Start the tasks as a group
-    group_tasks = group(task_signatures)
-    job = chord(group_tasks, finalize_signature).apply_async()
+    # Start the tasks as a chord
+    job = chord(task_signatures, body=finalize_signature).apply_async(countdown=1)
     job.parent.save()
-    # group_result = job.apply_async(countdown=1)
-    # group_result.save()
 
     t.tic()
 
