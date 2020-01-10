@@ -75,8 +75,8 @@ def format_extraction(extraction):
     formatted_families = {"families": format_feature_families(extraction.families)}
     formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks)}
 
-    dict.update(extraction_dict, formatted_families)
-    dict.update(extraction_dict, formatted_tasks)
+    extraction_dict.update(formatted_families)
+    extraction_dict.update(formatted_tasks)
 
     return extraction_dict
 
@@ -205,9 +205,16 @@ def fetch_extraction_result(celery_app, result_id):
 
         result = celery_app.GroupResult.restore(result_id)
 
-        total_steps = sum(
-            [task.info["total"] for task in result.children if type(task.info) is dict]
+        one_started_task = next(
+            (task for task in result.children if type(task.info) is dict), None
         )
+
+        total_steps = (
+            one_started_task.info["total"] * len(result.children)
+            if one_started_task is not None
+            else 0
+        )
+
         completed_steps = sum(
             [
                 task.info["completed"]
@@ -215,12 +222,16 @@ def fetch_extraction_result(celery_app, result_id):
                 if type(task.info) is dict
             ]
         )
+        pending_tasks = [
+            task for task in result.children if task.status == celerystates.PENDING
+        ]
 
         status = ExtractionStatus(
             result.ready(),
             result.successful(),
             result.failed(),
             len(result.children),
+            len(pending_tasks),
             result.completed_count(),
             total_steps,
             completed_steps,
@@ -299,7 +310,9 @@ def send_extraction_status_message(
 ):
     feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
 
+    print("Send extraction is  " + str(send_extraction))
     if send_extraction:
+        print(f"Sending whole feature extraction object with tasks and families etc. !")
         socketio_body = format_extraction(feature_extraction)
     else:
         extraction_status = fetch_extraction_result(
@@ -347,6 +360,7 @@ class ExtractionStatus:
         successful=False,
         failed=False,
         total_tasks=0,
+        pending_tasks=0,
         completed_tasks=0,
         total_steps=0,
         completed_steps=0,
@@ -355,6 +369,7 @@ class ExtractionStatus:
         self.successful = successful
         self.failed = failed
         self.total_tasks = total_tasks
+        self.pending_tasks = pending_tasks
         self.completed_tasks = completed_tasks
         self.total_steps = total_steps
         self.completed_steps = completed_steps
