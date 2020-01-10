@@ -14,7 +14,7 @@ from keycloak.realm import KeycloakRealm
 from requests_toolbelt import NonMultipartContentTypeException
 
 from imaginebackend_common.flask_init import create_app
-from imaginebackend_common.models import FeatureExtractionTask, FeatureExtraction, db
+from imaginebackend_common.models import FeatureExtractionTask, db
 from imaginebackend_common.kheops_utils import get_token_header, dicomFields
 from imaginebackend_common.utils import (
     get_socketio_body_feature_task,
@@ -31,7 +31,7 @@ from celery import states as celerystates
 from requests_toolbelt.multipart import decoder
 from pathlib import Path
 
-from imaginebackend_common.feature_backends import feature_backends_map
+from imaginebackend_common.feature_backends import feature_backends_map, FeatureBackend
 from imaginebackend_common.kheops_utils import endpoints
 
 celery = Celery(
@@ -73,11 +73,12 @@ def run_extraction(
 
         db.session.commit()
 
-        all_tasks = FeatureExtractionTask.query.order_by(
-            db.desc(FeatureExtractionTask.id)
-        ).all()
-        print(f"There are {len(all_tasks)} tasks in the table")
-        print(f"The latest task has id {all_tasks[0].id}")
+        # TODO - Remove this at the end
+        # all_tasks = FeatureExtractionTask.query.order_by(
+        #     db.desc(FeatureExtractionTask.id)
+        # ).all()
+        # print(f"There are {len(all_tasks)} tasks in the table")
+        # print(f"The latest task has id {all_tasks[0].id}")
 
         # Affect celery task ID to task (if needed)
         print(f"Getting Feature Extraction Task with id {feature_extraction_task_id}")
@@ -142,7 +143,8 @@ def run_extraction(
             celery, feature_extraction_task.feature_extraction.result_id
         )
 
-        print("Checking on parent status!")
+        # TODO - Remove this
+        print("PARENT STATUS : ")
         print(vars(extraction_status))
 
         return {
@@ -191,7 +193,6 @@ def finalize_extraction(task, results, feature_extraction_id):
 def finalize_extraction_task(
     task, result, feature_extraction_id, feature_extraction_task_id
 ):
-
     # Send Socket.IO message
     socketio_body = get_socketio_body_feature_task(
         task.request.id,
@@ -355,13 +356,8 @@ def extract_all_features(
         status_message,
     )
 
-    backend_inputs = {}
-    for backend in config["backends"]:
-        # if some features were selected for this backend
-        if len(config["backends"][backend]["features"]) > 0:
-            # get extractor from feature backends
-            extractor = feature_backends_map[backend](config["backends"][backend])
-            backend_inputs[backend] = extractor.pre_process_data(dicom_dir)
+    # Pre-process the data ONCE for all backends
+    backend_input = FeatureBackend.pre_process_data(dicom_dir)
 
     # Status update - EXTRACT
     current_step += 1
@@ -376,16 +372,22 @@ def extract_all_features(
     )
 
     for backend in config["backends"]:
-        # if there is pre-processed data for this backend
-        if backend in backend_inputs.keys():
+
+        # only if some features were selected for this backend
+        if len(config["backends"][backend]["features"]) > 0:
             # get extractor from feature backends
             extractor = feature_backends_map[backend](config["backends"][backend])
+            features = extractor.extract_features(backend_input)
+            features_dict.update(features)
+
             print("CONFIG!!!!")
             print(config["backends"][backend])
+
+            print("BACKEND INPUT!!! ")
+            print(json.dumps(backend_input))
+
             print("FEATURES!!!")
-            features = extractor.extract_features(backend_inputs[backend])
             print(features)
-            features_dict.update(features)
 
     result = features_dict
 
