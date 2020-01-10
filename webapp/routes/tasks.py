@@ -1,7 +1,7 @@
 from flask import Blueprint, abort, jsonify, request, g
 
 from imaginebackend_common.models import FeatureExtractionTask
-from imaginebackend_common.utils import fetch_task_result
+from imaginebackend_common.utils import fetch_task_result, format_feature_tasks
 from .utils import validate_decorate
 import celery.states as celery_states
 
@@ -19,7 +19,7 @@ def before_request():
 def tasks_by_user():
     tasks = FeatureExtractionTask.find_by_user(g.user)
 
-    return jsonify(tasks)
+    return jsonify(format_feature_tasks(tasks))
 
 
 # Feature extraction tasks for a given study
