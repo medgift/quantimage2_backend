@@ -258,6 +258,17 @@ class FeatureExtractionTask(BaseModel, db.Model):
 
         return query_results
 
+    @classmethod
+    def find_latest_by_user_and_study(cls, user_id, study_uid):
+        latest_task = (
+            cls.query.join(FeatureExtraction)
+            .filter(FeatureExtraction.user_id == user_id, cls.study_uid == study_uid)
+            .order_by(db.desc(FeatureExtractionTask.id))
+            .first()
+        )
+
+        return latest_task
+
     def to_dict(self):
         return {
             "id": self.id,

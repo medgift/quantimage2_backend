@@ -52,6 +52,7 @@ oidc_client = realm.open_id_connect(
 
 socketio = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
 
+# Create basic Flask app and push an app context to allow DB operations
 flask_app = create_app()
 flask_app.app_context().push()
 

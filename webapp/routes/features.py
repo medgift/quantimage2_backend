@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, request, g
 from imaginebackend_common.utils import fetch_extraction_result, format_extraction
 from ..service.feature_extraction import run_feature_extraction
 
-from imaginebackend_common.models import FeatureExtraction
+from imaginebackend_common.models import FeatureExtraction, FeatureExtractionTask
 
 from .utils import validate_decorate
 
@@ -31,12 +31,14 @@ def hello():
 def extraction_by_study(study_uid):
     user_id = g.user
 
-    # Find latest feature extraction for this study
-    latest_extraction_of_study = FeatureExtraction.find_latest_by_user_and_study_uid(
+    # Find the latest task linked to this study
+    latest_task_of_study = FeatureExtractionTask.find_latest_by_user_and_study(
         user_id, study_uid
     )
 
-    if latest_extraction_of_study:
+    # Use the latest feature extraction for this study OR an album that includes this study
+    if latest_task_of_study:
+        latest_extraction_of_study = latest_task_of_study.feature_extraction
         return jsonify(format_extraction(latest_extraction_of_study))
     else:
         return jsonify(None)
