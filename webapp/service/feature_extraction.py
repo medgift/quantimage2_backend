@@ -145,6 +145,10 @@ def run_feature_extraction(
     job = chord(task_signatures, body=finalize_signature).apply_async(countdown=1)
     job.parent.save()
 
+    # Persist group result manually, because by default it's using 24 hours
+    # (not clear why, it should respect the result_expires setting used for normal results)
+    my_celery.backend.client.persist(my_celery.backend.get_key_for_group(job.parent.id))
+
     t.tic()
 
     feature_extraction.result_id = job.parent.id
