@@ -5,7 +5,7 @@ import yaml
 from flask import Blueprint, abort, jsonify, request, current_app
 
 from imaginebackend_common.models import FeatureFamily
-from .utils import validate_decorate
+from .utils import validate_decorate, role_required
 from imaginebackend_common.feature_backends import feature_backends_map
 
 
@@ -24,22 +24,7 @@ def before_request():
 @bp.route("/feature-families", methods=("GET", "POST"))
 def feature_families():
     if request.method == "POST":
-        # print(request)
-
-        if request.files["file"] is None or not allowed_file(request.files["file"]):
-            abort(400)
-
-        file = request.files["file"]
-
-        file_path = save_feature_config(file)
-
-        name = request.form["name"]
-
-        # Create FeatureFamily object and send it back
-        feature_family = FeatureFamily(name, file_path)
-        feature_family.save_to_db()
-
-        return jsonify(feature_family.to_dict())
+        return create_feature_family()
 
     if request.method == "GET":
         feature_families = FeatureFamily.find_all()
@@ -55,26 +40,48 @@ def feature_families():
 def feature_family(feature_family_id):
 
     if request.method == "PATCH":
-
-        feature_family = FeatureFamily.find_by_id(feature_family_id)
-
-        feature_family.name = request.form["name"]
-
-        if request.files.get("file") is not None:
-            file = request.files["file"]
-
-            file_path = save_feature_config(file)
-
-            feature_family.config_path = file_path
-
-        feature_family.save_to_db()
-
-        return jsonify(feature_family.to_dict())
+        return update_feature_family(feature_family_id)
 
     if request.method == "GET":
         feature_family = FeatureFamily.find_by_id(feature_family_id)
 
         return jsonify(feature_family.to_dict())
+
+
+@role_required(os.environ["KEYCLOAK_FRONTEND_ADMIN_ROLE"])
+def create_feature_family():
+    if request.files["file"] is None or not allowed_file(request.files["file"]):
+        abort(400)
+
+    file = request.files["file"]
+
+    file_path = save_feature_config(file)
+
+    name = request.form["name"]
+
+    # Create FeatureFamily object and send it back
+    feature_family = FeatureFamily(name, file_path)
+    feature_family.save_to_db()
+
+    return jsonify(feature_family.to_dict())
+
+
+@role_required(os.environ["KEYCLOAK_FRONTEND_ADMIN_ROLE"])
+def update_feature_family(feature_family_id):
+    feature_family = FeatureFamily.find_by_id(feature_family_id)
+
+    feature_family.name = request.form["name"]
+
+    if request.files.get("file") is not None:
+        file = request.files["file"]
+
+        file_path = save_feature_config(file)
+
+        feature_family.config_path = file_path
+
+    feature_family.save_to_db()
+
+    return jsonify(feature_family.to_dict())
 
 
 def allowed_file(file):
