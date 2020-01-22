@@ -135,7 +135,11 @@ def format_feature_task(feature_task):
         # Otherwise it is still pending
         if result:
             status = status_object.status
-            status_message = task_status_message_from_result(result)
+
+            if status != celerystates.FAILURE:
+                status_message = task_status_message_from_result(result)
+            else:
+                status_message = result
 
         # Read the features file (if available)
         sanitized_object = read_feature_file(feature_task.features_path)
