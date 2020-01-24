@@ -39,5 +39,8 @@ jsonpickle
 # Computation modules (should disappear)
 pyradiomics
 
+# PyDICOM
+pydicom
+
 # YAML
 pyyaml

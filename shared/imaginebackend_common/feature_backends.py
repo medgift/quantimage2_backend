@@ -1,5 +1,7 @@
+import json
 import pathlib
 import tempfile
+import re
 
 from abc import abstractmethod
 
@@ -12,10 +14,10 @@ class FeatureBackend:
         self.config = config
 
     @classmethod
-    def pre_process_data(self, dicom_dir):
+    def pre_process_data(cls, dicom_dir):
         # Use Valentin's DicomWalker to convert DICOM to NII
         # as well as resample the images (based on modality)
-        results_dir = self.convert_dicom_to_nii(self, dicom_dir)
+        results_dir = cls.convert_dicom_to_nii(dicom_dir)
 
         # Go through results files and extract features
         file_paths = [
@@ -25,33 +27,8 @@ class FeatureBackend:
 
         return file_paths
 
-    def get_input_files(cls, files):
-        ct_path = None
-        labels_path = None
-
-        # TODO - Stop hard-coding to CT+RTSTRUCT, this should be dynamic!
-        for file_path in files:
-            if not ct_path and file_path.endswith("CT__resampled.nii"):
-                ct_path = file_path
-
-            if not labels_path and "mask" in file_path and file_path.endswith("CT.nii"):
-                labels_path = file_path
-
-        return {"image_path": ct_path, "labels_path": labels_path}
-
-    @abstractmethod
-    def extract_features(self, processed_data):
-        pass
-
-    @abstractmethod
-    def parse_config(self):
-        pass
-
-    @abstractmethod
-    def format_config(self):
-        pass
-
-    def convert_dicom_to_nii(self, input_dir, labels=["GTV T"]):
+    @classmethod
+    def convert_dicom_to_nii(cls, input_dir, labels=None):
         from okapy.dicomconverter.dicom_walker import DicomWalker
 
         output_dir = tempfile.mkdtemp()
@@ -65,23 +42,88 @@ class FeatureBackend:
 
         return output_dir
 
+    @classmethod
+    def get_input_files(cls, files):
+        image_matcher = re.compile(
+            r"(?P<patient_id>.*)__(?P<modality>.*)__resampled\.(?P<extension>.*)"
+        )
+        roi_matcher = re.compile(
+            r"(?P<patient_id>.*)__from_(?P<source_modality>.*)_mask__(?P<label>.*)__resampled_for__(?P<modality>.*)\.(?P<extension>.*)"
+        )
+
+        input_files = {}
+
+        for file_path in files:
+            file_name = pathlib.PurePath(file_path).name
+
+            # Check if it's an image or a mask
+            image_matches = re.match(image_matcher, file_name)
+
+            if image_matches:
+                print("image detected : " + file_path)
+
+                image_match_group = image_matches.groupdict()
+                modality = image_match_group["modality"]
+
+                # Create entry for the modality in the output map if necessary
+                if modality not in input_files:
+                    input_files[modality] = {}
+
+                # Define image for this modality
+                input_files[modality]["image"] = file_path
+            else:
+                roi_matches = re.match(roi_matcher, file_name)
+
+                if roi_matches:
+                    print("roi detected : " + file_path)
+
+                    roi_match_group = roi_matches.groupdict()
+                    modality = roi_match_group["modality"]
+
+                    # Create entry for the modality in the output map if necessary
+                    if modality not in input_files:
+                        input_files[modality] = {}
+
+                    # Create labels map in the output map if necessary
+                    if "labels" not in input_files[modality]:
+                        input_files[modality]["labels"] = {}
+
+                    # Add label to the map
+                    input_files[modality]["labels"][
+                        roi_match_group["label"]
+                    ] = file_path
+                else:
+                    print(f"Unrelated file detected: {file_path}")
+
+        print("FILES TO PROCESS : " + json.dumps(input_files))
+
+        return input_files
+
+    @abstractmethod
+    def extract_features(self, processed_data):
+        pass
+
+    @abstractmethod
+    def parse_config(self):
+        pass
+
+    @abstractmethod
+    def format_config(self):
+        pass
+
 
 class PyRadiomicsFeatureBackend(FeatureBackend):
-    def extract_features(self, processed_data):
+    def extract_features(self, image_path, mask_path):
         from .feature_extractors import PyRadiomicsFeatureExtractor
-
-        input_files = self.get_input_files(processed_data)
 
         parsed_config = self.parse_config()
         extractor = PyRadiomicsFeatureExtractor(parsed_config)
 
         print(
-            f"Extracting PyRadiomics Features with image {input_files['image_path']} and labels {input_files['labels_path']}"
+            f"Extracting PyRadiomics Features with image {image_path} and labels {mask_path}"
         )
 
-        result = extractor.extract(
-            input_files["image_path"], input_files["labels_path"]
-        )
+        result = extractor.extract(image_path, mask_path)
         return result
 
     def format_config(self):
@@ -111,21 +153,17 @@ class PyRadiomicsFeatureBackend(FeatureBackend):
 
 
 class RieszFeatureBackend(FeatureBackend):
-    def extract_features(self, processed_data):
+    def extract_features(self, image_path, mask_path):
         from .feature_extractors import RieszFeatureExtractor
-
-        input_files = self.get_input_files(processed_data)
 
         parsed_config = self.parse_config()
         extractor = RieszFeatureExtractor(parsed_config)
 
         print(
-            f"Extracting Riesz Features with image {input_files['image_path']} and labels {input_files['labels_path']}"
+            f"Extracting Riesz Features with image {image_path} and labels {mask_path}"
         )
 
-        result = extractor.extract(
-            input_files["image_path"], input_files["labels_path"]
-        )
+        result = extractor.extract(image_path, mask_path)
         return result
 
     def format_config(self):

@@ -360,6 +360,9 @@ def extract_all_features(
     # Pre-process the data ONCE for all backends
     backend_input = FeatureBackend.pre_process_data(dicom_dir)
 
+    # Get input files map to process (MODALITY -> [LABEL, ...])
+    input_files = FeatureBackend.get_input_files(backend_input)
+
     # Status update - EXTRACT
     current_step += 1
     status_message = "Extracting features"
@@ -378,18 +381,43 @@ def extract_all_features(
         if len(config["backends"][backend]["features"]) > 0:
             # get extractor from feature backends
             extractor = feature_backends_map[backend](config["backends"][backend])
-            features = extractor.extract_features(backend_input)
-            features_dict.update(features)
 
-            print("CONFIG!!!!")
-            print(config["backends"][backend])
+            # extract features for all modalities & labels
+            for modality, content in input_files.items():
+                if modality not in features_dict:
+                    features_dict[modality] = {}
 
-            print("BACKEND INPUT!!! ")
-            print(json.dumps(backend_input))
+                print(f"Processing modality {modality}")
+                image_path = content["image"]
+                labels = content["labels"]
+                for label, mask_path in labels.items():
+                    if label not in features_dict[modality]:
+                        features_dict[modality][label] = {}
 
-            print("FEATURES!!!")
-            print(features)
+                    print(f"    Processing label {label}")
+
+                    features = extractor.extract_features(image_path, mask_path)
+                    features_dict[modality][label].update(features)
+
+            print(f"!!!!!!!!!!!!Final Features Dictionary!!!!!!!!!")
+            print(features_dict)
+            # TODO - Remove this
+            # print("CONFIG!!!!")
+            # print(config["backends"][backend])
+            #
+            # print("BACKEND INPUT!!! ")
+            # print(json.dumps(backend_input))
+            #
+            # print("FEATURES!!!")
+            # print(features)
 
     result = features_dict
 
     return result
+
+
+def extract_features_for_modality_and_label(extractor, image_path, mask_path):
+    features = extractor.extract_features(
+        {"image_path": image_path, "labels_path": mask_path}
+    )
+    return features

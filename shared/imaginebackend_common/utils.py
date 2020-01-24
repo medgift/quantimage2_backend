@@ -172,15 +172,22 @@ def read_config_file(config_path):
 # Read Feature File
 def read_feature_file(feature_path):
 
-    sanitized_object = {}
+    sanitized_features_dict = {}
     if feature_path:
         try:
-            feature_object = jsonpickle.decode(open(feature_path).read())
-            sanitized_object = sanitize_features_object(feature_object)
+            features_dict = jsonpickle.decode(open(feature_path).read())
+
+            for modality, labels in features_dict.items():
+                for label, features in labels.items():
+                    features_dict[modality][label] = sanitize_features_object(
+                        features_dict[modality][label]
+                    )
         except FileNotFoundError:
             print(f"{feature_path} does not exist!")
 
-    return sanitized_object
+    sanitized_features_dict = features_dict
+
+    return sanitized_features_dict
 
 
 # Sanitize features object
