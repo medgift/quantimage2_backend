@@ -54,6 +54,17 @@ services:
       - default
       - prod
 
+  flower:
+    labels:
+      - "traefik.backend=${TRAEFIK_BACKEND_FLOWER}"
+      - "traefik.docker.network=prod"
+      - "traefik.frontend.rule=Host:${TRAEFIK_URL_FLOWER}"
+      - "traefik.enable=true"
+      - "traefik.frontend.whitelistSourceRange=153.109.130.143/32"
+    networks:
+      - default
+      - prod
+
 networks:
   prod:
     external: true
