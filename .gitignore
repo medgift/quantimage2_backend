@@ -82,3 +82,6 @@ venv
 
 # Worker external dependencies
 external_deps
+
+# Docs
+docs/build
