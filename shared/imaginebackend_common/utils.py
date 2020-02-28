@@ -6,7 +6,6 @@ from enum import Enum
 
 
 # Exceptions
-from functools import reduce
 from pathlib import Path
 
 import celery.states as celerystates

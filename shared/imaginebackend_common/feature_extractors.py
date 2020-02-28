@@ -1,8 +1,8 @@
 import json
 
 import os
-from radiomics import featureextractor
 import subprocess
+from radiomics import featureextractor
 from subprocess import PIPE
 from celery.contrib import rdb
 
