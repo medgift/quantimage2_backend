@@ -1,11 +1,14 @@
 import json
 import os
-from pathlib import Path
 
 import requests
-from ttictoc import TicToc
 
+from pathlib import Path
+from ttictoc import TicToc
 from celery import chord
+from flask import current_app
+
+from config import EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, FEATURES_SUBDIR
 
 from imaginebackend_common.kheops_utils import endpoints, get_token_header, dicomFields
 from imaginebackend_common.utils import (
@@ -13,7 +16,6 @@ from imaginebackend_common.utils import (
     get_socketio_body_extraction,
     fetch_extraction_result,
 )
-from ..config import EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, FEATURES_SUBDIR
 from imaginebackend_common.models import (
     FeatureExtraction,
     FeatureFamily,
@@ -21,9 +23,6 @@ from imaginebackend_common.models import (
     FeatureExtractionTask,
     db,
 )
-
-from .. import my_socketio
-from .. import my_celery
 
 
 def run_feature_extraction(
@@ -106,7 +105,7 @@ def run_feature_extraction(
             feature_extraction_task.flush_to_db()
 
             # Create new task signature
-            task_signature = my_celery.signature(
+            task_signature = current_app.my_celery.signature(
                 "imaginetasks.extract",
                 args=[
                     feature_extraction.id,
@@ -118,7 +117,7 @@ def run_feature_extraction(
                 ],
                 kwargs={},
                 countdown=1,
-                link=my_celery.signature(
+                link=current_app.my_celery.signature(
                     "imaginetasks.finalize_extraction_task",
                     args=[feature_extraction.id, feature_extraction_task.id],
                 ),
@@ -130,7 +129,7 @@ def run_feature_extraction(
     t.toc()
     print(f"---------------------------------------------------------")
 
-    finalize_signature = my_celery.signature(
+    finalize_signature = current_app.my_celery.signature(
         "imaginetasks.finalize_extraction", args=[feature_extraction.id],
     )
 
@@ -147,13 +146,17 @@ def run_feature_extraction(
 
     # Persist group result manually, because by default it's using 24 hours
     # (not clear why, it should respect the result_expires setting used for normal results)
-    my_celery.backend.client.persist(my_celery.backend.get_key_for_group(job.parent.id))
+    current_app.my_celery.backend.client.persist(
+        current_app.my_celery.backend.get_key_for_group(job.parent.id)
+    )
 
     t.tic()
 
     feature_extraction.result_id = job.parent.id
 
-    extraction_status = fetch_extraction_result(my_celery, feature_extraction.result_id)
+    extraction_status = fetch_extraction_result(
+        current_app.my_celery, feature_extraction.result_id
+    )
 
     print(f"Getting the extraction status")
     t.toc()
@@ -172,7 +175,7 @@ def run_feature_extraction(
             feature_extraction.id, vars(extraction_status)
         )
 
-        my_socketio.emit(MessageType.EXTRACTION_STATUS.value, socketio_body)
+        current_app.my_socketio.emit(MessageType.EXTRACTION_STATUS.value, socketio_body)
 
     feature_extraction = FeatureExtraction.find_by_id(feature_extraction.id)
 

@@ -2,7 +2,7 @@ import os
 from functools import wraps
 
 from flask import abort, g
-from ..config import keycloak_client
+from config import keycloak_client
 
 KEYCLOAK_RESOURCE_ACCESS = "resource_access"
 KEYCLOAK_ROLES = "roles"

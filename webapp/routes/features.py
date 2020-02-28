@@ -1,13 +1,12 @@
 from flask import Blueprint, jsonify, request, g
 
 from imaginebackend_common.utils import fetch_extraction_result, format_extraction
-from ..service.feature_extraction import run_feature_extraction
+from service.feature_extraction import run_feature_extraction
 
 from imaginebackend_common.models import FeatureExtraction, FeatureExtractionTask
 
 from .utils import validate_decorate
 
-from .. import my_celery
 
 # Define blueprint
 bp = Blueprint(__name__, "features")
