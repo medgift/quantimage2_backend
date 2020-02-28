@@ -1,17 +1,24 @@
+"""
+Celery tasks for running and finalizing feature extractions
+"""
 import os
 import shutil
 import tempfile
 import json
 import traceback
-
 import jsonpickle
 import requests
-
 import warnings
 
+from typing import List, Dict, Union, Any
 from flask_socketio import SocketIO
 from keycloak.realm import KeycloakRealm
 from requests_toolbelt import NonMultipartContentTypeException
+from celery import Celery
+from celery import states as celerystates
+from celery.signals import celeryd_after_setup
+from requests_toolbelt.multipart import decoder
+from pathlib import Path
 
 from imaginebackend_common.flask_init import create_app
 from imaginebackend_common.models import FeatureExtractionTask, db
@@ -26,11 +33,6 @@ from imaginebackend_common.utils import (
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
 
-from celery import Celery
-from celery import states as celerystates
-from requests_toolbelt.multipart import decoder
-from pathlib import Path
-
 from imaginebackend_common.feature_backends import feature_backends_map, FeatureBackend
 from imaginebackend_common.kheops_utils import endpoints
 
@@ -40,21 +42,31 @@ celery = Celery(
     broker=os.environ["CELERY_BROKER_URL"],
 )
 
-# Backend client
-realm = KeycloakRealm(
-    server_url=os.environ["KEYCLOAK_BASE_URL"],
-    realm_name=os.environ["KEYCLOAK_REALM_NAME"],
-)
-oidc_client = realm.open_id_connect(
-    client_id=os.environ["KEYCLOAK_KHEOPS_AUTH_CLIENT_ID"],
-    client_secret=os.environ["KEYCLOAK_KHEOPS_AUTH_CLIENT_SECRET"],
-)
 
-socketio = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
+@celeryd_after_setup.connect
+def setup(sender, instance, **kwargs):
+    """
+    Run once the Celery worker has started.
 
-# Create basic Flask app and push an app context to allow DB operations
-flask_app = create_app()
-flask_app.app_context().push()
+    Initialize the Keycloak OpenID client & the Flask-SocketIO instance.
+    """
+
+    # Backend client
+    realm = KeycloakRealm(
+        server_url=os.environ["KEYCLOAK_BASE_URL"],
+        realm_name=os.environ["KEYCLOAK_REALM_NAME"],
+    )
+    global oidc_client, socketio
+    oidc_client = realm.open_id_connect(
+        client_id=os.environ["KEYCLOAK_KHEOPS_AUTH_CLIENT_ID"],
+        client_secret=os.environ["KEYCLOAK_KHEOPS_AUTH_CLIENT_SECRET"],
+    )
+
+    socketio = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
+
+    # Create basic Flask app and push an app context to allow DB operations
+    flask_app = create_app()
+    flask_app.app_context().push()
 
 
 @celery.task(name="imaginetasks.extract", bind=True)
@@ -118,6 +130,7 @@ def run_extraction(
         # Download all the DICOM files
         dicom_dir = download_dicom_urls(token, url_list)
 
+        # Extract all the features
         features = extract_all_features(
             self,
             dicom_dir,
@@ -174,7 +187,7 @@ def run_extraction(
             "status_message": status_message,
         }
 
-        update_task_state(self, "FAILURE", meta)
+        update_task_state(self, celerystates.FAILURE, meta)
 
         raise e
 
@@ -212,17 +225,29 @@ def finalize_extraction_task(
 
 
 def update_progress(
-    task,
-    feature_extraction_id,
-    feature_extraction_task_id,
-    current_step,
-    steps,
-    status_message,
-):
+    task: celery.Task,
+    feature_extraction_id: int,
+    feature_extraction_task_id: int,
+    current_step: int,
+    steps: int,
+    status_message: str,
+) -> None:
+    """
+    Update the progress of a feature extraction Task
+
+    :param task: The Celery Task associated with the Feature Extraction Task
+    :param feature_extraction_id: The ID of the Feature Extraction to update (can include several tasks)
+    :param feature_extraction_task_id: The ID of the specific Feature Task to update
+    :param current_step: The current step (out of N steps) in the extraction process
+    :param steps: The total number of steps in the extraction process
+    :param status_message: The status message to show for the task (Downloading, Converting, etc.)
+    :returns: None
+    """
     print(
         f"Feature extraction task {feature_extraction_task_id} - {current_step}/{steps} - {status_message}"
     )
 
+    # TODO : Make this an enum
     status = "PROGRESS"
 
     meta = {
@@ -252,11 +277,27 @@ def update_progress(
     send_extraction_status_message(feature_extraction_id, celery, socketio)
 
 
-def update_task_state(task, state, meta):
+def update_task_state(task: celery.Task, state: str, meta: Dict[str, Any]) -> None:
+    """
+    Update the State of a Celery Task
+
+    :param task: The Celery Task to update
+    :param state: DICOM Study UID
+    :param meta: A Dictionary with state values
+    :returns: None
+    """
     task.update_state(state=state, meta=meta)
 
 
-def get_dicom_url_list(token, study_uid):
+def get_dicom_url_list(token: str, study_uid: str) -> List[str]:
+    """
+    Get the list of DICOM file URLs for a given study
+
+    :param token: Valid access token for the backend
+    :param study_uid: DICOM Study UID
+    :returns: The List of all DICOM image URLs for the Study
+    """
+
     # Get the metadata items of the study
     study_metadata_url = (
         endpoints.studies + "/" + study_uid + "/" + endpoints.studyMetadataSuffix
@@ -303,7 +344,14 @@ def get_dicom_url_list(token, study_uid):
     return instance_urls
 
 
-def download_dicom_urls(token, urls):
+def download_dicom_urls(token: str, urls: List[str]) -> str:
+    """
+    Download a list of DICOM images for further processing
+
+    :param token: Valid access token for the backend
+    :param urls: List of DICOM images to download
+    :returns: Path to the download directory
+    """
     tmp_dir = tempfile.mkdtemp()
 
     access_token = get_token_header(token)
@@ -333,14 +381,26 @@ def download_dicom_urls(token, urls):
 
 
 def extract_all_features(
-    task,
-    dicom_dir,
-    config_path,
-    feature_extraction_id,
-    feature_extraction_task_id=None,
-    current_step=None,
-    steps=None,
-):
+    task: celery.Task,
+    dicom_dir: str,
+    config_path: str,
+    feature_extraction_id: int,
+    feature_extraction_task_id: int = None,
+    current_step: int = None,
+    steps: int = None,
+) -> Dict[str, Any]:
+    """
+    Update the progress of a feature extraction Task
+
+    :param task: Celery Task associated with the Feature Extraction Task
+    :param dicom_dir: Path to the folder containing all DICOM images
+    :param config_path: Path to the YAML config file with the extraction parameters (TODO - Detail more)
+    :param feature_extraction_id: The ID of the Feature Extraction (global, can include multiple patients)
+    :param feature_extraction_task_id: The ID of the specific Feature Task (for a given study)
+    :param current_step: The current step (out of N steps) in the extraction process (should be 1 at this point)
+    :param steps: The total number of steps in the extraction process (currently 3 - Download, Conversion, Extraction)
+    :returns: A dictionary with the extracted features
+    """
     config = json.loads(Path(config_path).read_text()) if config_path else None
 
     features_dict = {}
@@ -414,10 +474,3 @@ def extract_all_features(
     result = features_dict
 
     return result
-
-
-def extract_features_for_modality_and_label(extractor, image_path, mask_path):
-    features = extractor.extract_features(
-        {"image_path": image_path, "labels_path": mask_path}
-    )
-    return features
