@@ -1,3 +1,8 @@
+.. QuantImage v2 documentation master file, created by
+   sphinx-quickstart on Wed Feb 26 14:54:55 2020.
+   You can adapt this file completely to your liking, but it should at least
+   contain the root `toctree` directive.
+
 Welcome to QuantImage v2's documentation!
 =========================================
 
@@ -20,7 +25,6 @@ Guide
 
    license
    help
-
 
 
 Indices and tables

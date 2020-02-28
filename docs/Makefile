@@ -14,6 +14,11 @@ help:
 
 .PHONY: help Makefile
 
+doc:
+	sphinx-apidoc -f -o source/ ../shared ../shared/setup.py
+	sphinx-apidoc -f -o source/ ../webapp
+	sphinx-apidoc -f -o source/ ../workers ../workers/celeryconfig.py
+	
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
 %: Makefile
