@@ -85,3 +85,6 @@ external_deps
 
 # Docs
 docs/build
+
+# Python Bytecode Files
+*.pyc

@@ -15,9 +15,6 @@ services:
       - AUTHLIB_INSECURE_TRANSPORT=1
     extra_hosts:
       - "roger:153.109.130.143"
-    command:
-      ["flask", "run"]
-      #["python", "-u", "app.py"]
 
   celery:
     extra_hosts:

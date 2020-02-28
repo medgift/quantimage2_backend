@@ -8,6 +8,7 @@
       <sourceFolder url="file://$MODULE_DIR$/webapp" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/workers" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/shared" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/docs/build" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.6 (imagine_backend)" jdkType="Python SDK" />
@@ -20,8 +21,5 @@
         <option value="$MODULE_DIR$/webapp/templates" />
       </list>
     </option>
-  </component>
-  <component name="TestRunnerService">
-    <option name="PROJECT_TEST_RUNNER" value="Unittests" />
   </component>
 </module>
