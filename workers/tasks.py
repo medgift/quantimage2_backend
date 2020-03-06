@@ -10,7 +10,7 @@ import jsonpickle
 import requests
 import warnings
 
-from typing import List, Dict, Union, Any
+from typing import List, Dict, Any
 from flask_socketio import SocketIO
 from keycloak.realm import KeycloakRealm
 from requests_toolbelt import NonMultipartContentTypeException
@@ -401,76 +401,119 @@ def extract_all_features(
     :param steps: The total number of steps in the extraction process (currently 3 - Download, Conversion, Extraction)
     :returns: A dictionary with the extracted features
     """
-    config = json.loads(Path(config_path).read_text()) if config_path else None
+    try:
+        config = json.loads(Path(config_path).read_text()) if config_path else None
 
-    features_dict = {}
+        features_dict = {}
 
-    # Status update - CONVERT
-    current_step += 1
-    status_message = "Pre-processing data"
-    update_progress(
-        task,
-        feature_extraction_id,
-        feature_extraction_task_id,
-        current_step,
-        steps,
-        status_message,
-    )
+        # Status update - CONVERT
+        current_step += 1
+        status_message = "Pre-processing data"
+        update_progress(
+            task,
+            feature_extraction_id,
+            feature_extraction_task_id,
+            current_step,
+            steps,
+            status_message,
+        )
 
-    # Pre-process the data ONCE for all backends
-    backend_input = FeatureBackend.pre_process_data(dicom_dir)
+        # Pre-process the data ONCE for all backends
+        backend_input = FeatureBackend.pre_process_data(dicom_dir)
 
-    # Get input files map to process (MODALITY -> [LABEL, ...])
-    input_files = FeatureBackend.get_input_files(backend_input)
+        # Get input files map to process (MODALITY -> [LABEL, ...])
+        input_files = FeatureBackend.get_input_files(backend_input)
 
-    # Status update - EXTRACT
-    current_step += 1
-    status_message = "Extracting features"
-    update_progress(
-        task,
-        feature_extraction_id,
-        feature_extraction_task_id,
-        current_step,
-        steps,
-        status_message,
-    )
+        # Status update - EXTRACT
+        current_step += 1
+        status_message = "Extracting features"
+        update_progress(
+            task,
+            feature_extraction_id,
+            feature_extraction_task_id,
+            current_step,
+            steps,
+            status_message,
+        )
 
-    for backend in config["backends"]:
+        for backend in config["backends"]:
 
-        # only if some features were selected for this backend
-        if len(config["backends"][backend]["features"]) > 0:
-            # get extractor from feature backends
-            extractor = feature_backends_map[backend](config["backends"][backend])
+            # only if some features were selected for this backend
+            if len(config["backends"][backend]["features"]) > 0:
+                # get extractor from feature backends
+                extractor = feature_backends_map[backend](config["backends"][backend])
 
-            # extract features for all modalities & labels
-            for modality, content in input_files.items():
-                if modality not in features_dict:
-                    features_dict[modality] = {}
+                # extract features for all modalities & labels
+                for modality, content in input_files.items():
+                    if modality not in features_dict:
+                        features_dict[modality] = {}
 
-                print(f"Processing modality {modality}")
-                image_path = content["image"]
-                labels = content["labels"]
-                for label, mask_path in labels.items():
-                    if label not in features_dict[modality]:
-                        features_dict[modality][label] = {}
+                    print(f"Processing modality {modality}")
+                    image_path = content["image"]
+                    labels = content["labels"]
+                    for label, mask_path in labels.items():
+                        if label not in features_dict[modality]:
+                            features_dict[modality][label] = {}
 
-                    print(f"    Processing label {label}")
+                        print(f"    Processing label {label}")
 
-                    features = extractor.extract_features(image_path, mask_path)
-                    features_dict[modality][label].update(features)
+                        features = extractor.extract_features(image_path, mask_path)
+                        features_dict[modality][label].update(features)
 
-            print(f"!!!!!!!!!!!!Final Features Dictionary!!!!!!!!!")
-            print(features_dict)
-            # TODO - Remove this
-            # print("CONFIG!!!!")
-            # print(config["backends"][backend])
-            #
-            # print("BACKEND INPUT!!! ")
-            # print(json.dumps(backend_input))
-            #
-            # print("FEATURES!!!")
-            # print(features)
+                print(f"!!!!!!!!!!!!Final Features Dictionary!!!!!!!!!")
+                print(features_dict)
+                # TODO - Remove this
+                # print("CONFIG!!!!")
+                # print(config["backends"][backend])
+                #
+                # print("BACKEND INPUT!!! ")
+                # print(json.dumps(backend_input))
+                #
+                # print("FEATURES!!!")
+                # print(features)
 
-    result = features_dict
+        result = features_dict
 
-    return result
+        return result
+
+    except Exception as e:
+
+        # logging.error(e)
+
+        print("!!!!!Caught an error while pre-processing or something!!!!!")
+
+        current_step = 0
+        status_message = "Failure!"
+        print(
+            f"Feature extraction task {feature_extraction_task_id} - {current_step}/{steps} - {status_message}"
+        )
+
+        meta = {
+            "exc_type": type(e).__name__,
+            "exc_message": traceback.format_exc().split("\n"),
+            "feature_extraction_task_id": feature_extraction_task_id,
+            "current": current_step,
+            "total": steps,
+            "status_message": status_message,
+        }
+
+        update_task_state(task, celerystates.FAILURE, meta)
+
+        # Send Socket.IO message
+        socketio_body = get_socketio_body_feature_task(
+            task.request.id,
+            feature_extraction_task_id,
+            celerystates.FAILURE,
+            task_status_message(current_step, steps, status_message),
+        )
+
+        # Send Socket.IO message to clients about task
+        socketio.emit(MessageType.FEATURE_TASK_STATUS.value, socketio_body)
+
+        # Send Socket.IO message to clients about extraction
+        send_extraction_status_message(feature_extraction_id, celery, socketio)
+
+        raise e
+
+    finally:
+        db.session.remove()

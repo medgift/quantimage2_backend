@@ -171,7 +171,7 @@ def read_config_file(config_path):
 # Read Feature File
 def read_feature_file(feature_path):
 
-    sanitized_features_dict = {}
+    features_dict = {}
     if feature_path:
         try:
             features_dict = jsonpickle.decode(open(feature_path).read())
