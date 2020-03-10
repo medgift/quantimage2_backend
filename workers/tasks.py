@@ -2,6 +2,7 @@
 Celery tasks for running and finalizing feature extractions
 """
 import os
+import logging
 import shutil
 import tempfile
 import json
@@ -21,7 +22,7 @@ from requests_toolbelt.multipart import decoder
 from pathlib import Path
 
 from imaginebackend_common.flask_init import create_app
-from imaginebackend_common.models import FeatureExtractionTask, db
+from imaginebackend_common.models import FeatureExtractionTask, db, FeatureExtraction
 from imaginebackend_common.kheops_utils import get_token_header, dicomFields
 from imaginebackend_common.utils import (
     get_socketio_body_feature_task,
@@ -99,6 +100,8 @@ def run_extraction(
             feature_extraction_task_id
         )
 
+        feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
+
         if not feature_extraction_task:
             raise Exception("Didn't find the task in the DB!!!")
 
@@ -154,7 +157,7 @@ def run_extraction(
 
         # Check if parent is done - TODO Find a better way to do this, not from the task level hopefully
         extraction_status = fetch_extraction_result(
-            celery, feature_extraction_task.feature_extraction.result_id
+            celery, feature_extraction.result_id
         )
 
         # TODO - Remove this
@@ -170,7 +173,7 @@ def run_extraction(
         }
     except Exception as e:
 
-        # logging.error(e)
+        logging.error(e)
 
         current_step = 0
         status_message = "Failure!"
