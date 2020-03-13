@@ -25,11 +25,18 @@ COPY ./workers/requirements*.txt ./
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install melampus dependencies (temporary)
+RUN pip install --no-cache-dir -r requirements-melampus.txt
+
+# Install melampus manually (temporary)
+RUN pip install --index-url https://test.pypi.org/simple/ quantimage-melampus==0.0.1
+
 # Install okapy dependencies (temporary)
 RUN pip install --no-cache-dir -r requirements-okapy.txt
 
 # Install okapy manually (temporary)
 RUN pip install --index-url https://test.pypi.org/simple/ --no-deps okapy==0.1.3
+
 
 ENV MCR_HOME /mcr/v97
 ENV LD_LIBRARY_PATH $MCR_HOME/runtime/glnxa64:$MCR_HOME/bin/glnxa64:$MCR_HOME/sys/os/glnxa64:$MCR_HOME/extern/bin/glnxa64:$LD_LIBRARY_PATH
