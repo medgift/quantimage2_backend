@@ -100,6 +100,9 @@ services:
     depends_on:
       - keycloak-db
     command: ["-b", "0.0.0.0","-Dkeycloak.profile=preview"]
+    networks:
+      - default
+      - kheops_default
 
   keycloak-db:
     image: postgres
@@ -126,3 +129,7 @@ services:
 volumes:
   backend-data:
   pgdata:
+
+networks:
+  kheops_default:
+    external: true
