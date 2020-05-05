@@ -59,8 +59,8 @@ def setup(sender, instance, **kwargs):
     )
     global oidc_client, socketio
     oidc_client = realm.open_id_connect(
-        client_id=os.environ["KEYCLOAK_KHEOPS_AUTH_CLIENT_ID"],
-        client_secret=os.environ["KEYCLOAK_KHEOPS_AUTH_CLIENT_SECRET"],
+        client_id=os.environ["KEYCLOAK_IMAGINE_CLIENT_ID"],
+        client_secret=os.environ["KEYCLOAK_IMAGINE_CLIENT_SECRET"],
     )
 
     socketio = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
@@ -123,15 +123,12 @@ def run_extraction(
         # Get a token for the given user (possible thanks to token exchange in Keycloak)
         token = oidc_client.token_exchange(
             requested_token_type="urn:ietf:params:oauth:token-type:access_token",
-            audience=os.environ["KEYCLOAK_KHEOPS_AUTH_CLIENT_ID"],
+            audience=os.environ["KEYCLOAK_IMAGINE_CLIENT_ID"],
             requested_subject=user_id,
         )["access_token"]
 
-        # Get the list of instance URLs
-        url_list = get_dicom_url_list(token, study_uid)
-
-        # Download all the DICOM files
-        dicom_dir = download_dicom_urls(token, url_list)
+        # Download study and write files to directory
+        dicom_dir = download_study(token, study_uid)
 
         # Extract all the features
         features = extract_all_features(
@@ -191,6 +188,8 @@ def run_extraction(
         }
 
         update_task_state(self, celerystates.FAILURE, meta)
+
+        print("PROBLEM WHEN EXTRACTING STUDY WITH UID  " + study_uid)
 
         raise e
 
@@ -292,95 +291,44 @@ def update_task_state(task: celery.Task, state: str, meta: Dict[str, Any]) -> No
     task.update_state(state=state, meta=meta)
 
 
-def get_dicom_url_list(token: str, study_uid: str) -> List[str]:
-    """
-    Get the list of DICOM file URLs for a given study
+def download_study(token: str, study_uid: str) -> str:
+    """"
+    Download a study and write all files to a directory
 
     :param token: Valid access token for the backend
-    :param study_uid: DICOM Study UID
-    :returns: The List of all DICOM image URLs for the Study
-    """
-
-    # Get the metadata items of the study
-    study_metadata_url = (
-        endpoints.studies + "/" + study_uid + "/" + endpoints.studyMetadataSuffix
-    )
-
-    access_token = get_token_header(token)
-
-    study_metadata = requests.get(study_metadata_url, headers=access_token).json()
-
-    # instance_urls = {"CT": [], "PET": []}
-    instance_urls = []
-
-    # Go through each study metadata item
-    for entry in study_metadata:
-
-        # Determine the modality
-        modality = None
-        if entry[dicomFields.MODALITY][dicomFields.VALUE][0] == "PT":
-            modality = "PET"
-        elif entry[dicomFields.MODALITY][dicomFields.VALUE][0] == "CT":
-            modality = "CT"
-        elif entry[dicomFields.MODALITY][dicomFields.VALUE][0] == "MR":
-            modality = "MRI"
-        elif entry[dicomFields.MODALITY][dicomFields.VALUE][0] == "RTSTRUCT":
-            modality = "RTSTRUCT"
-
-        # If PET/CT, add URL to corresponding list
-        series_uid = entry[dicomFields.SERIES_UID][dicomFields.VALUE][0]
-        instance_uid = entry[dicomFields.INSTANCE_UID][dicomFields.VALUE][0]
-        final_url = (
-            endpoints.studies
-            + "/"
-            + study_uid
-            + endpoints.seriesSuffix
-            + "/"
-            + series_uid
-            + endpoints.instancesSuffix
-            + "/"
-            + instance_uid
-        )
-        if modality:
-            instance_urls.append(final_url)
-
-    return instance_urls
-
-
-def download_dicom_urls(token: str, urls: List[str]) -> str:
-    """
-    Download a list of DICOM images for further processing
-
-    :param token: Valid access token for the backend
-    :param urls: List of DICOM images to download
-    :returns: Path to the download directory
+    :param study_uid: The UID of the study to download
+    :returns: Path to the directory of downloaded files
     """
     tmp_dir = tempfile.mkdtemp()
+    tmp_file = tempfile.mktemp("multipart")
+
+    study_metadata_url = endpoints.studies + "/" + study_uid
 
     access_token = get_token_header(token)
-    for url in urls:
-        filename = os.path.basename(url)
 
-        import logging
+    response = requests.get(study_metadata_url, headers=access_token,)
 
-        logging.getLogger("urllib3").setLevel(logging.ERROR)
-        response = requests.get(url, headers=access_token)
+    # Save to file
+    with open(tmp_file, "wb") as f:
+        f.write(response.content)
 
-        try:
-            multipart_data = decoder.MultipartDecoder.from_response(response)
-        except NonMultipartContentTypeException as e:
-            print("Got a weird thing from Kheops, response was")
-            print(response.text)
-            raise e
+    # Get content-type header (with boundary)
+    content_type = response.headers["content-type"]
 
-        # Get first part, with the content
-        part = multipart_data.parts[0]
-
-        fh = open(os.path.join(tmp_dir, filename), "wb")
-        fh.write(part.content)
-        fh.close()
+    file_index = 1
+    for part in decoder.MultipartDecoder(
+        get_bytes_from_file(tmp_file), content_type
+    ).parts:
+        part_content = part.content
+        part_path = f"{tmp_dir}/{file_index}.dcm"
+        with open(part_path, "wb") as f:
+            f.write(part_content)
 
     return tmp_dir
+
+
+def get_bytes_from_file(filename):
+    return open(filename, "rb").read()
 
 
 def extract_all_features(
