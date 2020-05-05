@@ -109,14 +109,14 @@ def format_feature_tasks(feature_tasks):
 
     if feature_tasks:
         for feature_task in feature_tasks:
-            formatted_feature_task = format_feature_task(feature_task)
+            formatted_feature_task = format_feature_task(feature_task, payload=False)
             feature_task_list.append(formatted_feature_task)
 
     return feature_task_list
 
 
 # Formate feature task
-def format_feature_task(feature_task):
+def format_feature_task(feature_task, payload=True):
     status = celerystates.PENDING
     status_message = StatusMessage.WAITING_TO_START.value
     sanitized_object = {}
@@ -141,22 +141,28 @@ def format_feature_task(feature_task):
                 status_message = result
 
         # Read the features file (if available)
-        sanitized_object = read_feature_file(feature_task.features_path)
+        if payload:
+            sanitized_object = read_feature_file(feature_task.features_path)
 
     # Read the config file (if available)
     # config = read_config_file(feature.config_path)
 
-    return {
+    response_dict = {
         "id": feature_task.id,
         "updated_at": feature_task.updated_at.strftime(DATE_FORMAT),
         "status": status,
         "status_message": status_message,
-        "payload": sanitized_object,
         "study_uid": feature_task.study_uid,
         # "feature_family_id": feature.feature_family_id,
         "feature_family": feature_task.feature_family.to_dict(),
         # "config": json.loads(config),
     }
+
+    # If the payload should be included, add it to the response dictionary
+    if payload:
+        response_dict["payload"] = sanitized_object
+
+    return response_dict
 
 
 # Read Config File

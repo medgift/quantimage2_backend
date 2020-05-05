@@ -17,8 +17,6 @@ services:
       - KEYCLOAK_IMAGINE_CLIENT_SECRET=${KEYCLOAK_IMAGINE_CLIENT_SECRET}
       - KEYCLOAK_REALM_NAME=${KEYCLOAK_REALM_NAME}
       - KEYCLOAK_REALM_PUBLIC_KEY=${KEYCLOAK_REALM_PUBLIC_KEY}
-      - KEYCLOAK_KHEOPS_AUTH_CLIENT_ID=${KEYCLOAK_KHEOPS_AUTH_CLIENT_ID}
-      - KEYCLOAK_KHEOPS_AUTH_CLIENT_SECRET=${KEYCLOAK_KHEOPS_AUTH_CLIENT_SECRET}
       - KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL}
       - KHEOPS_BASE_URL=${KHEOPS_BASE_URL}
       - PYTHONUNBUFFERED=TRUE
@@ -43,8 +41,8 @@ services:
       - KHEOPS_BASE_URL=${KHEOPS_BASE_URL}
       - KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL}
       - KEYCLOAK_REALM_NAME=${KEYCLOAK_REALM_NAME}
-      - KEYCLOAK_KHEOPS_AUTH_CLIENT_ID=${KEYCLOAK_KHEOPS_AUTH_CLIENT_ID}
-      - KEYCLOAK_KHEOPS_AUTH_CLIENT_SECRET=${KEYCLOAK_KHEOPS_AUTH_CLIENT_SECRET}
+      - KEYCLOAK_IMAGINE_CLIENT_ID=${KEYCLOAK_IMAGINE_CLIENT_ID}
+      - KEYCLOAK_IMAGINE_CLIENT_SECRET=${KEYCLOAK_IMAGINE_CLIENT_SECRET}
       - PYTHONUNBUFFERED=TRUE
       - PYTHON_ENV=production
     volumes:
@@ -100,9 +98,6 @@ services:
     depends_on:
       - keycloak-db
     command: ["-b", "0.0.0.0","-Dkeycloak.profile=preview"]
-    networks:
-      - default
-      - kheops_default
 
   keycloak-db:
     image: postgres
@@ -124,12 +119,8 @@ services:
       - keycloak-db
 
   ohif:
-    image: ohif/viewer
+    image: ohif/viewer:v3.7.8.10404
 
 volumes:
   backend-data:
   pgdata:
-
-networks:
-  kheops_default:
-    external: true
