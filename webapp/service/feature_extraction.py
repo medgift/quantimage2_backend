@@ -4,7 +4,7 @@ import os
 import requests
 
 from pathlib import Path
-from ttictoc import TicToc
+from ttictoc import tic, toc
 from celery import chord
 from flask import current_app
 
@@ -29,23 +29,21 @@ def run_feature_extraction(
     user_id, album_id, feature_families_map, study_uid=None, token=None
 ):
 
-    t = TicToc(print_toc=True)
-
-    t.tic()
+    tic()
 
     # Create Feature Extraction object
     feature_extraction = FeatureExtraction(user_id, album_id, study_uid)
     feature_extraction.flush_to_db()
 
     print(f"Creating the feature extraction object")
-    t.toc()
+    print(toc())
     print(f"---------------------------------------------------------")
 
     # For each feature family, create the association with the extraction
     # as well as the feature extraction task
     task_signatures = []
 
-    t.tic()
+    tic()
 
     # Assemble study UIDs (multiple for albums, single if study given directly)
     study_uids = []
@@ -126,18 +124,18 @@ def run_feature_extraction(
             task_signatures.append(task_signature)
 
     print(f"Creating the task signatures (and FeatureExtractionTasks)")
-    t.toc()
+    print(toc())
     print(f"---------------------------------------------------------")
 
     finalize_signature = current_app.my_celery.signature(
         "imaginetasks.finalize_extraction", args=[feature_extraction.id],
     )
 
-    t.tic()
+    tic()
     db.session.commit()
 
     print(f"Committing the session")
-    t.toc()
+    print(toc())
     print(f"---------------------------------------------------------")
 
     # Start the tasks as a chord
@@ -150,7 +148,7 @@ def run_feature_extraction(
         current_app.my_celery.backend.get_key_for_group(job.parent.id)
     )
 
-    t.tic()
+    tic()
 
     feature_extraction.result_id = job.parent.id
 
@@ -159,14 +157,14 @@ def run_feature_extraction(
     )
 
     print(f"Getting the extraction status")
-    t.toc()
+    print(toc())
     print(f"---------------------------------------------------------")
 
-    t.tic()
+    tic()
     db.session.commit()
 
     print(f"Committing the session (again)")
-    t.toc()
+    print(toc())
     print(f"---------------------------------------------------------")
 
     # Send a Socket.IO message to inform that the extraction has started

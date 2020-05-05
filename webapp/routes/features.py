@@ -1,4 +1,7 @@
-from flask import Blueprint, jsonify, request, g
+from flask import Blueprint, jsonify, request, g, current_app
+
+from random import randint
+from requests_toolbelt.multipart import decoder
 
 from imaginebackend_common.utils import fetch_extraction_result, format_extraction
 from service.feature_extraction import run_feature_extraction
@@ -7,6 +10,12 @@ from imaginebackend_common.models import FeatureExtraction, FeatureExtractionTas
 
 from .utils import validate_decorate
 
+import json
+import pandas
+import tempfile
+import requests
+
+from melampus import classifier
 
 # Define blueprint
 bp = Blueprint(__name__, "features")
@@ -64,7 +73,7 @@ def extractions_by_album(album_id):
 def extraction_status(extraction_id):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
-    status = fetch_extraction_result(my_celery, extraction.result_id)
+    status = fetch_extraction_result(current_app.my_celery, extraction.result_id)
 
     response = vars(status)
 
@@ -100,3 +109,49 @@ def extract_album(album_id):
     )
 
     return jsonify(format_extraction(feature_extraction))
+
+
+# Analysis of features
+@bp.route("/analyze", methods=["POST"])
+def analyze_features():
+
+    # Dictionary with the key corresponding
+    # to a MODALITY + ROI combination and
+    # the value being a JSON representation
+    # of the features (including patient ID)
+    features = request.json
+
+    first_features = next(iter(features.values()))
+
+    # Create temporary file for CSV content & dump it there
+    with tempfile.NamedTemporaryFile() as temp:
+        df = pandas.read_json(json.dumps(first_features))
+        dataCsvFile = df.to_csv(temp.name)
+
+        labelsDf = simulateLabels(df)
+
+        labelsList = list(labelsDf.label)
+
+        myClassifier = classifier.MelampusClassifier(temp.name, labelsList, "patientID")
+
+        myClassifier.train()
+
+        performance = myClassifier.assess_classifier()
+
+        return jsonify({"performance": performance})
+
+
+def simulateLabels(df):
+    patientIDs = list(df.patientID)
+    columns = ["patientID", "label"]
+
+    labelData = {columns[0]: [], columns[1]: []}
+
+    for patientID in patientIDs:
+        randomLabel = randint(0, 1)
+        labelData[columns[0]].append(patientID)
+        labelData[columns[1]].append(randomLabel)
+
+    labelsDf = pandas.DataFrame(labelData, columns=columns)
+
+    return labelsDf
