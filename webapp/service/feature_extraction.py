@@ -48,7 +48,7 @@ def run_feature_extraction(
     # Assemble study UIDs (multiple for albums, single if study given directly)
     study_uids = []
     if album_id:
-        album_studies = get_study_uids_from_album(album_id, token)
+        album_studies = get_studies_from_album(album_id, token)
         study_uids = list(
             map(
                 lambda study: study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
@@ -180,7 +180,17 @@ def run_feature_extraction(
     return feature_extraction
 
 
-def get_study_uids_from_album(album_id, token):
+def get_album_details(album_id, token):
+    album_url = f"{endpoints.albums}/{album_id}"
+
+    access_token = get_token_header(token)
+
+    album_details = requests.get(album_url, headers=access_token).json()
+
+    return album_details
+
+
+def get_studies_from_album(album_id, token):
     album_studies_url = f"{endpoints.studies}?{endpoints.album_parameter}={album_id}"
 
     access_token = get_token_header(token)

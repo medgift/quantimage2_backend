@@ -21,7 +21,7 @@ mysqlclient
 # SQLAlchemy
 SQLAlchemy
 
-# Keycloak (alternative client for token exchange)
+# Keycloak
 python-keycloak-client
 
 # Celery

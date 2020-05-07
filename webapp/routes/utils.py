@@ -2,7 +2,10 @@ import os
 from functools import wraps
 
 from flask import abort, g
-from config import keycloak_client
+from jose import JWTError, ExpiredSignatureError
+from jose.exceptions import JWTClaimsError
+
+from config import oidc_client
 
 KEYCLOAK_RESOURCE_ACCESS = "resource_access"
 KEYCLOAK_ROLES = "roles"
@@ -52,17 +55,19 @@ def validate_request(request):
         abort(400)
     else:
         token = authorization.split(" ")[1]
-        # rpt = keycloak_client.entitlement(token, "resource_id")
-        validated = keycloak_client.introspect(token)
-        return validated["active"]
+        try:
+            token_decoded = decode_token(token)
+            return True
+        except (JWTError, ExpiredSignatureError, JWTClaimsError) as e:
+            return False
 
 
 def decode_token(token):
     secret = f"-----BEGIN PUBLIC KEY-----\n{os.environ['KEYCLOAK_REALM_PUBLIC_KEY']}\n-----END PUBLIC KEY-----"
 
     # Verify signature & expiration
-    options = {"verify_signature": True, "verify_aud": False, "exp": True}
-    token_decoded = keycloak_client.decode_token(token, key=secret, options=options)
+    options = {"verify_signature": True, "verify_aud": False}
+    token_decoded = oidc_client.decode_token(token, key=secret, options=options)
 
     return token_decoded
 

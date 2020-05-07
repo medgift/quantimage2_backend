@@ -25,7 +25,7 @@ class FeatureBackend:
             for filepath in pathlib.Path(results_dir).glob("**/*")
         ]
 
-        return file_paths
+        return [file_paths, results_dir]
 
     @classmethod
     def convert_dicom_to_nii(cls, input_dir, labels=None):

@@ -27,7 +27,7 @@ redis
 requests
 
 # Keycloak
-python-keycloak
+python-keycloak-client
 
 # SQLAlchemy
 SQLAlchemy

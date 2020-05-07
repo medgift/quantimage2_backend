@@ -65,14 +65,14 @@ class MessageType(Enum):
 
 
 # Format feature extraction
-def format_extraction(extraction):
+def format_extraction(extraction, payload=False):
     extraction_dict = extraction.to_dict()
 
     status = fetch_extraction_result(celery, extraction.result_id)
     extraction_dict["status"] = vars(status)
 
     formatted_families = {"families": format_feature_families(extraction.families)}
-    formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks)}
+    formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks, payload)}
 
     extraction_dict.update(formatted_families)
     extraction_dict.update(formatted_tasks)
@@ -103,13 +103,13 @@ def format_family(family):
 
 
 # Format feature tasks
-def format_feature_tasks(feature_tasks):
+def format_feature_tasks(feature_tasks, payload=False):
     # Gather the feature tasks
     feature_task_list = []
 
     if feature_tasks:
         for feature_task in feature_tasks:
-            formatted_feature_task = format_feature_task(feature_task, payload=False)
+            formatted_feature_task = format_feature_task(feature_task, payload)
             feature_task_list.append(formatted_feature_task)
 
     return feature_task_list

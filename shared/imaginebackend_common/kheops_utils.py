@@ -17,6 +17,7 @@ class KheopsEndpoints(object):
 
 endpoints = KheopsEndpoints()
 endpoints.studies = kheopsBaseEndpoint + "/studies"
+endpoints.albums = kheopsBaseEndpoint + "/albums"
 endpoints.album_parameter = "album"
 endpoints.seriesSuffix = "/series"
 endpoints.instancesSuffix = "/instances"
@@ -29,9 +30,11 @@ class DicomFields(object):
 
 dicomFields = DicomFields()
 dicomFields.STUDY_UID = "0020000D"
+dicomFields.STUDY_DATE = "00080020"
 dicomFields.SERIES_UID = "0020000E"
 dicomFields.INSTANCE_UID = "00080018"
 dicomFields.DATE = "00080020"
+dicomFields.PATIENT_ID = "00100020"
 dicomFields.PATIENT_NAME = "00100010"
 dicomFields.MODALITY = "00080060"
 dicomFields.MODALITIES = "00080061"
