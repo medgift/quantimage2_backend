@@ -24,6 +24,7 @@ from service.feature_transformation import (
     transform_studies_features_to_csv,
     get_csv_file_content,
     make_album_file_name,
+    separate_features_by_modality_and_roi,
 )
 
 from .utils import validate_decorate
@@ -130,25 +131,12 @@ def download_extraction_by_id(id):
         # Album : send back a zip file with CSV files separated by
         # - Modality : PT/CT features shouldn't be mixed for example
         # - ROI : Main tumor & metastases features shouldn't be mixed for example
-
-        string_mem = io.StringIO(csv_file_content)
-        df = pandas.read_csv(string_mem)
-
-        # Group data by modality & label in order
-        # to save separate CSV files in a ZIP file
-        files_by_modality_and_label = {}
-        for idx, row in df.iterrows():
-            key = f"{row.Modality}_{row.ROI}"
-
-            if key not in files_by_modality_and_label:
-                files_by_modality_and_label[key] = []
-
-            files_by_modality_and_label[key].append(row.values.tolist())
+        grouped_features = separate_features_by_modality_and_roi(csv_file_content)
 
         # Create ZIP file to return
         zip_buffer = io.BytesIO()
         with ZipFile(zip_buffer, "a", ZIP_DEFLATED, False) as zip_file:
-            for group_name, group_data in files_by_modality_and_label.items():
+            for group_name, group_data in grouped_features.items():
                 group_string_mem = io.StringIO()
                 csv_writer = csv.writer(group_string_mem)
                 csv_writer.writerows([csv_header] + group_data)
@@ -163,8 +151,6 @@ def download_extraction_by_id(id):
             mimetype="application/zip",
             headers={"Content-disposition": f"attachment; filename={file_name}"},
         )
-
-        return "Album"
     else:
         # Single study : just send back a CSV file with the various columns
         file_name = make_study_file_name(patient_id, study_date, feature_families)

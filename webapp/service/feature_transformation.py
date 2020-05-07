@@ -1,6 +1,7 @@
 import csv
 import io
 import collections
+import pandas
 
 from imaginebackend_common.kheops_utils import dicomFields
 from imaginebackend_common.utils import read_feature_file
@@ -76,6 +77,24 @@ def transform_study_features_to_tabular(tasks, patient_id):
     csv_data = assemble_csv_data_lines(grouped_filtered_features, csv_header)
 
     return [csv_header, csv_data]
+
+
+def separate_features_by_modality_and_roi(all_features_as_csv):
+    string_mem = io.StringIO(all_features_as_csv)
+    df = pandas.read_csv(string_mem)
+
+    # Group data by modality & label in order
+    # to save separate CSV files in a ZIP file
+    features_by_group = {}
+    for idx, row in df.iterrows():
+        key = f"{row.Modality}_{row.ROI}"
+
+        if key not in features_by_group:
+            features_by_group[key] = []
+
+        features_by_group[key].append(row.values.tolist())
+
+    return features_by_group
 
 
 def assemble_csv_header(features_by_modality_and_label):
