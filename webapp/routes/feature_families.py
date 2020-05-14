@@ -85,7 +85,7 @@ def update_feature_family(feature_family_id):
 
 
 def allowed_file(file):
-    return file.content_type == "application/x-yaml"
+    return file.content_type == "application/x-yaml" or file.content_type == "application/octet-stream"
 
 
 def save_feature_config(file):
