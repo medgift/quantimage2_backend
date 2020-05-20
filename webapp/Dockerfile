@@ -11,7 +11,7 @@ COPY requirements*.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install melampus manually (temporary)
-RUN pip install --index-url https://test.pypi.org/simple/ --no-deps quantimage-melampus==0.0.4
+RUN pip install --index-url https://test.pypi.org/simple/ --no-deps quantimage-melampus==0.0.5
 
 # Copy source code
 COPY . .
