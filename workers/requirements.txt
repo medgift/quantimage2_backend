@@ -44,3 +44,6 @@ pydicom
 
 # YAML
 pyyaml
+
+# tictoc
+ttictoc
