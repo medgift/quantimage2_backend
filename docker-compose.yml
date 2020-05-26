@@ -23,7 +23,6 @@ services:
     volumes:
       - backend-data:/imagine-data
       - ./shared/imaginebackend_common/:/usr/local/lib/python3.6/imaginebackend_common
-      - ./venv/lib/python3.6/site-packages/melampus:/usr/local/lib/python3.6/site-packages/melampus
 
   celery:
     build:
