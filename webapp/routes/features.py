@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request, g, current_app, Response
 
+import numpy
 
 from random import randint
 
@@ -11,6 +12,7 @@ from imaginebackend_common.utils import (
     format_extraction,
     read_feature_file,
 )
+from service.feature_analysis import train_model_with_metric
 from service.feature_extraction import (
     run_feature_extraction,
     get_studies_from_album,
@@ -34,11 +36,8 @@ from zipfile import ZipFile, ZIP_DEFLATED
 import csv
 import io
 import os
-import json
 import pandas
-import tempfile
 
-from melampus import classifier
 
 # Define blueprint
 bp = Blueprint(__name__, "features")
@@ -84,6 +83,20 @@ def extraction_by_id(id):
     return jsonify(format_extraction(feature_extraction, payload=True))
 
 
+# Get feature details for a given extraction
+@bp.route("/extractions/<id>/feature-details")
+def extraction_features_by_id(id):
+    # TODO - Add support for making this work for a single study as well
+    token = g.token
+
+    extraction = FeatureExtraction.find_by_id(id)
+    studies = get_studies_from_album(extraction.album_id, token)
+
+    [header, features] = transform_studies_features_to_csv(extraction, studies)
+
+    return jsonify({"header": header, "features": features})
+
+
 # Download features in CSV format
 @bp.route("/extractions/<id>/download")  # ?patientID=???&studyDate=??? OR ?userID=???
 def download_extraction_by_id(id):
@@ -102,7 +115,7 @@ def download_extraction_by_id(id):
     album_name = None
 
     user_id = request.args.get("userID", None)
-    if user_id:
+    if user_id:  # Download for an album
         # Get a token for the given user (possible thanks to token exchange in Keycloak)
         token = oidc_client.token_exchange(
             requested_token_type="urn:ietf:params:oauth:token-type:access_token",
@@ -116,12 +129,20 @@ def download_extraction_by_id(id):
         [csv_header, csv_data] = transform_studies_features_to_csv(
             feature_extraction, album_studies
         )
-    else:
+    else:  # Download for a single study
         patient_id = request.args.get("patientID", None)
+        study_uid = request.args.get("studyUID", None)
         study_date = request.args.get("studyDate", None)
 
+        # Make sure to only keep tasks related to the study
+        # A Feature Extraction MAY contain tasks unrelated
+        # to the current study if it was an album extraction
+        study_tasks = list(
+            filter(lambda task: task.study_uid == study_uid, feature_extraction.tasks)
+        )
+
         [csv_header, csv_data] = transform_study_features_to_tabular(
-            feature_extraction.tasks, patient_id
+            study_tasks, patient_id
         )
 
     csv_data_with_header = [csv_header] + csv_data
@@ -223,37 +244,26 @@ def extract_album(album_id):
 
 # Analysis of features
 @bp.route("/analyze", methods=["POST"])
-def analyze_features():
+def analyze_features(gt):
 
     # Dictionary with the key corresponding
     # to a MODALITY + ROI combination and
     # the value being a JSON representation
     # of the features (including patient ID)
-    features = request.json
+    body = request.json
 
-    first_features = next(iter(features.values()))
+    extraction_id = body["extraction-id"]
+    studies = body["studies"]
+    album = body["album"]
 
-    # Create temporary file for CSV content & dump it there
-    with tempfile.NamedTemporaryFile() as temp:
-        df = pandas.read_json(json.dumps(first_features))
-        dataCsvFile = df.to_csv(temp.name)
+    metrics = train_model_with_metric(extraction_id, studies, album, gt)
 
-        labelsDf = simulateLabels(df)
-
-        labelsList = list(labelsDf.label)
-
-        myClassifier = classifier.MelampusClassifier(temp.name, labelsList, "patientID")
-
-        myClassifier.train()
-
-        performance = myClassifier.assess_classifier()
-
-        return jsonify({"performance": performance})
+    return jsonify({"performance": metrics})
 
 
 def simulateLabels(df):
-    patientIDs = list(df.patientID)
-    columns = ["patientID", "label"]
+    patientIDs = list(df.PatientID)
+    columns = ["PatientID", "Label"]
 
     labelData = {columns[0]: [], columns[1]: []}
 

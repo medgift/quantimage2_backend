@@ -282,6 +282,53 @@ class FeatureExtractionTask(BaseModel, db.Model):
         }
 
 
+# Machine learning model
+class Model(BaseModel, db.Model):
+    def __init__(self, name, type, model_path, user_id, album_id):
+        self.name = name
+        self.type = type
+        self.model_path = model_path
+        self.user_id = user_id
+        self.album_id = album_id
+
+    # Name of the model
+    name = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Type of the model (classification, survival)
+    type = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Path to pickled version of the model
+    model_path = db.Column(db.String(255), nullable=False, unique=True)
+
+    # User who created the model
+    user_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Album on which the album was created
+    album_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    @classmethod
+    def find_by_album(cls, album_id, user_id):
+        instances = cls.query.filter_by(album_id=album_id, user_id=user_id).all()
+        return instances
+
+    @classmethod
+    def find_by_user(cls, user_id):
+        instances = cls.query.filter_by(user_id=user_id).all()
+        return instances
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "name": self.name,
+            "type": self.type,
+            "model_path": self.model_path,
+            "user_id": self.user_id,
+            "album_id": self.album_id,
+        }
+
+
 def get_or_create(model, **kwargs):
     instance = db.session.query(model).filter_by(**kwargs).one_or_none()
     if instance:

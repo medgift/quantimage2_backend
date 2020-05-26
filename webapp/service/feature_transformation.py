@@ -3,6 +3,8 @@ import io
 import collections
 import pandas
 
+from ttictoc import tic, toc
+
 from imaginebackend_common.kheops_utils import dicomFields
 from imaginebackend_common.utils import read_feature_file
 
@@ -16,8 +18,9 @@ def transform_studies_features_to_csv(feature_extraction, studies):
     header = None
     data = []
 
+    i = 0
+
     for study in studies:
-        print(study)
         patient_id = study[dicomFields.PATIENT_ID][dicomFields.VALUE][0]
         study_uid = study[dicomFields.STUDY_UID][dicomFields.VALUE][0]
         study_date = study[dicomFields.STUDY_DATE][dicomFields.VALUE][0]
@@ -36,7 +39,8 @@ def transform_studies_features_to_csv(feature_extraction, studies):
             header = study_header
         data += study_data
 
-    print(data)
+        i += 1
+        print(f"Transformed {i}/{len(studies)} studies")
 
     return [header, data]
 

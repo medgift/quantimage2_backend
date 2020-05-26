@@ -7,6 +7,7 @@ from enum import Enum
 
 # Exceptions
 from pathlib import Path
+from ttictoc import tic, toc
 
 import celery.states as celerystates
 import jsonpickle
@@ -180,7 +181,11 @@ def read_feature_file(feature_path):
     features_dict = {}
     if feature_path:
         try:
+            tic()
             features_dict = jsonpickle.decode(open(feature_path).read())
+            elapsed = toc()
+            # TODO - Remove this once the serialization has been improved!
+            # print(f"Unpickling took {elapsed}s")
 
             for modality, labels in features_dict.items():
                 for label, features in labels.items():

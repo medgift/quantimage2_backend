@@ -33,7 +33,7 @@ def run_feature_extraction(
 
     # Create Feature Extraction object
     feature_extraction = FeatureExtraction(user_id, album_id, study_uid)
-    feature_extraction.flush_to_db()
+    feature_extraction.save_to_db()
 
     print(f"Creating the feature extraction object")
     print(toc())
@@ -87,7 +87,7 @@ def run_feature_extraction(
         )
 
         # Save the association to the DB
-        feature_extraction_family.flush_to_db()
+        feature_extraction_family.save_to_db()
 
         # Create extraction task and run it
         for study_uid in study_uids:
@@ -100,7 +100,7 @@ def run_feature_extraction(
                 None,
                 features_path,
             )
-            feature_extraction_task.flush_to_db()
+            feature_extraction_task.save_to_db()
 
             # Create new task signature
             task_signature = current_app.my_celery.signature(
