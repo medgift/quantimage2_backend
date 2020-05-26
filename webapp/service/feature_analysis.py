@@ -6,7 +6,7 @@ import tempfile
 from imaginebackend_common.models import FeatureExtraction
 from service.feature_transformation import transform_studies_features_to_csv
 
-from melampus import classifier
+from melampus.classifier import MelampusClassifier
 
 
 def train_model_with_metric(extraction_id, studies, album, gt):
@@ -65,9 +65,7 @@ def train_model_with_metric(extraction_id, studies, album, gt):
         featuresDf.to_csv(temp.name)
 
         # Call Melampus classifier
-        myClassifier = classifier.MelampusClassifier(
-            temp.name, "logistic_regression", labelsList
-        )
+        myClassifier = MelampusClassifier(temp.name, "logistic_regression", labelsList)
 
         myClassifier.train()
 
