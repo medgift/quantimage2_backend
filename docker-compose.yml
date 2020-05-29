@@ -106,7 +106,7 @@ services:
       - POSTGRES_PASSWORD=${KEYCLOAK_DB_PASSWORD}
       - POSTGRES_DB=${KEYCLOAK_DB}
     volumes:
-      - pgdata:/var/lib/postgresql
+      - pgdata:/var/lib/postgresql/data
 
   keycloak-db-admin:
     image:                 dpage/pgadmin4
