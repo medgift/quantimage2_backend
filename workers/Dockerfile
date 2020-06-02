@@ -29,7 +29,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir -r requirements-melampus.txt
 
 # Install melampus manually (temporary)
-RUN pip install --index-url https://test.pypi.org/simple/ --no-deps quantimage-melampus==0.0.5
+RUN pip install --index-url https://test.pypi.org/simple/ --no-deps quantimage-melampus==0.0.6
 
 # Install okapy dependencies (temporary)
 RUN pip install --no-cache-dir -r requirements-okapy.txt

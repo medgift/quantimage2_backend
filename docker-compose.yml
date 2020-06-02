@@ -60,6 +60,8 @@ services:
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_DATABASE=${MYSQL_DATABASE}
+    volumes:
+      - backend-db:/var/lib/mysql
 
   phpmyadmin:
     image:                 phpmyadmin/phpmyadmin
@@ -74,6 +76,9 @@ services:
 
   redis:
     image: redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - tasks-db:/data
 
   redis-socket:
     image: redis
@@ -125,4 +130,6 @@ services:
 
 volumes:
   backend-data:
+  backend-db:
+  tasks-db:
   pgdata:

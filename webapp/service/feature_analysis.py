@@ -1,5 +1,6 @@
 import csv
 import io
+import os
 import pandas
 import tempfile
 
@@ -34,14 +35,13 @@ def train_model_with_metric(extraction_id, studies, album, gt):
     # Drop modality & ROI from the dataframe, as Melampus doesn't support string values
     featuresDf = featuresDf.drop(["Modality", "ROI"], axis=1)
 
-    # TODO - Get actual labels dynamically (CSV file or something)
-    labelsDf = gt
+    # Get Labels DataFrame
+    labelsDf = pandas.DataFrame(gt, columns=["PatientID", "ROI", "Label"])
 
+    # Get labels for each patient (to make sure they are in the same order)
     labelsList = []
     for index, row in featuresDf.iterrows():
-        patient_label = labelsDf[
-            labelsDf["PatientID"] == row.PatientID[0 : row.PatientID.rindex("_")]
-        ].Label.values[0]
+        patient_label = labelsDf[labelsDf["PatientID"] == row.PatientID].Label.values[0]
         labelsList.append(patient_label)
 
     # trainLabels = []
@@ -67,9 +67,16 @@ def train_model_with_metric(extraction_id, studies, album, gt):
         # Call Melampus classifier
         myClassifier = MelampusClassifier(temp.name, "logistic_regression", labelsList)
 
-        myClassifier.train()
+        model = myClassifier.train()
+
+        # train with metrics (doesn't work withe the small dataset)
+        # myClassifier.train_and_evaluate()
 
         # Convert metrics to native Python types
-        metrics = {}
-        for metric_name, metric_value in myClassifier.metrics.items():
-            metrics[metric_name] = metric_value.item()
+        # metrics = {}
+        # for metric_name, metric_value in myClassifier.metrics.items():
+        #     metrics[metric_name] = metric_value.item()
+
+        # os.unlink(temp.name)
+
+    return model

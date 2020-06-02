@@ -29,6 +29,7 @@ from routes.features import bp as features_bp
 from routes.feature_families import bp as feature_families_bp
 from routes.tasks import bp as tasks_bp
 from routes.models import bp as models_bp
+from routes.labels import bp as labels_bp
 
 print("App is Starting!")
 
@@ -129,6 +130,7 @@ def setup_app(app):
         app.register_blueprint(feature_families_bp)
         app.register_blueprint(tasks_bp)
         app.register_blueprint(models_bp)
+        app.register_blueprint(labels_bp)
 
 
 if __name__ == "__main__":

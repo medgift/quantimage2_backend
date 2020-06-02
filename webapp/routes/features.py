@@ -240,38 +240,3 @@ def extract_album(album_id):
     )
 
     return jsonify(format_extraction(feature_extraction))
-
-
-# Analysis of features
-@bp.route("/analyze", methods=["POST"])
-def analyze_features(gt):
-
-    # Dictionary with the key corresponding
-    # to a MODALITY + ROI combination and
-    # the value being a JSON representation
-    # of the features (including patient ID)
-    body = request.json
-
-    extraction_id = body["extraction-id"]
-    studies = body["studies"]
-    album = body["album"]
-
-    metrics = train_model_with_metric(extraction_id, studies, album, gt)
-
-    return jsonify({"performance": metrics})
-
-
-def simulateLabels(df):
-    patientIDs = list(df.PatientID)
-    columns = ["PatientID", "Label"]
-
-    labelData = {columns[0]: [], columns[1]: []}
-
-    for patientID in patientIDs:
-        randomLabel = randint(0, 1)
-        labelData[columns[0]].append(patientID)
-        labelData[columns[1]].append(randomLabel)
-
-    labelsDf = pandas.DataFrame(labelData, columns=columns)
-
-    return labelsDf

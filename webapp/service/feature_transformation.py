@@ -25,14 +25,15 @@ def transform_studies_features_to_csv(feature_extraction, studies):
         study_uid = study[dicomFields.STUDY_UID][dicomFields.VALUE][0]
         study_date = study[dicomFields.STUDY_DATE][dicomFields.VALUE][0]
 
-        dated_patient_id = f"{patient_id}_{study_date}"
+        # Stop this for now, it should be unique usually
+        # dated_patient_id = f"{patient_id}_{study_date}"
 
         study_tasks = list(
             filter(lambda task: task.study_uid == study_uid, feature_extraction.tasks)
         )
 
         [study_header, study_data] = transform_study_features_to_tabular(
-            study_tasks, dated_patient_id
+            study_tasks, patient_id
         )
 
         if not header:

@@ -28,6 +28,16 @@ class BaseModel(object):
         return instance
 
     @classmethod
+    def delete_by_id(cls, id):
+        instance = db.session.query(cls).filter_by(id=id).one_or_none()
+        if instance:
+            db.session.delete(instance)
+            db.session.commit()
+            return instance
+        else:
+            return None
+
+    @classmethod
     def find_all(cls):
         instances = db.session.query(cls).all()
         return instances
@@ -284,9 +294,10 @@ class FeatureExtractionTask(BaseModel, db.Model):
 
 # Machine learning model
 class Model(BaseModel, db.Model):
-    def __init__(self, name, type, model_path, user_id, album_id):
+    def __init__(self, name, type, algorithm, model_path, user_id, album_id):
         self.name = name
         self.type = type
+        self.algorithm = algorithm
         self.model_path = model_path
         self.user_id = user_id
         self.album_id = album_id
@@ -296,6 +307,9 @@ class Model(BaseModel, db.Model):
 
     # Type of the model (classification, survival)
     type = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Algorithm used for the model (linear regression, random forests, SVM, etc.)
+    algorithm = db.Column(db.String(255), nullable=False, unique=False)
 
     # Path to pickled version of the model
     model_path = db.Column(db.String(255), nullable=False, unique=True)
@@ -323,18 +337,86 @@ class Model(BaseModel, db.Model):
             "updated_at": self.updated_at,
             "name": self.name,
             "type": self.type,
+            "algorithm": self.algorithm,
             "model_path": self.model_path,
             "user_id": self.user_id,
             "album_id": self.album_id,
         }
 
 
-def get_or_create(model, **kwargs):
-    instance = db.session.query(model).filter_by(**kwargs).one_or_none()
+# Patient/Region outcome
+class Label(BaseModel, db.Model):
+    def __init__(self, album_id, patient_id, roi, outcome, user_id):
+        self.album_id = album_id
+        self.patient_id = patient_id
+        self.roi = roi
+        self.outcome = outcome
+        self.user_id = user_id
+
+    # Album ID
+    album_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Patient ID
+    patient_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    # ROI Name
+    roi = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Outcome
+    outcome = db.Column(db.String(255), nullable=False, unique=False)
+
+    # User who created the model
+    user_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    @classmethod
+    def find_by_album(cls, album_id, user_id):
+        instances = cls.query.filter_by(album_id=album_id, user_id=user_id).all()
+        return instances
+
+    @classmethod
+    def find_by_user(cls, user_id):
+        instances = cls.query.filter_by(user_id=user_id).all()
+        return instances
+
+    @classmethod
+    def save_label(cls, album_id, patient_id, roi, outcome, user_id):
+        result = get_or_create(
+            Label,
+            criteria={
+                "album_id": album_id,
+                "patient_id": patient_id,
+                "roi": roi,
+                "user_id": user_id,
+            },
+            defaults={"outcome": outcome},
+        )
+        if result["created"] == False:
+            old_instance = result["instance"]
+            old_instance.outcome = outcome
+            old_instance.save_to_db()
+
+        return result["instance"]
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "album_id": self.album_id,
+            "patient_id": self.patient_id,
+            "roi": self.roi,
+            "outcome": self.outcome,
+            "user_id": self.user_id,
+        }
+
+
+def get_or_create(model, criteria=None, defaults=None):
+    instance = db.session.query(model).filter_by(**criteria).one_or_none()
     if instance:
-        return instance
+        return {"instance": instance, "created": False}
     else:
-        instance = model(**kwargs)
+        criteria.update(defaults)
+        instance = model(**criteria)
         db.session.add(instance)
         db.session.commit()
-        return instance
+        return {"instance": instance, "created": True}
