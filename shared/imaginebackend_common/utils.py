@@ -66,17 +66,19 @@ class MessageType(Enum):
 
 
 # Format feature extraction
-def format_extraction(extraction, payload=False):
+def format_extraction(extraction, payload=False, families=True, tasks=False):
     extraction_dict = extraction.to_dict()
 
     status = fetch_extraction_result(celery, extraction.result_id)
     extraction_dict["status"] = vars(status)
 
-    formatted_families = {"families": format_feature_families(extraction.families)}
-    formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks, payload)}
+    if families:
+        formatted_families = {"families": format_feature_families(extraction.families)}
+        extraction_dict.update(formatted_families)
 
-    extraction_dict.update(formatted_families)
-    extraction_dict.update(formatted_tasks)
+    if tasks:
+        formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks, payload)}
+        extraction_dict.update(formatted_tasks)
 
     return extraction_dict
 
@@ -334,7 +336,7 @@ def send_extraction_status_message(
     print("Send extraction is  " + str(send_extraction))
     if send_extraction:
         print(f"Sending whole feature extraction object with tasks and families etc. !")
-        socketio_body = format_extraction(feature_extraction)
+        socketio_body = format_extraction(feature_extraction, tasks=True)
     else:
         extraction_status = fetch_extraction_result(
             celery, feature_extraction.result_id

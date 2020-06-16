@@ -10,7 +10,7 @@ from service.feature_transformation import transform_studies_features_to_csv
 from melampus.classifier import MelampusClassifier
 
 
-def train_model_with_metric(extraction_id, studies, album, gt):
+def train_model_with_metric(extraction_id, studies, algorithm_type, gt):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
     [header, features] = transform_studies_features_to_csv(extraction, studies)
@@ -26,7 +26,7 @@ def train_model_with_metric(extraction_id, studies, album, gt):
     featuresDf = pandas.read_csv(mem_file)
 
     # TODO - How to deal with multiple modalities & ROIs?
-    # Grab just CT & GTV_T as a test
+    # Grab just CT & GTV_L as a test
     featuresDf = featuresDf[
         (featuresDf["Modality"] == "CT") & (featuresDf["ROI"] == "GTV_L")
     ]
@@ -42,7 +42,7 @@ def train_model_with_metric(extraction_id, studies, album, gt):
     labelsList = []
     for index, row in featuresDf.iterrows():
         patient_label = labelsDf[labelsDf["PatientID"] == row.PatientID].Label.values[0]
-        labelsList.append(patient_label)
+        labelsList.append(int(patient_label))
 
     # trainLabels = []
     # for index, row in trainDf.iterrows():
@@ -65,9 +65,12 @@ def train_model_with_metric(extraction_id, studies, album, gt):
         featuresDf.to_csv(temp.name)
 
         # Call Melampus classifier
-        myClassifier = MelampusClassifier(temp.name, "logistic_regression", labelsList)
+        myClassifier = MelampusClassifier(temp.name, algorithm_type, labelsList)
 
-        model = myClassifier.train()
+        model = myClassifier.train_and_evaluate()
+
+        # Save metrics in the model for now
+        model.metrics = myClassifier.metrics
 
         # train with metrics (doesn't work withe the small dataset)
         # myClassifier.train_and_evaluate()

@@ -7,6 +7,7 @@ from random import randint
 from keycloak.realm import KeycloakRealm
 
 from config import oidc_client
+from imaginebackend_common.kheops_utils import dicomFields
 from imaginebackend_common.utils import (
     fetch_extraction_result,
     format_extraction,
@@ -80,7 +81,7 @@ def extraction_by_study(study_uid):
 def extraction_by_id(id):
     feature_extraction = FeatureExtraction.find_by_id(id)
 
-    return jsonify(format_extraction(feature_extraction, payload=True))
+    return jsonify(format_extraction(feature_extraction, payload=True, tasks=True))
 
 
 # Get feature details for a given extraction
@@ -95,6 +96,37 @@ def extraction_features_by_id(id):
     [header, features] = transform_studies_features_to_csv(extraction, studies)
 
     return jsonify({"header": header, "features": features})
+
+
+# Get data points (PatientID/ROI) for a given extraction
+@bp.route("/extractions/<id>/data-points")
+def extraction_data_points_by_id(id):
+    # TODO - Add support for making this work for a single study as well
+    token = g.token
+
+    extraction = FeatureExtraction.find_by_id(id)
+    studies = get_studies_from_album(extraction.album_id, token)
+
+    # Get Patient IDs from studies
+    patient_ids = []
+    for study in studies:
+        patient_id = study[dicomFields.PATIENT_ID][dicomFields.VALUE][0]
+        if not patient_id in patient_ids:
+            patient_ids.append(patient_id)
+
+    # Get ROIs from a first feature file
+    first_task = extraction.tasks[0]
+    features_content = read_feature_file(first_task.features_path)
+    first_modality = next(iter(features_content))
+    rois = features_content[first_modality].keys()
+
+    # Generate data points
+    data_points = []
+    for patient_id in patient_ids:
+        for roi in rois:
+            data_points.append([patient_id, roi])
+
+    return jsonify({"data-points": data_points})
 
 
 # Download features in CSV format

@@ -1,5 +1,7 @@
 import os
 
+import collections
+
 import jsonpickle
 
 from flask import Blueprint, jsonify, request, g, current_app, Response
@@ -20,13 +22,31 @@ def before_request():
     validate_decorate(request)
 
 
+def format_model(model):
+    model_dict = model.to_dict()
+
+    # De-serialize model (for metrics)
+    f = open(model.model_path)
+    json_str = f.read()
+    model_object = jsonpickle.decode(json_str)
+
+    # Convert metrics to native Python types
+    metrics = collections.OrderedDict()
+    for metric_name, metric_value in model_object.metrics.items():
+        metrics[metric_name] = metric_value.item()
+
+    model_dict["metrics"] = metrics
+
+    return model_dict
+
+
 @bp.route("/models/<album_id>", methods=("GET", "POST"))
 def models_by_album(album_id):
 
     if request.method == "GET":
-        albums = Model.find_by_album(album_id, g.user)
-        formatted_albums = list(map(lambda album: album.to_dict(), albums,))
-        return jsonify(formatted_albums)
+        models = Model.find_by_album(album_id, g.user)
+        formatted_models = list(map(lambda model: format_model(model), models))
+        return jsonify(formatted_models)
 
     if request.method == "POST":
         # Dictionary with the key corresponding
@@ -42,7 +62,7 @@ def models_by_album(album_id):
         model_type = body["model-type"]
         algorithm_type = body["algorithm-type"]
 
-        model = train_model_with_metric(extraction_id, studies, album, gt)
+        model = train_model_with_metric(extraction_id, studies, algorithm_type, gt)
 
         model_path = get_models_path(
             g.user, album["album_id"], model_type, algorithm_type
@@ -67,18 +87,19 @@ def models_by_album(album_id):
         )
         db_model.save_to_db()
 
-        return jsonify(db_model.to_dict())
+        return jsonify(format_model(db_model))
 
 
 @bp.route("/models/<id>", methods=["DELETE"])
 def model(id):
     the_model = Model.delete_by_id(id)
+    formatted_model = format_model(the_model)
     model_path = the_model.model_path
     try:
         os.unlink(model_path)
     except FileNotFoundError as e:
         pass
-    return jsonify(the_model.to_dict())
+    return jsonify(formatted_model)
 
 
 @bp.route("/models")
