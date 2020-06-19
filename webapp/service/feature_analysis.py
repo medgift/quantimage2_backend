@@ -31,6 +31,15 @@ def train_model_with_metric(extraction_id, studies, algorithm_type, gt):
         (featuresDf["Modality"] == "CT") & (featuresDf["ROI"] == "GTV_L")
     ]
 
+    # Keep just GTV_L for now
+    # featuresDf = featuresDf[(featuresDf["ROI"] == "GTV_L")]
+
+    # Drop the ROI column
+    # featuresDf = featuresDf.drop(["ROI"], axis=1)
+
+    # TODO - Analyze what is the best thing to do, try concatenation so far
+    # featuresDf = concatenate_modalities(featuresDf)
+
     # TODO - Should Melampus be able to deal with string columns?
     # Drop modality & ROI from the dataframe, as Melampus doesn't support string values
     featuresDf = featuresDf.drop(["Modality", "ROI"], axis=1)
@@ -62,12 +71,27 @@ def train_model_with_metric(extraction_id, studies, algorithm_type, gt):
     with tempfile.NamedTemporaryFile(mode="w+") as temp:
 
         # Save filtered DataFrame to CSV file (to feed it to Melampus)
-        featuresDf.to_csv(temp.name)
+        featuresDf.to_csv(temp.name, index=False)
 
         # Call Melampus classifier
         myClassifier = MelampusClassifier(temp.name, algorithm_type, labelsList)
 
         model = myClassifier.train_and_evaluate()
+
+        # Add & customize some metrics - TODO do this in Melampus
+        metrics_name_mapping = {
+            "area_under_curve": "auc",
+            "precision": "positive_predictive_value",
+            "recall": "sensitivity",
+        }
+        for metric_name, metric_value in myClassifier.metrics.items():
+            if metric_name in metrics_name_mapping:
+                myClassifier.metrics[metrics_name_mapping[metric_name]] = metric_value
+                del myClassifier.metrics[metric_name]
+
+        myClassifier.metrics["specificity"] = myClassifier.metrics["true_neg"] / (
+            myClassifier.metrics["true_neg"] + myClassifier.metrics["false_pos"]
+        )
 
         # Save metrics in the model for now
         model.metrics = myClassifier.metrics
@@ -83,3 +107,25 @@ def train_model_with_metric(extraction_id, studies, algorithm_type, gt):
         # os.unlink(temp.name)
 
     return model
+
+
+def concatenate_modalities(featuresDf):
+    # Concatenate features from the various modalities
+
+    # Keep PatientID
+    pidDf = featuresDf["PatientID"].to_frame()
+    uniquePidDf = pidDf.drop_duplicates(subset="PatientID")
+    uniquePidDf = uniquePidDf.set_index("PatientID", drop=False)
+
+    to_concat = [uniquePidDf]
+    # Groupe dataframes by Modality
+    for modality, modalityDf in featuresDf.groupby("Modality"):
+        withoutModalityDf = modalityDf.drop("Modality", axis=1)
+        withoutModalityDf = withoutModalityDf.set_index("PatientID", drop=True)
+        withoutModalityDf = withoutModalityDf.add_prefix(modality + "_")
+        to_concat.append(withoutModalityDf)
+        print(withoutModalityDf)
+
+    concatenatedDf = pandas.concat(to_concat, axis=1)
+
+    return concatenatedDf

@@ -72,6 +72,21 @@ def format_extraction(extraction, payload=False, families=True, tasks=False):
     status = fetch_extraction_result(celery, extraction.result_id)
     extraction_dict["status"] = vars(status)
 
+    # fetch info about the features extracted
+    feature_family_task = {}
+    for task in extraction.tasks:
+        if task.feature_family_id not in feature_family_task:
+            feature_family_task[task.feature_family_id] = task
+
+    all_feature_names = []
+    for family_id, task in feature_family_task.items():
+        features_dict = read_feature_file(task.features_path)
+        feature_names = get_feature_names(features_dict)
+
+        all_feature_names += feature_names
+
+    extraction_dict["feature-number"] = len(all_feature_names)
+
     if families:
         formatted_families = {"families": format_feature_families(extraction.families)}
         extraction_dict.update(formatted_families)
@@ -81,6 +96,20 @@ def format_extraction(extraction, payload=False, families=True, tasks=False):
         extraction_dict.update(formatted_tasks)
 
     return extraction_dict
+
+
+# Get features names from dictionary
+def get_feature_names(features_dict):
+    feature_names = []
+    first_modality = features_dict[next(iter(features_dict.keys()))]
+    first_roi = first_modality[next(iter(first_modality.keys()))]
+
+    leave_out_prefix = "diagnostics_"
+    for feature_name, feature_value in first_roi.items():
+        if not feature_name.startswith(leave_out_prefix):
+            feature_names.append(feature_name)
+
+    return feature_names
 
 
 # Format feature families
