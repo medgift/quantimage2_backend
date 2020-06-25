@@ -11,6 +11,7 @@ from imaginebackend_common.models import Model
 from pathlib import Path
 
 # Define blueprint
+from imaginebackend_common.utils import format_extraction
 from routes.utils import validate_decorate
 from service.feature_analysis import train_model_with_metric
 
@@ -24,6 +25,13 @@ def before_request():
 
 def format_model(model):
     model_dict = model.to_dict()
+
+    # Format feature extraction to get feature n° and names
+    formatted_extraction = format_extraction(model.feature_extraction, families=True)
+
+    model_dict["extraction"] = formatted_extraction
+    model_dict["feature-number"] = formatted_extraction["feature-number"]
+    model_dict["feature-names"] = formatted_extraction["feature-names"]
 
     # De-serialize model (for metrics)
     f = open(model.model_path)
@@ -55,14 +63,16 @@ def models_by_album(album_id):
         # of the features (including patient ID)
         body = request.json
 
-        extraction_id = body["extraction-id"]
+        feature_extraction_id = body["extraction-id"]
         studies = body["studies"]
         album = body["album"]
         gt = body["labels"]
         model_type = body["model-type"]
         algorithm_type = body["algorithm-type"]
 
-        model = train_model_with_metric(extraction_id, studies, algorithm_type, gt)
+        model = train_model_with_metric(
+            feature_extraction_id, studies, algorithm_type, gt
+        )
 
         model_path = get_models_path(
             g.user, album["album_id"], model_type, algorithm_type
@@ -84,6 +94,7 @@ def models_by_album(album_id):
             model_path,
             g.user,
             album["album_id"],
+            feature_extraction_id,
         )
         db_model.save_to_db()
 

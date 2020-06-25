@@ -86,6 +86,7 @@ def format_extraction(extraction, payload=False, families=True, tasks=False):
         all_feature_names += feature_names
 
     extraction_dict["feature-number"] = len(all_feature_names)
+    extraction_dict["feature-names"] = all_feature_names
 
     if families:
         formatted_families = {"families": format_feature_families(extraction.families)}

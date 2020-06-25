@@ -155,6 +155,9 @@ class FeatureExtraction(BaseModel, db.Model):
     # Tasks for this feature extraction
     tasks = db.relationship("FeatureExtractionTask")
 
+    # Models for this feature extraction
+    models = db.relationship("Model")
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -294,13 +297,23 @@ class FeatureExtractionTask(BaseModel, db.Model):
 
 # Machine learning model
 class Model(BaseModel, db.Model):
-    def __init__(self, name, type, algorithm, model_path, user_id, album_id):
+    def __init__(
+        self,
+        name,
+        type,
+        algorithm,
+        model_path,
+        user_id,
+        album_id,
+        feature_extraction_id,
+    ):
         self.name = name
         self.type = type
         self.algorithm = algorithm
         self.model_path = model_path
         self.user_id = user_id
         self.album_id = album_id
+        self.feature_extraction_id = feature_extraction_id
 
     # Name of the model
     name = db.Column(db.String(255), nullable=False, unique=False)
@@ -317,8 +330,14 @@ class Model(BaseModel, db.Model):
     # User who created the model
     user_id = db.Column(db.String(255), nullable=False, unique=False)
 
-    # Album on which the album was created
+    # Album on which the model was created
     album_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Relationships
+    feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
+    feature_extraction = db.relationship(
+        "FeatureExtraction", back_populates="models", lazy="joined"
+    )
 
     @classmethod
     def find_by_album(cls, album_id, user_id):
