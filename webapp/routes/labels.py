@@ -29,12 +29,18 @@ def save_labels(album_id):
     outcomes_dict = request.json
 
     outcomes = []
-    for patient_id, roi_dict in outcomes_dict.items():
-        for roi, outcome in roi_dict.items():
-            created_updated_label = Label.save_label(
-                album_id, patient_id, roi, outcome, user
-            )
-            outcomes.append(created_updated_label.to_dict())
+
+    # TODO - Allow choosing a mode (Patient only or patient + roi)
+    # for patient_id, roi_dict in outcomes_dict.items():
+    #     for roi, outcome in roi_dict.items():
+    #         created_updated_label = Label.save_label(
+    #             album_id, patient_id, roi, outcome, user
+    #         )
+    #         outcomes.append(created_updated_label.to_dict())
+
+    for patient_id, outcome in outcomes_dict.items():
+        created_updated_label = Label.save_label(album_id, patient_id, outcome, user)
+        outcomes.append(created_updated_label.to_dict())
 
     return jsonify(outcomes)
 

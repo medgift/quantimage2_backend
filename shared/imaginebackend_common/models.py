@@ -302,6 +302,8 @@ class Model(BaseModel, db.Model):
         name,
         type,
         algorithm,
+        modalities,
+        rois,
         model_path,
         user_id,
         album_id,
@@ -310,6 +312,8 @@ class Model(BaseModel, db.Model):
         self.name = name
         self.type = type
         self.algorithm = algorithm
+        self.modalities = modalities
+        self.rois = rois
         self.model_path = model_path
         self.user_id = user_id
         self.album_id = album_id
@@ -323,6 +327,12 @@ class Model(BaseModel, db.Model):
 
     # Algorithm used for the model (linear regression, random forests, SVM, etc.)
     algorithm = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Modalities used for training the model
+    modalities = db.Column(db.JSON, nullable=False, unique=False)
+
+    # ROIs used for training the model
+    rois = db.Column(db.JSON, nullable=False, unique=False)
 
     # Path to pickled version of the model
     model_path = db.Column(db.String(255), nullable=False, unique=True)
@@ -357,6 +367,8 @@ class Model(BaseModel, db.Model):
             "name": self.name,
             "type": self.type,
             "algorithm": self.algorithm,
+            "modalities": self.modalities,
+            "rois": self.rois,
             "model_path": self.model_path,
             "user_id": self.user_id,
             "album_id": self.album_id,
@@ -365,10 +377,11 @@ class Model(BaseModel, db.Model):
 
 # Patient/Region outcome
 class Label(BaseModel, db.Model):
-    def __init__(self, album_id, patient_id, roi, outcome, user_id):
+    # TODO - Allow choosing a mode (Patient only or Patient + ROI)
+    def __init__(self, album_id, patient_id, outcome, user_id):
         self.album_id = album_id
         self.patient_id = patient_id
-        self.roi = roi
+        # self.roi = roi
         self.outcome = outcome
         self.user_id = user_id
 
@@ -378,8 +391,9 @@ class Label(BaseModel, db.Model):
     # Patient ID
     patient_id = db.Column(db.String(255), nullable=False, unique=False)
 
+    # TODO - Allow choosing a mode (Patient only or Patient + ROI)
     # ROI Name
-    roi = db.Column(db.String(255), nullable=False, unique=False)
+    # roi = db.Column(db.String(255), nullable=False, unique=False)
 
     # Outcome
     outcome = db.Column(db.String(255), nullable=False, unique=False)
@@ -397,14 +411,15 @@ class Label(BaseModel, db.Model):
         instances = cls.query.filter_by(user_id=user_id).all()
         return instances
 
+    # TODO - Allow choosing a mode (Patient only or patient + ROI)
     @classmethod
-    def save_label(cls, album_id, patient_id, roi, outcome, user_id):
+    def save_label(cls, album_id, patient_id, outcome, user_id):
         result = get_or_create(
             Label,
             criteria={
                 "album_id": album_id,
                 "patient_id": patient_id,
-                "roi": roi,
+                # "roi": roi,
                 "user_id": user_id,
             },
             defaults={"outcome": outcome},
@@ -416,6 +431,7 @@ class Label(BaseModel, db.Model):
 
         return result["instance"]
 
+    # TODO - Allow choosing a mode (Patient only or patient + ROI)
     def to_dict(self):
         return {
             "id": self.id,
@@ -423,7 +439,7 @@ class Label(BaseModel, db.Model):
             "updated_at": self.updated_at,
             "album_id": self.album_id,
             "patient_id": self.patient_id,
-            "roi": self.roi,
+            # "roi": self.roi,
             "outcome": self.outcome,
             "user_id": self.user_id,
         }

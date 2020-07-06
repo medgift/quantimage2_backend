@@ -10,7 +10,9 @@ from service.feature_transformation import transform_studies_features_to_csv
 from melampus.classifier import MelampusClassifier
 
 
-def train_model_with_metric(extraction_id, studies, algorithm_type, gt):
+def train_model_with_metric(
+    extraction_id, studies, algorithm_type, modalities, rois, gt
+):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
     [header, features] = transform_studies_features_to_csv(extraction, studies)
@@ -25,11 +27,11 @@ def train_model_with_metric(extraction_id, studies, algorithm_type, gt):
     # Create DataFrame from CSV data
     featuresDf = pandas.read_csv(mem_file)
 
-    # TODO - How to deal with multiple modalities & ROIs?
+    # TODO - How to deal with multiple modalities & ROIs? - Concatenate for now...
     # Grab just CT & GTV_L as a test
-    featuresDf = featuresDf[
-        (featuresDf["Modality"] == "CT") & (featuresDf["ROI"] == "GTV_L")
-    ]
+    # featuresDf = featuresDf[
+    #     (featuresDf["Modality"] == "CT") & (featuresDf["ROI"] == "GTV_L")
+    # ]
 
     # Keep just GTV_L for now
     # featuresDf = featuresDf[(featuresDf["ROI"] == "GTV_L")]
@@ -38,34 +40,21 @@ def train_model_with_metric(extraction_id, studies, algorithm_type, gt):
     # featuresDf = featuresDf.drop(["ROI"], axis=1)
 
     # TODO - Analyze what is the best thing to do, try concatenation so far
-    # featuresDf = concatenate_modalities(featuresDf)
+    featuresDf = concatenate_modalities_rois(featuresDf, modalities, rois)
 
     # TODO - Should Melampus be able to deal with string columns?
     # Drop modality & ROI from the dataframe, as Melampus doesn't support string values
-    featuresDf = featuresDf.drop(["Modality", "ROI"], axis=1)
+    # featuresDf = featuresDf.drop(["Modality", "ROI"], axis=1)
 
     # Get Labels DataFrame
-    labelsDf = pandas.DataFrame(gt, columns=["PatientID", "ROI", "Label"])
+    # TODO - Allow choosing a mode (Patient only or Patient + ROI)
+    labelsDf = pandas.DataFrame(gt, columns=["PatientID", "Label"])
 
     # Get labels for each patient (to make sure they are in the same order)
     labelsList = []
     for index, row in featuresDf.iterrows():
         patient_label = labelsDf[labelsDf["PatientID"] == row.PatientID].Label.values[0]
         labelsList.append(int(patient_label))
-
-    # trainLabels = []
-    # for index, row in trainDf.iterrows():
-    #     patient_label = labelsDf[
-    #         labelsDf["PatientID"] == row.PatientID[0 : row.PatientID.rindex("_")]
-    #     ].Label.values[0]
-    #     trainLabels.append(patient_label)
-    #
-    # testLabels = []
-    # for index, row in testDf.iterrows():
-    #     patient_label = labelsDf[
-    #         labelsDf["PatientID"] == row.PatientID[0 : row.PatientID.rindex("_")]
-    #     ].Label.values[0]
-    #     testLabels.append(patient_label)
 
     # Create temporary file for CSV content & dump it there
     with tempfile.NamedTemporaryFile(mode="w+") as temp:
@@ -109,8 +98,13 @@ def train_model_with_metric(extraction_id, studies, algorithm_type, gt):
     return model
 
 
-def concatenate_modalities(featuresDf):
-    # Concatenate features from the various modalities
+def concatenate_modalities_rois(featuresDf, modalities, rois):
+    # Concatenate features from the various modalities & ROIs (if necessary)
+
+    # Only 1 Modality & 1 ROI - Just drop these columns then
+    # if len(modalities) == 1 and len(rois) == 1:
+    #     updatedDf = featuresDf.drop(["Modality", "ROI"], axis=1)
+    #     return updatedDf
 
     # Keep PatientID
     pidDf = featuresDf["PatientID"].to_frame()
@@ -118,13 +112,18 @@ def concatenate_modalities(featuresDf):
     uniquePidDf = uniquePidDf.set_index("PatientID", drop=False)
 
     to_concat = [uniquePidDf]
-    # Groupe dataframes by Modality
-    for modality, modalityDf in featuresDf.groupby("Modality"):
-        withoutModalityDf = modalityDf.drop("Modality", axis=1)
-        withoutModalityDf = withoutModalityDf.set_index("PatientID", drop=True)
-        withoutModalityDf = withoutModalityDf.add_prefix(modality + "_")
-        to_concat.append(withoutModalityDf)
-        print(withoutModalityDf)
+    # Groupe dataframes by Modality & ROI
+    for group, groupDf in featuresDf.groupby(["Modality", "ROI"]):
+        print(group)
+        print(groupDf)
+        withoutModalityAndROIDf = groupDf.drop(["Modality", "ROI"], axis=1)
+        withoutModalityAndROIDf = withoutModalityAndROIDf.set_index(
+            "PatientID", drop=True
+        )
+        prefix = "-".join(group)
+        withoutModalityAndROIDf = withoutModalityAndROIDf.add_prefix(prefix + "_")
+        to_concat.append(withoutModalityAndROIDf)
+        print(withoutModalityAndROIDf)
 
     concatenatedDf = pandas.concat(to_concat, axis=1)
 

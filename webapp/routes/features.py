@@ -114,19 +114,20 @@ def extraction_data_points_by_id(id):
         if not patient_id in patient_ids:
             patient_ids.append(patient_id)
 
+    # TODO - Allow choosing a mode (patient only or patient + roi)
     # Get ROIs from a first feature file
-    first_task = extraction.tasks[0]
-    features_content = read_feature_file(first_task.features_path)
-    first_modality = next(iter(features_content))
-    rois = features_content[first_modality].keys()
+    # first_task = extraction.tasks[0]
+    # features_content = read_feature_file(first_task.features_path)
+    # first_modality = next(iter(features_content))
+    # rois = features_content[first_modality].keys()
 
     # Generate data points
-    data_points = []
-    for patient_id in patient_ids:
-        for roi in rois:
-            data_points.append([patient_id, roi])
+    # data_points = []
+    # for patient_id in patient_ids:
+    # for roi in rois:
+    #     data_points.append([patient_id, roi])
 
-    return jsonify({"data-points": data_points})
+    return jsonify({"data-points": patient_ids})
 
 
 # Download features in CSV format

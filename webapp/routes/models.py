@@ -69,9 +69,11 @@ def models_by_album(album_id):
         gt = body["labels"]
         model_type = body["model-type"]
         algorithm_type = body["algorithm-type"]
+        modalities = body["modalities"]
+        rois = body["rois"]
 
         model = train_model_with_metric(
-            feature_extraction_id, studies, algorithm_type, gt
+            feature_extraction_id, studies, algorithm_type, modalities, rois, gt
         )
 
         model_path = get_models_path(
@@ -91,6 +93,8 @@ def models_by_album(album_id):
             model_name,
             model_type,
             algorithm_type,
+            modalities,
+            rois,
             model_path,
             g.user,
             album["album_id"],
