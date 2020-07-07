@@ -76,8 +76,8 @@ def models_by_album(album_id):
             feature_extraction_id, studies, algorithm_type, modalities, rois, gt
         )
 
-        model_path = get_models_path(
-            g.user, album["album_id"], model_type, algorithm_type
+        model_path = get_model_path(
+            g.user, album["album_id"], model_type, algorithm_type, modalities, rois
         )
 
         # Persist model in DB and on disk (pickle it)
@@ -123,10 +123,10 @@ def models_by_user():
     return jsonify(albums)
 
 
-def get_models_path(user_id, album_id, model_type, algorithm_type):
+def get_model_path(user_id, album_id, model_type, algorithm_type, modalities, rois):
     # Define features path for storing the results
     models_dir = os.path.join(MODELS_BASE_DIR, user_id, album_id)
-    models_filename = f"model_{model_type}_{algorithm_type}.json"
+    models_filename = f"model_{model_type}_{algorithm_type}_{'-'.join(modalities)}_{'-'.join(rois)}.json"
     models_path = os.path.join(models_dir, models_filename)
 
     return models_path
