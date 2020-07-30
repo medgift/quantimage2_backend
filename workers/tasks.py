@@ -447,6 +447,11 @@ def extract_all_features(
 
         print("!!!!!Caught an error while pre-processing or something!!!!!")
 
+        try:
+            shutil.rmtree(dir_to_delete, True)
+        except NameError:
+            print("Could not delete directory, variable does not exist")
+
         current_step = 0
         status_message = "Failure!"
         print(
