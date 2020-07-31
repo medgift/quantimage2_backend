@@ -3,6 +3,7 @@ import io
 import os
 import pandas
 import tempfile
+import numpy as np
 
 from imaginebackend_common.models import FeatureExtraction
 from service.feature_transformation import transform_studies_features_to_csv
@@ -25,7 +26,7 @@ def train_model_with_metric(
     mem_file.seek(0)
 
     # Create DataFrame from CSV data
-    featuresDf = pandas.read_csv(mem_file)
+    featuresDf = pandas.read_csv(mem_file, dtype={"PatientID": np.str})
 
     # TODO - How to deal with multiple modalities & ROIs? - Concatenate for now...
     # Grab just CT & GTV_L as a test
@@ -116,14 +117,17 @@ def concatenate_modalities_rois(featuresDf, modalities, rois):
     for group, groupDf in featuresDf.groupby(["Modality", "ROI"]):
         print(group)
         print(groupDf)
-        withoutModalityAndROIDf = groupDf.drop(["Modality", "ROI"], axis=1)
-        withoutModalityAndROIDf = withoutModalityAndROIDf.set_index(
-            "PatientID", drop=True
-        )
-        prefix = "-".join(group)
-        withoutModalityAndROIDf = withoutModalityAndROIDf.add_prefix(prefix + "_")
-        to_concat.append(withoutModalityAndROIDf)
-        print(withoutModalityAndROIDf)
+
+        # Only keep selected modalities & ROIs
+        if group[0] in modalities and group[1] in rois:
+            withoutModalityAndROIDf = groupDf.drop(["Modality", "ROI"], axis=1)
+            withoutModalityAndROIDf = withoutModalityAndROIDf.set_index(
+                "PatientID", drop=True
+            )
+            prefix = "-".join(group)
+            withoutModalityAndROIDf = withoutModalityAndROIDf.add_prefix(prefix + "_")
+            to_concat.append(withoutModalityAndROIDf)
+            print(withoutModalityAndROIDf)
 
     concatenatedDf = pandas.concat(to_concat, axis=1)
 
