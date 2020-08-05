@@ -3,6 +3,11 @@ import os
 import collections
 
 import jsonpickle
+import jsonpickle.ext.pandas as jsonpickle_pd
+
+jsonpickle_pd.register_handlers()
+
+from imaginebackend_common.const import MODEL_TYPES
 
 from flask import Blueprint, jsonify, request, g, current_app, Response
 
@@ -14,6 +19,7 @@ from pathlib import Path
 from imaginebackend_common.utils import format_extraction
 from routes.utils import validate_decorate
 from service.feature_analysis import train_model_with_metric
+from service.survival_analysis import train_survival_model
 
 bp = Blueprint(__name__, "models")
 
@@ -24,6 +30,7 @@ def before_request():
 
 
 def format_model(model):
+
     model_dict = model.to_dict()
 
     # Format feature extraction to get feature n° and names
@@ -33,15 +40,21 @@ def format_model(model):
     model_dict["feature-number"] = formatted_extraction["feature-number"]
     model_dict["feature-names"] = formatted_extraction["feature-names"]
 
-    # De-serialize model (for metrics)
+    # De-serialize model (for metrics etc.)
     f = open(model.model_path)
     json_str = f.read()
     model_object = jsonpickle.decode(json_str)
 
     # Convert metrics to native Python types
     metrics = collections.OrderedDict()
-    for metric_name, metric_value in model_object.metrics.items():
-        metrics[metric_name] = metric_value.item()
+    if MODEL_TYPES(model.type) == MODEL_TYPES.CLASSIFICATION:
+        for metric_name, metric_value in model_object.metrics.items():
+            metrics[metric_name] = metric_value.item()
+    elif MODEL_TYPES(model.type) == MODEL_TYPES.SURVIVAL:
+        metrics["concordance_index"] = model_object.concordance_index_
+        metrics["events_observed"] = len(model_object.event_observed)
+    else:
+        raise NotImplementedError
 
     model_dict["metrics"] = metrics
 
@@ -72,13 +85,24 @@ def models_by_album(album_id):
         modalities = body["modalities"]
         rois = body["rois"]
 
-        model = train_model_with_metric(
-            feature_extraction_id, studies, algorithm_type, modalities, rois, gt
-        )
+        if MODEL_TYPES(model_type) == MODEL_TYPES.CLASSIFICATION:
+            model = train_model_with_metric(
+                feature_extraction_id, studies, algorithm_type, modalities, rois, gt
+            )
 
-        model_path = get_model_path(
-            g.user, album["album_id"], model_type, algorithm_type, modalities, rois
-        )
+            model_path = get_model_path(
+                g.user, album["album_id"], model_type, algorithm_type, modalities, rois
+            )
+        elif MODEL_TYPES(model_type) == MODEL_TYPES.SURVIVAL:
+            model = train_survival_model(
+                feature_extraction_id, studies, modalities, rois, gt
+            )
+
+            model_path = get_model_path(
+                g.user, album["album_id"], model_type, None, modalities, rois
+            )
+        else:
+            raise NotImplementedError
 
         # Persist model in DB and on disk (pickle it)
         json_model = jsonpickle.encode(model)
@@ -126,7 +150,13 @@ def models_by_user():
 def get_model_path(user_id, album_id, model_type, algorithm_type, modalities, rois):
     # Define features path for storing the results
     models_dir = os.path.join(MODELS_BASE_DIR, user_id, album_id)
-    models_filename = f"model_{model_type}_{algorithm_type}_{'-'.join(modalities)}_{'-'.join(rois)}.json"
+
+    if algorithm_type:
+        models_filename = f"model_{model_type}_{algorithm_type}_{'-'.join(modalities)}_{'-'.join(rois)}.json"
+    else:
+        models_filename = (
+            f"model_{model_type}_{'-'.join(modalities)}_{'-'.join(rois)}.json"
+        )
     models_path = os.path.join(models_dir, models_filename)
 
     return models_path

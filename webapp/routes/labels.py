@@ -13,22 +13,22 @@ def before_request():
     validate_decorate(request)
 
 
-@bp.route("/labels/<album_id>", methods=("GET", "POST"))
-def labels_by_album(album_id):
+@bp.route("/labels/<album_id>/<label_type>", methods=("GET", "POST"))
+def labels_by_album(album_id, label_type):
     if request.method == "POST":
-        return save_labels(album_id)
+        return save_labels(album_id, label_type)
 
     if request.method == "GET":
-        labels = Label.find_by_album(album_id, g.user)
+        labels = Label.find_by_album(album_id, g.user, label_type)
         serialized_labels = list(map(lambda label: label.to_dict(), labels))
         return jsonify(serialized_labels)
 
 
-def save_labels(album_id):
+def save_labels(album_id, label_type):
     user = g.user
-    outcomes_dict = request.json
+    labels_dict = request.json
 
-    outcomes = []
+    labels = []
 
     # TODO - Allow choosing a mode (Patient only or patient + roi)
     # for patient_id, roi_dict in outcomes_dict.items():
@@ -38,11 +38,13 @@ def save_labels(album_id):
     #         )
     #         outcomes.append(created_updated_label.to_dict())
 
-    for patient_id, outcome in outcomes_dict.items():
-        created_updated_label = Label.save_label(album_id, patient_id, outcome, user)
-        outcomes.append(created_updated_label.to_dict())
+    for patient_id, label_content in labels_dict.items():
+        created_updated_label = Label.save_label(
+            album_id, patient_id, label_type, label_content, user
+        )
+        labels.append(created_updated_label.to_dict())
 
-    return jsonify(outcomes)
+    return jsonify(labels)
 
 
 @bp.route("/labels")

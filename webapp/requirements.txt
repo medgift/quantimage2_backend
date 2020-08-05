@@ -56,3 +56,4 @@ ttictoc
 # Melampus (temporary)
 scikit-learn
 pandas
+lifelines

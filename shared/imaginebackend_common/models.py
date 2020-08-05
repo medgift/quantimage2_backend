@@ -375,14 +375,13 @@ class Model(BaseModel, db.Model):
         }
 
 
-# Patient/Region outcome
+# Data Label
 class Label(BaseModel, db.Model):
-    # TODO - Allow choosing a mode (Patient only or Patient + ROI)
-    def __init__(self, album_id, patient_id, outcome, user_id):
+    def __init__(self, album_id, patient_id, label_type, label_content, user_id):
         self.album_id = album_id
         self.patient_id = patient_id
-        # self.roi = roi
-        self.outcome = outcome
+        self.label_type = label_type
+        self.label_content = label_content
         self.user_id = user_id
 
     # Album ID
@@ -391,19 +390,20 @@ class Label(BaseModel, db.Model):
     # Patient ID
     patient_id = db.Column(db.String(255), nullable=False, unique=False)
 
-    # TODO - Allow choosing a mode (Patient only or Patient + ROI)
-    # ROI Name
-    # roi = db.Column(db.String(255), nullable=False, unique=False)
+    # Label Type (Classification, Survival, ...)
+    label_type = db.Column(db.String(255), nullable=False, unique=False)
 
-    # Outcome
-    outcome = db.Column(db.String(255), nullable=False, unique=False)
+    # Label Content
+    label_content = db.Column(db.JSON, nullable=False, unique=False)
 
-    # User who created the model
+    # User who created the label
     user_id = db.Column(db.String(255), nullable=False, unique=False)
 
     @classmethod
-    def find_by_album(cls, album_id, user_id):
-        instances = cls.query.filter_by(album_id=album_id, user_id=user_id).all()
+    def find_by_album(cls, album_id, user_id, label_type):
+        instances = cls.query.filter_by(
+            album_id=album_id, user_id=user_id, label_type=label_type
+        ).all()
         return instances
 
     @classmethod
@@ -411,27 +411,25 @@ class Label(BaseModel, db.Model):
         instances = cls.query.filter_by(user_id=user_id).all()
         return instances
 
-    # TODO - Allow choosing a mode (Patient only or patient + ROI)
     @classmethod
-    def save_label(cls, album_id, patient_id, outcome, user_id):
+    def save_label(cls, album_id, patient_id, label_type, label_content, user_id):
         result = get_or_create(
             Label,
             criteria={
                 "album_id": album_id,
                 "patient_id": patient_id,
-                # "roi": roi,
+                "label_type": label_type,
                 "user_id": user_id,
             },
-            defaults={"outcome": outcome},
+            defaults={"label_content": label_content},
         )
         if result["created"] == False:
             old_instance = result["instance"]
-            old_instance.outcome = outcome
+            old_instance.label_content = label_content
             old_instance.save_to_db()
 
         return result["instance"]
 
-    # TODO - Allow choosing a mode (Patient only or patient + ROI)
     def to_dict(self):
         return {
             "id": self.id,
@@ -439,8 +437,8 @@ class Label(BaseModel, db.Model):
             "updated_at": self.updated_at,
             "album_id": self.album_id,
             "patient_id": self.patient_id,
-            # "roi": self.roi,
-            "outcome": self.outcome,
+            "label_type": self.label_type,
+            "label_content": self.label_content,
             "user_id": self.user_id,
         }
 
