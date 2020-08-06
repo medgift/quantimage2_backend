@@ -302,6 +302,9 @@ class Model(BaseModel, db.Model):
         name,
         type,
         algorithm,
+        validation_strategy,
+        feature_selection,
+        feature_names,
         modalities,
         rois,
         model_path,
@@ -312,6 +315,9 @@ class Model(BaseModel, db.Model):
         self.name = name
         self.type = type
         self.algorithm = algorithm
+        self.validation_strategy = validation_strategy
+        self.feature_selection = feature_selection
+        self.feature_names = feature_names
         self.modalities = modalities
         self.rois = rois
         self.model_path = model_path
@@ -327,6 +333,15 @@ class Model(BaseModel, db.Model):
 
     # Algorithm used for the model (linear regression, random forests, SVM, etc.)
     algorithm = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Validation strategy used for the model (Stratified K-Fold, Train/Test split, etc.)
+    validation_strategy = db.Column(db.String(255), nullable=True, unique=False)
+
+    # Feature selection used for the model (variance thresholding, correlation, etc.)
+    feature_selection = db.Column(db.String(255), nullable=True, unique=False)
+
+    # Feature names that were finally used for the model (after selection)
+    feature_names = db.Column(db.JSON, nullable=True, unique=False)
 
     # Modalities used for training the model
     modalities = db.Column(db.JSON, nullable=False, unique=False)
@@ -367,6 +382,9 @@ class Model(BaseModel, db.Model):
             "name": self.name,
             "type": self.type,
             "algorithm": self.algorithm,
+            "validation_strategy": self.validation_strategy,
+            "feature_selection": self.feature_selection,
+            "feature_names": self.feature_names,
             "modalities": self.modalities,
             "rois": self.rois,
             "model_path": self.model_path,

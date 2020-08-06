@@ -37,8 +37,20 @@ def format_model(model):
     formatted_extraction = format_extraction(model.feature_extraction, families=True)
 
     model_dict["extraction"] = formatted_extraction
-    model_dict["feature-number"] = formatted_extraction["feature-number"]
-    model_dict["feature-names"] = formatted_extraction["feature-names"]
+
+    # Assign feature number & names based on the saved features
+    # if feature selection was performed, otherwise use the
+    # ones given by the feature extraction (all features)
+    model_dict["feature-number"] = (
+        len(model.feature_names)
+        if model.feature_names
+        else formatted_extraction["feature-number"]
+    )
+    model_dict["feature-names"] = (
+        model.feature_names
+        if model.feature_names
+        else formatted_extraction["feature-names"]
+    )
 
     # De-serialize model (for metrics etc.)
     f = open(model.model_path)
@@ -84,9 +96,12 @@ def models_by_album(album_id):
         algorithm_type = body["algorithm-type"]
         modalities = body["modalities"]
         rois = body["rois"]
+        validation_strategy = None
+        feature_selection = None
+        feature_names = None
 
         if MODEL_TYPES(model_type) == MODEL_TYPES.CLASSIFICATION:
-            model = train_model_with_metric(
+            model, validation_strategy, validation_params = train_model_with_metric(
                 feature_extraction_id, studies, algorithm_type, modalities, rois, gt
             )
 
@@ -94,7 +109,7 @@ def models_by_album(album_id):
                 g.user, album["album_id"], model_type, algorithm_type, modalities, rois
             )
         elif MODEL_TYPES(model_type) == MODEL_TYPES.SURVIVAL:
-            model = train_survival_model(
+            model, feature_selection, feature_names = train_survival_model(
                 feature_extraction_id, studies, modalities, rois, gt
             )
 
@@ -117,6 +132,11 @@ def models_by_album(album_id):
             model_name,
             model_type,
             algorithm_type,
+            f"{validation_strategy} ({validation_params['k']} folds)"
+            if validation_strategy
+            else None,
+            feature_selection,
+            feature_names,
             modalities,
             rois,
             model_path,

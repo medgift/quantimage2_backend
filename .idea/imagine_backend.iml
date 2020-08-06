@@ -8,6 +8,7 @@
       <sourceFolder url="file://$MODULE_DIR$/webapp" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/workers" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/shared" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/venv/src/melampus" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/docs/build" />
       <excludeFolder url="file://$MODULE_DIR$/keycloak_theme" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />

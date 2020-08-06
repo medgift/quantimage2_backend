@@ -66,7 +66,9 @@ def train_model_with_metric(
         # Call Melampus classifier
         myClassifier = MelampusClassifier(temp.name, algorithm_type, labelsList)
 
-        model = myClassifier.train_and_evaluate()
+        model, cv_strategy, cv_params = myClassifier.train_and_evaluate(
+            random_state=extraction_id
+        )
 
         # Add & customize some metrics - TODO do this in Melampus
         metrics_name_mapping = {
@@ -96,7 +98,7 @@ def train_model_with_metric(
 
         # os.unlink(temp.name)
 
-    return model
+    return model, cv_strategy, cv_params
 
 
 def concatenate_modalities_rois(featuresDf, modalities, rois):

@@ -41,7 +41,7 @@ def train_survival_model(extraction_id, studies, modalities, rois, gt):
 
     featureSelector = MelampusFeatureSelector(dataframe=featuresDfNumericOnly)
 
-    filteredFeatures = featureSelector.variance_threshold()
+    filteredFeatures, p_value = featureSelector.variance_threshold()
 
     filteredFeaturesWithCategorical = pandas.concat(
         [featuresDfCategoricalOnly, filteredFeatures], axis=1
@@ -104,4 +104,8 @@ def train_survival_model(extraction_id, studies, modalities, rois, gt):
 
         # os.unlink(temp.name)
 
-    return fitted_analyzer
+    return (
+        fitted_analyzer,
+        f"variance_threshold (p={p_value})",
+        list(filteredFeatures.columns),
+    )
