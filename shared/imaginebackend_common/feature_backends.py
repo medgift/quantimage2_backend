@@ -50,6 +50,9 @@ class FeatureBackend:
         roi_matcher = re.compile(
             r"(?P<patient_id>.*)__from_(?P<source_modality>.*)_mask__(?P<label>.*)__resampled_for__(?P<modality>.*)\.(?P<extension>.*)"
         )
+        roi_matcher_simple = re.compile(
+            r"(?P<label>.*)__resampled_for__(?P<modality>.*)\.(?P<extension>.*)"
+        )
 
         input_files = {}
 
@@ -73,6 +76,10 @@ class FeatureBackend:
                 input_files[modality]["image"] = file_path
             else:
                 roi_matches = re.match(roi_matcher, file_name)
+
+                # If not matches are found, try with the simpler matcher alternative
+                if not roi_matches:
+                    roi_matches = re.match(roi_matcher_simple, file_name)
 
                 if roi_matches:
                     print("roi detected : " + file_path)

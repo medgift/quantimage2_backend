@@ -87,9 +87,10 @@ def format_extraction(extraction, payload=False, families=True, tasks=False):
 
     modalities = list(features_dict.keys())
 
-    first_modality = features_dict[next(iter(features_dict.keys()))]
-
-    rois = list(first_modality.keys())
+    rois = []
+    if bool(features_dict):
+        first_modality = features_dict[next(iter(features_dict.keys()))]
+        rois = list(first_modality.keys())
 
     extraction_dict["feature-number"] = len(all_feature_names)
     extraction_dict["feature-names"] = all_feature_names
@@ -110,13 +111,16 @@ def format_extraction(extraction, payload=False, families=True, tasks=False):
 # Get features names from dictionary
 def get_feature_names(features_dict):
     feature_names = []
-    first_modality = features_dict[next(iter(features_dict.keys()))]
-    first_roi = first_modality[next(iter(first_modality.keys()))]
 
-    leave_out_prefix = "diagnostics_"
-    for feature_name, feature_value in first_roi.items():
-        if not feature_name.startswith(leave_out_prefix):
-            feature_names.append(feature_name)
+    if bool(features_dict):
+
+        first_modality = features_dict[next(iter(features_dict.keys()))]
+        first_roi = first_modality[next(iter(first_modality.keys()))]
+
+        leave_out_prefix = "diagnostics_"
+        for feature_name, feature_value in first_roi.items():
+            if not feature_name.startswith(leave_out_prefix):
+                feature_names.append(feature_name)
 
     return feature_names
 

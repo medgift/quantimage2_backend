@@ -36,7 +36,7 @@ RUN pip install git+https://github.com/orfi2017/quantimage-melampus.git@developm
 RUN pip install --no-cache-dir -r requirements-okapy.txt
 
 # Install okapy manually (temporary)
-RUN pip install --index-url https://test.pypi.org/simple/ --no-deps okapy==0.1.3
+RUN pip install --index-url https://test.pypi.org/simple/ --no-deps okapy==0.1.4
 
 
 ENV MCR_HOME /mcr/v97

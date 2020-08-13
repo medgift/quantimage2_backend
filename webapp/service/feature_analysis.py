@@ -70,20 +70,10 @@ def train_model_with_metric(
             random_state=extraction_id
         )
 
-        # Add & customize some metrics - TODO do this in Melampus
-        metrics_name_mapping = {
-            "area_under_curve": "auc",
-            "precision": "positive_predictive_value",
-            "recall": "sensitivity",
-        }
-        for metric_name, metric_value in myClassifier.metrics.items():
-            if metric_name in metrics_name_mapping:
-                myClassifier.metrics[metrics_name_mapping[metric_name]] = metric_value
-                del myClassifier.metrics[metric_name]
-
-        myClassifier.metrics["specificity"] = myClassifier.metrics["true_neg"] / (
-            myClassifier.metrics["true_neg"] + myClassifier.metrics["false_pos"]
-        )
+        # TODO - Removed the confusion matrix for now
+        # myClassifier.metrics["specificity"] = myClassifier.metrics["true_neg"] / (
+        #     myClassifier.metrics["true_neg"] + myClassifier.metrics["false_pos"]
+        # )
 
         # Save metrics in the model for now
         model.metrics = myClassifier.metrics

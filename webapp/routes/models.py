@@ -5,6 +5,8 @@ import collections
 import jsonpickle
 import jsonpickle.ext.pandas as jsonpickle_pd
 
+from time import time
+
 jsonpickle_pd.register_handlers()
 
 from imaginebackend_common.const import MODEL_TYPES
@@ -13,6 +15,7 @@ from flask import Blueprint, jsonify, request, g, current_app, Response
 
 from config import MODELS_BASE_DIR
 from imaginebackend_common.models import Model
+from imaginebackend_common.models import Label
 from pathlib import Path
 
 # Define blueprint
@@ -52,19 +55,24 @@ def format_model(model):
         else formatted_extraction["feature-names"]
     )
 
+    # Get number of observations from labels so far
+    labels = Label.find_by_album(
+        formatted_extraction["album_id"], formatted_extraction["user_id"], model.type
+    )
+    model_dict["observations"] = len(labels)
+
     # De-serialize model (for metrics etc.)
     f = open(model.model_path)
     json_str = f.read()
     model_object = jsonpickle.decode(json_str)
 
     # Convert metrics to native Python types
-    metrics = collections.OrderedDict()
     if MODEL_TYPES(model.type) == MODEL_TYPES.CLASSIFICATION:
-        for metric_name, metric_value in model_object.metrics.items():
-            metrics[metric_name] = metric_value.item()
+        metrics = model_object.metrics
     elif MODEL_TYPES(model.type) == MODEL_TYPES.SURVIVAL:
+        metrics = collections.OrderedDict()
         metrics["concordance_index"] = model_object.concordance_index_
-        metrics["events_observed"] = len(model_object.event_observed)
+        # metrics["events_observed"] = len(model_object.event_observed)
     else:
         raise NotImplementedError
 
@@ -132,7 +140,7 @@ def models_by_album(album_id):
             model_name,
             model_type,
             algorithm_type,
-            f"{validation_strategy} ({validation_params['k']} folds)"
+            f"{validation_strategy} ({validation_params['k']} folds, {validation_params['n']} repetitions)"
             if validation_strategy
             else None,
             feature_selection,
@@ -172,11 +180,12 @@ def get_model_path(user_id, album_id, model_type, algorithm_type, modalities, ro
     models_dir = os.path.join(MODELS_BASE_DIR, user_id, album_id)
 
     if algorithm_type:
-        models_filename = f"model_{model_type}_{algorithm_type}_{'-'.join(modalities)}_{'-'.join(rois)}.json"
+        models_filename = f"model_{model_type}_{algorithm_type}_{'-'.join(modalities)}_{'-'.join(rois)}"
     else:
-        models_filename = (
-            f"model_{model_type}_{'-'.join(modalities)}_{'-'.join(rois)}.json"
-        )
+        models_filename = f"model_{model_type}_{'-'.join(modalities)}_{'-'.join(rois)}"
+
+    models_filename += f"_{str(int(time()))}"
+    models_filename += ".json"
     models_path = os.path.join(models_dir, models_filename)
 
     return models_path
