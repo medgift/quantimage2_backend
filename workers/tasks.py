@@ -8,6 +8,8 @@ import tempfile
 import json
 import traceback
 import jsonpickle
+
+import pydevd_pycharm
 import requests
 import warnings
 
@@ -37,6 +39,19 @@ warnings.filterwarnings("ignore", message="Failed to parse headers")
 
 from imaginebackend_common.feature_backends import feature_backends_map, FeatureBackend
 from imaginebackend_common.kheops_utils import endpoints
+
+# Setup Debugger
+if "DEBUGGER_IP" in os.environ and os.environ["DEBUGGER_IP"] != "":
+    try:
+        pydevd_pycharm.settrace(
+            os.environ["DEBUGGER_IP"],
+            port=int(os.environ["DEBUGGER_PORT_CELERY"]),
+            suspend=False,
+            stderrToServer=True,
+            stdoutToServer=True,
+        )
+    except ConnectionRefusedError:
+        logging.warning("No debug server running")
 
 celery = Celery(
     "tasks",
@@ -381,10 +396,10 @@ def extract_all_features(
         )
 
         # Pre-process the data ONCE for all backends
-        [backend_input, dir_to_delete] = FeatureBackend.pre_process_data(dicom_dir)
+        conversion_result, dir_to_delete = FeatureBackend.pre_process_data(dicom_dir)
 
         # Get input files map to process (MODALITY -> [LABEL, ...])
-        input_files = FeatureBackend.get_input_files(backend_input)
+        input_files = FeatureBackend.get_input_files(conversion_result)
 
         # Status update - EXTRACT
         current_step += 1

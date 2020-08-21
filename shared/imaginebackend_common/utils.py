@@ -69,7 +69,9 @@ class MessageType(Enum):
 def format_extraction(extraction, payload=False, families=True, tasks=False):
     extraction_dict = extraction.to_dict()
 
-    status = fetch_extraction_result(celery, extraction.result_id)
+    status = fetch_extraction_result(
+        celery, extraction.result_id, tasks=extraction.tasks
+    )
     extraction_dict["status"] = vars(status)
 
     # fetch info about the features extracted
@@ -262,7 +264,7 @@ def sanitize_features_object(feature_object):
 
 
 # Get Extraction Status
-def fetch_extraction_result(celery_app, result_id):
+def fetch_extraction_result(celery_app, result_id, tasks=None):
     status = ExtractionStatus()
 
     if result_id is not None:
@@ -270,25 +272,45 @@ def fetch_extraction_result(celery_app, result_id):
 
         result = celery_app.GroupResult.restore(result_id)
 
-        one_started_task = next(
-            (task for task in result.children if type(task.info) is dict), None
-        )
+        # Make in inventory of errors (if tasks are provided)
+        if tasks is not None:
+            errors = {}
 
-        total_steps = (
-            one_started_task.info["total"] * len(result.children)
-            if one_started_task is not None
-            else 0
-        )
+            for child in result.children:
+                if isinstance(child.info, Exception):
+                    task = next(filter(lambda t: t.task_id == child.task_id, tasks))
+                    study_uid = task.study_uid
 
-        completed_steps = sum(
-            [
-                task.info["completed"]
-                for task in result.children
-                if type(task.info) is dict
-            ]
-        )
+                    if study_uid not in errors:
+                        errors[study_uid] = []
+
+                    if not str(child.info) in errors[study_uid]:
+                        errors[study_uid].append(str(child.info))
+
+        # one_started_task = next(
+        #     (task for task in result.children if type(task.info) is dict), None
+        # )
+
+        # total_steps = (
+        #     one_started_task.info["total"] * len(result.children)
+        #     if one_started_task is not None
+        #     else 0
+        # )
+        #
+        # completed_steps = sum(
+        #     [
+        #         task.info["completed"]
+        #         for task in result.children
+        #         if type(task.info) is dict
+        #     ]
+        # )
+
         pending_tasks = [
             task for task in result.children if task.status == celerystates.PENDING
+        ]
+
+        failed_tasks = [
+            task for task in result.children if task.status == celerystates.FAILURE
         ]
 
         status = ExtractionStatus(
@@ -298,8 +320,8 @@ def fetch_extraction_result(celery_app, result_id):
             len(result.children),
             len(pending_tasks),
             result.completed_count(),
-            total_steps,
-            completed_steps,
+            len(failed_tasks),
+            errors=errors,
         )
 
     return status
@@ -416,8 +438,11 @@ class ExtractionStatus:
     failed = False
     total_tasks = 0
     completed_tasks = 0
-    total_steps = 0
-    completed_steps = 0
+    failed_tasks = 0
+    errors = None
+    # total_steps = 0
+    # completed_steps = 0
+    # failed_steps = 0
 
     def __init__(
         self,
@@ -427,8 +452,10 @@ class ExtractionStatus:
         total_tasks=0,
         pending_tasks=0,
         completed_tasks=0,
-        total_steps=0,
-        completed_steps=0,
+        failed_tasks=0,
+        errors=None
+        # total_steps=0,
+        # completed_steps=0,
     ):
         self.ready = ready
         self.successful = successful
@@ -436,8 +463,10 @@ class ExtractionStatus:
         self.total_tasks = total_tasks
         self.pending_tasks = pending_tasks
         self.completed_tasks = completed_tasks
-        self.total_steps = total_steps
-        self.completed_steps = completed_steps
+        self.failed_tasks = failed_tasks
+        self.errors = errors
+        # self.total_steps = total_steps
+        # self.completed_steps = completed_steps
 
 
 # Misc

@@ -17,90 +17,123 @@ class FeatureBackend:
     def pre_process_data(cls, dicom_dir):
         # Use Valentin's DicomWalker to convert DICOM to NII
         # as well as resample the images (based on modality)
-        results_dir = cls.convert_dicom_to_nii(dicom_dir)
+        conversion_result, output_dir = cls.convert_dicom_to_nii(dicom_dir)
 
+        return conversion_result, output_dir
         # Go through results files and extract features
-        file_paths = [
-            str(filepath.absolute())
-            for filepath in pathlib.Path(results_dir).glob("**/*")
-        ]
-
-        return [file_paths, results_dir]
+        # file_paths = [
+        #     str(filepath.absolute())
+        #     for filepath in pathlib.Path(results_dir).glob("**/*")
+        # ]
+        #
+        # return [file_paths, results_dir]
 
     @classmethod
     def convert_dicom_to_nii(cls, input_dir, labels=None):
-        from okapy.dicomconverter.dicom_walker import DicomWalker
+        # from okapy.dicomconverter.dicom_walker import DicomWalker
+        from okapy.dicomconverter.converter import Converter
 
         output_dir = tempfile.mkdtemp()
 
-        walker = DicomWalker(
-            input_dir, output_dir, list_labels=labels, extension_output="nii"
-        )
-        walker.walk()
-        walker.fill_dicom_files()
-        walker.convert()
+        converter = Converter(output_dir, list_labels=labels)
 
-        return output_dir
+        conversion_result = converter(input_dir)
+
+        # walker = DicomWalker(
+        #     input_dir, output_dir, list_labels=labels, extension_output="nii"
+        # )
+        # walker.walk()
+        # walker.fill_dicom_files()
+        # walker.convert()
+
+        # return output_dir
+
+        return conversion_result, output_dir
 
     @classmethod
-    def get_input_files(cls, files):
-        image_matcher = re.compile(
-            r"(?P<patient_id>.*)__(?P<modality>.*)__resampled\.(?P<extension>.*)"
-        )
-        roi_matcher = re.compile(
-            r"(?P<patient_id>.*)__from_(?P<source_modality>.*)_mask__(?P<label>.*)__resampled_for__(?P<modality>.*)\.(?P<extension>.*)"
-        )
-        roi_matcher_simple = re.compile(
-            r"(?P<label>.*)__resampled_for__(?P<modality>.*)\.(?P<extension>.*)"
-        )
+    def get_input_files(cls, conversion_result):
+
+        # image_matcher = re.compile(
+        #     r"(?P<patient_id>.*)__(?P<modality>.*)__resampled\.(?P<extension>.*)"
+        # )
+        # roi_matcher = re.compile(
+        #     r"(?P<patient_id>.*)__from_(?P<source_modality>.*)_mask__(?P<label>.*)__resampled_for__(?P<modality>.*)\.(?P<extension>.*)"
+        # )
+        # roi_matcher_simple = re.compile(
+        #     r"(?P<label>.*)__resampled_for__(?P<modality>.*)\.(?P<extension>.*)"
+        # )
+
+        # Current structure
+        # List [ Tuple(List[...], List[...]) ]
+        # First list has only one element, maybe because we only have one patient
+        # Tuple is VolumeResult[], MaskResult[], each list can have multiple entries
 
         input_files = {}
 
-        for file_path in files:
-            file_name = pathlib.PurePath(file_path).name
+        for result in conversion_result:
+            volume_results, mask_results = result
 
-            # Check if it's an image or a mask
-            image_matches = re.match(image_matcher, file_name)
+            for volume_result in volume_results:
+                modality = volume_result.modality
 
-            if image_matches:
-                print("image detected : " + file_path)
-
-                image_match_group = image_matches.groupdict()
-                modality = image_match_group["modality"]
-
-                # Create entry for the modality in the output map if necessary
                 if modality not in input_files:
                     input_files[modality] = {}
 
-                # Define image for this modality
-                input_files[modality]["image"] = file_path
-            else:
-                roi_matches = re.match(roi_matcher, file_name)
+                input_files[modality]["image"] = str(volume_result.path)
 
-                # If not matches are found, try with the simpler matcher alternative
-                if not roi_matches:
-                    roi_matches = re.match(roi_matcher_simple, file_name)
+                for mask_result in mask_results:
+                    label = mask_result.label
 
-                if roi_matches:
-                    print("roi detected : " + file_path)
-
-                    roi_match_group = roi_matches.groupdict()
-                    modality = roi_match_group["modality"]
-
-                    # Create entry for the modality in the output map if necessary
-                    if modality not in input_files:
-                        input_files[modality] = {}
-
-                    # Create labels map in the output map if necessary
                     if "labels" not in input_files[modality]:
                         input_files[modality]["labels"] = {}
 
-                    # Add label to the map
-                    input_files[modality]["labels"][
-                        roi_match_group["label"]
-                    ] = file_path
-                else:
-                    print(f"Unrelated file detected: {file_path}")
+                    input_files[modality]["labels"][label] = str(mask_result.path)
+
+        # for file_path in files:
+        #     file_name = pathlib.PurePath(file_path).name
+        #
+        #     # Check if it's an image or a mask
+        #     image_matches = re.match(image_matcher, file_name)
+        #
+        #     if image_matches:
+        #         print("image detected : " + file_path)
+        #
+        #         image_match_group = image_matches.groupdict()
+        #         modality = image_match_group["modality"]
+        #
+        #         # Create entry for the modality in the output map if necessary
+        #         if modality not in input_files:
+        #             input_files[modality] = {}
+        #
+        #         # Define image for this modality
+        #         input_files[modality]["image"] = file_path
+        #     else:
+        #         roi_matches = re.match(roi_matcher, file_name)
+        #
+        #         # If not matches are found, try with the simpler matcher alternative
+        #         if not roi_matches:
+        #             roi_matches = re.match(roi_matcher_simple, file_name)
+        #
+        #         if roi_matches:
+        #             print("roi detected : " + file_path)
+        #
+        #             roi_match_group = roi_matches.groupdict()
+        #             modality = roi_match_group["modality"]
+        #
+        #             # Create entry for the modality in the output map if necessary
+        #             if modality not in input_files:
+        #                 input_files[modality] = {}
+        #
+        #             # Create labels map in the output map if necessary
+        #             if "labels" not in input_files[modality]:
+        #                 input_files[modality]["labels"] = {}
+        #
+        #             # Add label to the map
+        #             input_files[modality]["labels"][
+        #                 roi_match_group["label"]
+        #             ] = file_path
+        #         else:
+        #             print(f"Unrelated file detected: {file_path}")
 
         print("FILES TO PROCESS : " + json.dumps(input_files))
 

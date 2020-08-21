@@ -26,9 +26,12 @@ services:
     environment:
       #- CELERY_RDB_HOST=0.0.0.0
       #- CELERY_RDB_PORT=34000
+      - DEBUGGER_IP=${DEBUGGER_IP}
+      - DEBUGGER_PORT_CELERY=${DEBUGGER_PORT_CELERY}
       - PYTHON_ENV=nodebug
     #ports:
       #- 34000-34100:34000-34100
+    command: ["celery", "worker", "--app=tasks", "--loglevel=INFO", "--pool=solo"]
 
   flower:
     ports:

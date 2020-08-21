@@ -36,10 +36,11 @@ RUN pip install git+https://github.com/orfi2017/quantimage-melampus.git@developm
 RUN pip install --no-cache-dir -r requirements-okapy.txt
 
 # Install okapy manually (temporary)
-RUN pip install --index-url https://test.pypi.org/simple/ --no-deps okapy==0.1.4
+RUN pip install --index-url https://test.pypi.org/simple/ --no-deps okapy==0.1.6
 
 
 ENV MCR_HOME /mcr/v97
+ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libexpat.so
 ENV LD_LIBRARY_PATH $MCR_HOME/runtime/glnxa64:$MCR_HOME/bin/glnxa64:$MCR_HOME/sys/os/glnxa64:$MCR_HOME/extern/bin/glnxa64:$LD_LIBRARY_PATH
 
 # Install ncdu to investigate size

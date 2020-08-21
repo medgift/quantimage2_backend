@@ -2,7 +2,7 @@
 black
 
 # Debug
-pydevd-pycharm==201.7223.92
+pydevd-pycharm==202.6397.98
 
 # HTTP requests handler
 requests
@@ -47,3 +47,6 @@ pyyaml
 
 # tictoc
 ttictoc
+
+# Okapy
+SimpleITK
