@@ -266,6 +266,7 @@ def sanitize_features_object(feature_object):
 # Get Extraction Status
 def fetch_extraction_result(celery_app, result_id, tasks=None):
     status = ExtractionStatus()
+    errors = {}
 
     if result_id is not None:
         print(f"Getting result for extraction result {result_id}")
@@ -274,7 +275,6 @@ def fetch_extraction_result(celery_app, result_id, tasks=None):
 
         # Make in inventory of errors (if tasks are provided)
         if tasks is not None:
-            errors = {}
 
             for child in result.children:
                 if isinstance(child.info, Exception):
