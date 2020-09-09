@@ -244,19 +244,19 @@ def extraction_status(extraction_id):
     return jsonify(response)
 
 
-# Feature extraction for a study
-@bp.route("/extract/study/<study_uid>", methods=["POST"])
-def extract_study(study_uid):
-    user_id = g.user
-
-    feature_families_map = request.json
-
-    # Define feature families to extract
-    feature_extraction = run_feature_extraction(
-        user_id, None, feature_families_map, study_uid
-    )
-
-    return jsonify(format_extraction(feature_extraction))
+# # Feature extraction for a study
+# @bp.route("/extract/study/<study_uid>", methods=["POST"])
+# def extract_study(study_uid):
+#     user_id = g.user
+#
+#     feature_families_map = request.json
+#
+#     # Define feature families to extract
+#     feature_extraction = run_feature_extraction(
+#         user_id, None, feature_families_map, study_uid
+#     )
+#
+#     return jsonify(format_extraction(feature_extraction))
 
 
 # Feature extraction for an album
@@ -269,7 +269,7 @@ def extract_album(album_id):
 
     # Define feature families to extract
     feature_extraction = run_feature_extraction(
-        user_id, album_id, feature_families_map, None, token
+        user_id, album_id, feature_families_map, token
     )
 
     return jsonify(format_extraction(feature_extraction))

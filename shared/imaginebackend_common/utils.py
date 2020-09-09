@@ -80,19 +80,29 @@ def format_extraction(extraction, payload=False, families=True, tasks=False):
         if task.feature_family_id not in feature_family_task:
             feature_family_task[task.feature_family_id] = task
 
-    all_feature_names = []
-    for family_id, task in feature_family_task.items():
-        features_dict = read_feature_file(task.features_path)
-        feature_names = get_feature_names(features_dict)
+    all_feature_names = extraction.feature_names()
 
-        all_feature_names += feature_names
+    # all_feature_names = []
+    # for family_id, task in feature_family_task.items():
+    #     features_dict = read_feature_file(task.features_path)
+    #     feature_names = get_feature_names(features_dict)
+    #
+    #     all_feature_names += feature_names
 
-    modalities = list(features_dict.keys())
+    # modalities = list(features_dict.keys())
 
-    rois = []
-    if bool(features_dict):
-        first_modality = features_dict[next(iter(features_dict.keys()))]
-        rois = list(first_modality.keys())
+    # if bool(features_dict):
+    #     first_modality = features_dict[next(iter(features_dict.keys()))]
+    #     rois = list(first_modality.keys())
+
+    # TODO - Make this more robust, check all tasks perhaps
+    modalities = list(
+        set(list(map(lambda fv: fv.modality.name, extraction.tasks[0].feature_values)))
+    )
+
+    rois = list(
+        set(list(map(lambda fv: fv.roi.name, extraction.tasks[0].feature_values)))
+    )
 
     extraction_dict["feature-number"] = len(all_feature_names)
     extraction_dict["feature-names"] = all_feature_names

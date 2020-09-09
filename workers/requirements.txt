@@ -50,3 +50,6 @@ ttictoc
 
 # Okapy
 SimpleITK
+
+# Iteration
+more-itertools

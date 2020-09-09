@@ -25,14 +25,12 @@ from imaginebackend_common.models import (
 )
 
 
-def run_feature_extraction(
-    user_id, album_id, feature_families_map, study_uid=None, token=None
-):
+def run_feature_extraction(user_id, album_id, feature_families_map, token=None):
 
     tic()
 
     # Create Feature Extraction object
-    feature_extraction = FeatureExtraction(user_id, album_id, study_uid)
+    feature_extraction = FeatureExtraction(user_id, album_id)
     feature_extraction.save_to_db()
 
     print(f"Creating the feature extraction object")
@@ -45,19 +43,15 @@ def run_feature_extraction(
 
     tic()
 
-    # Assemble study UIDs (multiple for albums, single if study given directly)
-    study_uids = []
-    if album_id:
-        album_studies = get_studies_from_album(album_id, token)
-        study_uids = list(
-            map(
-                lambda study: study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
-                album_studies,
-            )
+    # Assemble study UIDs
+    album_studies = get_studies_from_album(album_id, token)
+    study_uids = list(
+        map(
+            lambda study: study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
+            album_studies,
         )
-        print(study_uids)
-    else:
-        study_uids = [study_uid]
+    )
+    print(study_uids)
 
     # Go through each study assembled above
 
@@ -71,12 +65,7 @@ def run_feature_extraction(
         # Save config for this extraction & family
         feature_config = feature_families_map[feature_family_id]
         config_path = save_config(
-            feature_extraction,
-            feature_family,
-            feature_config,
-            user_id,
-            album_id,
-            study_uid,
+            feature_extraction, feature_family, feature_config, user_id, album_id,
         )
 
         # Create the association
@@ -91,14 +80,14 @@ def run_feature_extraction(
 
         # Create extraction task and run it
         for study_uid in study_uids:
-            features_path = get_features_path(user_id, study_uid, feature_family.name)
+            # features_path = get_features_path(user_id, study_uid, feature_family.name)
 
             feature_extraction_task = FeatureExtractionTask(
                 feature_extraction.id,
                 study_uid,
                 feature_family_id_int,
                 None,
-                features_path,
+                # features_path,
             )
             feature_extraction_task.save_to_db()
 
@@ -110,7 +99,7 @@ def run_feature_extraction(
                     user_id,
                     feature_extraction_task.id,
                     study_uid,
-                    features_path,
+                    # features_path,
                     config_path,
                 ],
                 kwargs={},
@@ -200,29 +189,20 @@ def get_studies_from_album(album_id, token):
     return album_studies
 
 
-def get_features_path(user_id, study_uid, feature_family_name):
-    # Define features path for storing the results
-    features_dir = os.path.join(
-        EXTRACTIONS_BASE_DIR, FEATURES_SUBDIR, user_id, study_uid
-    )
-    features_filename = feature_family_name + ".json"
-    features_path = os.path.join(features_dir, features_filename)
+# def get_features_path(user_id, study_uid, feature_family_name):
+#     # Define features path for storing the results
+#     features_dir = os.path.join(
+#         EXTRACTIONS_BASE_DIR, FEATURES_SUBDIR, user_id, study_uid
+#     )
+#     features_filename = feature_family_name + ".json"
+#     features_path = os.path.join(features_dir, features_filename)
+#
+#     return features_path
 
-    return features_path
 
-
-def save_config(
-    feature_extraction, feature_family, feature_config, user_id, album_id, study_uid
-):
+def save_config(feature_extraction, feature_family, feature_config, user_id, album_id):
     # Define config path for storing the feature family configuration
-    if feature_extraction.study_uid:
-        config_dir = os.path.join(
-            EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, user_id, study_uid
-        )
-    else:
-        config_dir = os.path.join(
-            EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, user_id, album_id
-        )
+    config_dir = os.path.join(EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, user_id, album_id)
 
     config_filename = feature_family.name + ".json"
     config_path = os.path.join(config_dir, config_filename)

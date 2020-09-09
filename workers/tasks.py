@@ -24,6 +24,7 @@ from requests_toolbelt.multipart import decoder
 from pathlib import Path
 from zipfile import ZipFile
 
+from imaginebackend_common.feature_storage import store_features
 from imaginebackend_common.flask_init import create_app
 from imaginebackend_common.models import FeatureExtractionTask, db, FeatureExtraction
 from imaginebackend_common.kheops_utils import get_token_header, dicomFields
@@ -93,7 +94,7 @@ def run_extraction(
     user_id,
     feature_extraction_task_id,
     study_uid,
-    features_path,
+    # features_path,
     config_path,
 ):
     try:
@@ -115,6 +116,8 @@ def run_extraction(
         feature_extraction_task = FeatureExtractionTask.find_by_id(
             feature_extraction_task_id
         )
+
+        feature_family_id = feature_extraction_task.feature_family_id
 
         feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
 
@@ -161,9 +164,12 @@ def run_extraction(
         shutil.rmtree(dicom_dir, True)
 
         # Save the features
-        json_features = jsonpickle.encode(features)
-        os.makedirs(os.path.dirname(features_path), exist_ok=True)
-        Path(features_path).write_text(json_features)
+        # json_features = jsonpickle.encode(features)
+        # os.makedirs(os.path.dirname(features_path), exist_ok=True)
+        # Path(features_path).write_text(json_features)
+        store_features(
+            feature_extraction_task_id, feature_family_id, features,
+        )
 
         # Extraction is complete
         status_message = "Extraction Complete"
