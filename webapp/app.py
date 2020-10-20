@@ -27,9 +27,11 @@ from imaginebackend_common.utils import InvalidUsage
 # Routes
 from routes.features import bp as features_bp
 from routes.feature_families import bp as feature_families_bp
+from routes.feature_collections import bp as feature_collections_bp
 from routes.tasks import bp as tasks_bp
 from routes.models import bp as models_bp
 from routes.labels import bp as labels_bp
+from routes.charts import bp as charts_bp
 
 print("App is Starting!")
 
@@ -128,9 +130,11 @@ def setup_app(app):
     with app.app_context():
         app.register_blueprint(features_bp)
         app.register_blueprint(feature_families_bp)
+        app.register_blueprint(feature_collections_bp)
         app.register_blueprint(tasks_bp)
         app.register_blueprint(models_bp)
         app.register_blueprint(labels_bp)
+        app.register_blueprint(charts_bp)
 
 
 if __name__ == "__main__":

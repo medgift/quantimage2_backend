@@ -1,7 +1,9 @@
 import decimal, datetime
+import pandas
 
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, Table, Column, Integer
+from ttictoc import tic, toc
 
 
 db = SQLAlchemy()
@@ -189,6 +191,9 @@ class FeatureExtraction(BaseModel, db.Model):
     # Models for this feature extraction
     models = db.relationship("Model")
 
+    # Collections for this feature extraction
+    collections = db.relationship("FeatureCollection")
+
     def feature_names(self):
         feature_names = []
 
@@ -327,6 +332,24 @@ class FeatureDefinition(BaseModel, db.Model):
     )
 
 
+# class FeatureCollectionValue(BaseModelAssociation, db.Model):
+#     # Left
+#     feature_collection_id = db.Column(
+#         db.Integer, db.ForeignKey("feature_collection.id"), primary_key=True,
+#     )
+#
+#     # Right
+#     feature_value_id = db.Column(
+#         db.Integer, db.ForeignKey("feature_value.id"), primary_key=True,
+#     )
+#
+#     # TODO : Extra Data (could contain modified value e.g.)
+#
+#     # Relationships
+#     feature_collection = db.relationship("FeatureCollection", back_populates="values")
+#     feature_value = db.relationship("FeatureValue", back_populates="collections")
+
+
 # The value of a given feature
 class FeatureValue(BaseModel, db.Model):
     def __init__(
@@ -343,18 +366,120 @@ class FeatureValue(BaseModel, db.Model):
         self.modality_id = modality_id
         self.roi_id = roi_id
 
+    @classmethod
+    def get_for_collection(cls, collection):
+        names = []
+        features_formatted = []
+
+        for i in collection.values:
+            features_formatted.append(i.to_formatted_dict())
+            if i.feature_definition.name not in names:
+                names.append(i.feature_definition.name)
+
+        return features_formatted, names
+
+    @classmethod
+    def get_for_extraction(cls, feature_extraction):
+        extraction_task_ids = list(map(lambda task: task.id, feature_extraction.tasks))
+
+        tic()
+        instances = cls.query.filter(
+            FeatureValue.feature_extraction_task_id.in_(extraction_task_ids)
+        ).all()
+        elapsed_db = toc()
+        print("DB query took:", elapsed_db)
+
+        names = []
+        features_formatted = []
+
+        for i in instances:
+            features_formatted.append(i.to_formatted_dict())
+            if i.feature_definition.name not in names:
+                names.append(i.feature_definition.name)
+
+        return features_formatted, names
+
+    @classmethod
+    def find_by_tasks_modality_roi(cls, task_ids, modality_id, roi_id):
+        feature_values = cls.query.filter(
+            cls.modality_id == modality_id,
+            cls.roi_id == roi_id,
+            cls.feature_extraction_task_id.in_(task_ids),
+        ).all()
+
+        return feature_values
+
     # Value of the feature
     value = db.Column(db.Float)
 
     # Relationships
     feature_definition_id = db.Column(db.Integer, ForeignKey("feature_definition.id"))
+    feature_definition = db.relationship("FeatureDefinition", lazy="joined")
     feature_extraction_task_id = db.Column(
         db.Integer, ForeignKey("feature_extraction_task.id")
     )
+    feature_extraction_task = db.relationship("FeatureExtractionTask", lazy="joined")
     modality_id = db.Column(db.Integer, ForeignKey("modality.id"))
     modality = db.relationship("Modality", lazy="joined")
     roi_id = db.Column(db.Integer, ForeignKey("roi.id"))
     roi = db.relationship("ROI", lazy="joined")
+
+    # Association to FeatureCollectionValues
+    # collections = db.relationship(
+    #     "FeatureCollectionValue", back_populates="feature_value"
+    # )
+
+    def to_formatted_dict(self):
+        return {
+            "study_uid": self.feature_extraction_task.study_uid,
+            "modality": self.modality.name,
+            "roi": self.roi.name,
+            "name": self.feature_definition.name,
+            "value": self.value,
+        }
+
+
+feature_collection_value = Table(
+    "feature_collection_value",
+    db.metadata,
+    Column("feature_collection_id", Integer, ForeignKey("feature_collection.id")),
+    Column("feature_value_id", Integer, ForeignKey("feature_value.id")),
+)
+
+# Customized Feature Collection (filtered rows & columns so far)
+class FeatureCollection(BaseModel, db.Model):
+    def __init__(self, name, feature_extraction_id):
+        self.name = name
+        self.feature_extraction_id = feature_extraction_id
+
+    @classmethod
+    def find_by_extraction(cls, extraction_id):
+        feature_collections = cls.query.filter(
+            cls.feature_extraction_id == extraction_id,
+        ).all()
+
+        return feature_collections
+
+    # Name of the collection
+    name = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Association to a FeatureExtraction
+    feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
+    feature_extraction = db.relationship(
+        "FeatureExtraction", back_populates="collections", lazy="joined"
+    )
+
+    # Association to FeatureCollectionValues
+    values = db.relationship("FeatureValue", secondary="feature_collection_value")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "name": self.name,
+            "feature_extraction_id": self.feature_extraction_id,
+        }
 
 
 # Machine learning model

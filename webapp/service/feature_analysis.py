@@ -6,7 +6,7 @@ import tempfile
 import numpy as np
 
 from imaginebackend_common.models import FeatureExtraction
-from service.feature_transformation import transform_studies_features_to_csv
+from service.feature_transformation import transform_studies_features_to_df
 
 from melampus.classifier import MelampusClassifier
 
@@ -16,17 +16,17 @@ def train_model_with_metric(
 ):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
-    [header, features] = transform_studies_features_to_csv(extraction, studies)
+    header, features_df = transform_studies_features_to_df(extraction, studies)
 
-    # Transform array to CSV in order to create a DataFrame
-    mem_file = io.StringIO()
-    csv_writer = csv.writer(mem_file)
-    csv_writer.writerow(header)
-    csv_writer.writerows(features)
-    mem_file.seek(0)
-
-    # Create DataFrame from CSV data
-    featuresDf = pandas.read_csv(mem_file, dtype={"PatientID": np.str})
+    # # Transform array to CSV in order to create a DataFrame
+    # mem_file = io.StringIO()
+    # csv_writer = csv.writer(mem_file)
+    # csv_writer.writerow(header)
+    # csv_writer.writerows(features)
+    # mem_file.seek(0)
+    #
+    # # Create DataFrame from CSV data
+    # featuresDf = pandas.read_csv(mem_file, dtype={"PatientID": np.str})
 
     # TODO - How to deal with multiple modalities & ROIs? - Concatenate for now...
     # Grab just CT & GTV_L as a test
@@ -41,7 +41,7 @@ def train_model_with_metric(
     # featuresDf = featuresDf.drop(["ROI"], axis=1)
 
     # TODO - Analyze what is the best thing to do, try concatenation so far
-    featuresDf = concatenate_modalities_rois(featuresDf, modalities, rois)
+    features_df = concatenate_modalities_rois(features_df, modalities, rois)
 
     # TODO - Should Melampus be able to deal with string columns?
     # Drop modality & ROI from the dataframe, as Melampus doesn't support string values
@@ -49,19 +49,21 @@ def train_model_with_metric(
 
     # Get Labels DataFrame
     # TODO - Allow choosing a mode (Patient only or Patient + ROI)
-    labelsDf = pandas.DataFrame(gt, columns=["PatientID", "Label"])
+    labels_df = pandas.DataFrame(gt, columns=["PatientID", "Label"])
 
     # Get labels for each patient (to make sure they are in the same order)
     labelsList = []
-    for index, row in featuresDf.iterrows():
-        patient_label = labelsDf[labelsDf["PatientID"] == row.PatientID].Label.values[0]
+    for index, row in features_df.iterrows():
+        patient_label = labels_df[labels_df["PatientID"] == row.PatientID].Label.values[
+            0
+        ]
         labelsList.append(int(patient_label))
 
     # Create temporary file for CSV content & dump it there
     with tempfile.NamedTemporaryFile(mode="w+") as temp:
 
         # Save filtered DataFrame to CSV file (to feed it to Melampus)
-        featuresDf.to_csv(temp.name, index=False)
+        features_df.to_csv(temp.name, index=False)
 
         # Call Melampus classifier
         myClassifier = MelampusClassifier(temp.name, algorithm_type, labelsList)
@@ -94,11 +96,6 @@ def train_model_with_metric(
 def concatenate_modalities_rois(featuresDf, modalities, rois):
     # Concatenate features from the various modalities & ROIs (if necessary)
 
-    # Only 1 Modality & 1 ROI - Just drop these columns then
-    # if len(modalities) == 1 and len(rois) == 1:
-    #     updatedDf = featuresDf.drop(["Modality", "ROI"], axis=1)
-    #     return updatedDf
-
     # Keep PatientID
     pidDf = featuresDf["PatientID"].to_frame()
     uniquePidDf = pidDf.drop_duplicates(subset="PatientID")
@@ -107,11 +104,10 @@ def concatenate_modalities_rois(featuresDf, modalities, rois):
     to_concat = [uniquePidDf]
     # Groupe dataframes by Modality & ROI
     for group, groupDf in featuresDf.groupby(["Modality", "ROI"]):
-        print(group)
-        print(groupDf)
-
         # Only keep selected modalities & ROIs
-        if group[0] in modalities and group[1] in rois:
+        if (len(modalities) == 0 and len(rois) == 0) or (
+            group[0] in modalities and group[1] in rois
+        ):
             withoutModalityAndROIDf = groupDf.drop(["Modality", "ROI"], axis=1)
             withoutModalityAndROIDf = withoutModalityAndROIDf.set_index(
                 "PatientID", drop=True
@@ -119,8 +115,8 @@ def concatenate_modalities_rois(featuresDf, modalities, rois):
             prefix = "-".join(group)
             withoutModalityAndROIDf = withoutModalityAndROIDf.add_prefix(prefix + "_")
             to_concat.append(withoutModalityAndROIDf)
-            print(withoutModalityAndROIDf)
 
+    # Add back the Patient ID at the end
     concatenatedDf = pandas.concat(to_concat, axis=1)
 
     return concatenatedDf

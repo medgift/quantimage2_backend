@@ -14,6 +14,7 @@ services:
       - DEBUGGER_PORT=${DEBUGGER_PORT}
       - GEVENT_SUPPORT=True
       - AUTHLIB_INSECURE_TRANSPORT=1
+      - KHEOPS_ALBUM_TOKEN=${KHEOPS_ALBUM_TOKEN}
     extra_hosts:
       - "roger:153.109.130.143"
 
@@ -32,6 +33,7 @@ services:
     #ports:
       #- 34000-34100:34000-34100
     command: ["celery", "worker", "--app=tasks", "--loglevel=INFO", "--pool=solo"]
+    #command: ["celery", "worker", "--app=tasks", "--loglevel=INFO"]
 
   flower:
     ports:

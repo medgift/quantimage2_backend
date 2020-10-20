@@ -10,13 +10,13 @@ from melampus.feature_selector import MelampusFeatureSelector
 
 from imaginebackend_common.models import FeatureExtraction
 from service.feature_analysis import concatenate_modalities_rois
-from service.feature_transformation import transform_studies_features_to_csv
+from service.feature_transformation import transform_studies_features_to_df
 
 
 def train_survival_model(extraction_id, studies, modalities, rois, gt):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
-    [header, features] = transform_studies_features_to_csv(extraction, studies)
+    header, features = transform_studies_features_to_df(extraction, studies)
 
     # Transform array to CSV in order to create a DataFrame
     mem_file = io.StringIO()
