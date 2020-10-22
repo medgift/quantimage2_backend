@@ -133,6 +133,34 @@ def extraction_features_by_id(id):
 
 
 # Get data points (PatientID/ROI) for a given extraction
+@bp.route("/extractions/<extraction_id>/collections/<collection_id>/data-points")
+def extraction_collection_data_points(extraction_id, collection_id):
+    # TODO - Add support for making this work for a single study as well
+    token = g.token
+
+    extraction = FeatureExtraction.find_by_id(extraction_id)
+    studies = get_studies_from_album(extraction.album_id, token)
+
+    collection = FeatureCollection.find_by_id(collection_id)
+
+    # Get studies included in the collection's feature values
+
+    study_uids = set(
+        list(map(lambda v: v.feature_extraction_task.study_uid, collection.values))
+    )
+
+    # Get Patient IDs from studies
+    patient_ids = []
+    for study in studies:
+        patient_id = study[dicomFields.PATIENT_ID][dicomFields.VALUE][0]
+        study_uid = study[dicomFields.STUDY_UID][dicomFields.VALUE][0]
+        if not patient_id in patient_ids and study_uid in study_uids:
+            patient_ids.append(patient_id)
+
+    return jsonify({"data-points": patient_ids})
+
+
+# Get data points (PatientID/ROI) for a given extraction
 @bp.route("/extractions/<id>/data-points")
 def extraction_data_points_by_id(id):
     # TODO - Add support for making this work for a single study as well

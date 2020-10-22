@@ -5,6 +5,8 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import ForeignKey, Table, Column, Integer
 from ttictoc import tic, toc
 
+from sqlalchemy.dialects.mysql import LONGTEXT
+
 
 db = SQLAlchemy()
 
@@ -481,6 +483,11 @@ class FeatureCollection(BaseModel, db.Model):
             "feature_extraction_id": self.feature_extraction_id,
         }
 
+    def format_collection(self):
+        modalities = list(set(map(lambda v: v.modality.name, self.values)))
+        rois = list(set(map(lambda v: v.roi.name, self.values)))
+        return {"collection": self.to_dict(), "modalities": modalities, "rois": rois}
+
 
 # Machine learning model
 class Model(BaseModel, db.Model):
@@ -600,6 +607,81 @@ class Label(BaseModel, db.Model):
 
     # Label Content
     label_content = db.Column(db.JSON, nullable=False, unique=False)
+
+    # User who created the label
+    user_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    @classmethod
+    def find_by_album(cls, album_id, user_id, label_type):
+        instances = cls.query.filter_by(
+            album_id=album_id, user_id=user_id, label_type=label_type
+        ).all()
+        return instances
+
+    @classmethod
+    def find_by_user(cls, user_id):
+        instances = cls.query.filter_by(user_id=user_id).all()
+        return instances
+
+    @classmethod
+    def save_label(cls, album_id, patient_id, label_type, label_content, user_id):
+        old_instance, created = Label.get_or_create(
+            criteria={
+                "album_id": album_id,
+                "patient_id": patient_id,
+                "label_type": label_type,
+                "user_id": user_id,
+            },
+            defaults={"label_content": label_content},
+        )
+        if not created:
+            old_instance.label_content = label_content
+            old_instance.save_to_db()
+
+        return old_instance
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "album_id": self.album_id,
+            "patient_id": self.patient_id,
+            "label_type": self.label_type,
+            "label_content": self.label_content,
+            "user_id": self.user_id,
+        }
+
+
+# Chart Annotation
+class Annotation(BaseModel, db.Model):
+    def __init__(self, parent_id, album_id, deleted, title, text, lines, user_id):
+        self.parent_id = parent_id
+        self.album_id = album_id
+        self.deleted = deleted
+        self.title = title
+        self.text = text
+        self.lines = lines
+        self.user_id = user_id
+
+    # Parent Annotation
+    parent_id = db.Column(db.Integer, ForeignKey("annotation.id"))
+    parent = db.relationship("Annotation", lazy="joined")
+
+    # Album ID
+    album_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Deleted
+    deleted = db.Column(db.Boolean, nullable=False, default=False)
+
+    # Title
+    title = db.Column(db.String(255), nullable=False)
+
+    # Text
+    text = db.Column(db.Text, nullable=False)
+
+    # Lines
+    lines = db.Column(LONGTEXT, nullable=True)
 
     # User who created the label
     user_id = db.Column(db.String(255), nullable=False, unique=False)

@@ -97,6 +97,7 @@ def models_by_album(album_id):
         body = request.json
 
         feature_extraction_id = body["extraction-id"]
+        collection_id = body["collection-id"]
         studies = body["studies"]
         album = body["album"]
         gt = body["labels"]
@@ -110,7 +111,13 @@ def models_by_album(album_id):
 
         if MODEL_TYPES(model_type) == MODEL_TYPES.CLASSIFICATION:
             model, validation_strategy, validation_params = train_model_with_metric(
-                feature_extraction_id, studies, algorithm_type, modalities, rois, gt
+                feature_extraction_id,
+                collection_id,
+                studies,
+                algorithm_type,
+                modalities,
+                rois,
+                gt,
             )
 
             model_path = get_model_path(
@@ -118,7 +125,7 @@ def models_by_album(album_id):
             )
         elif MODEL_TYPES(model_type) == MODEL_TYPES.SURVIVAL:
             model, feature_selection, feature_names = train_survival_model(
-                feature_extraction_id, studies, modalities, rois, gt
+                feature_extraction_id, collection_id, studies, modalities, rois, gt
             )
 
             model_path = get_model_path(

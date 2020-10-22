@@ -5,18 +5,27 @@ import pandas
 import tempfile
 import numpy as np
 
-from imaginebackend_common.models import FeatureExtraction
-from service.feature_transformation import transform_studies_features_to_df
+from imaginebackend_common.models import FeatureExtraction, FeatureCollection
+from service.feature_transformation import (
+    transform_studies_features_to_df,
+    transform_studies_collection_features_to_df,
+)
 
 from melampus.classifier import MelampusClassifier
 
 
 def train_model_with_metric(
-    extraction_id, studies, algorithm_type, modalities, rois, gt
+    extraction_id, collection_id, studies, algorithm_type, modalities, rois, gt
 ):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
-    header, features_df = transform_studies_features_to_df(extraction, studies)
+    if collection_id:
+        collection = FeatureCollection.find_by_id(collection_id)
+        header, features_df = transform_studies_collection_features_to_df(
+            extraction, studies, collection
+        )
+    else:
+        header, features_df = transform_studies_features_to_df(extraction, studies)
 
     # # Transform array to CSV in order to create a DataFrame
     # mem_file = io.StringIO()

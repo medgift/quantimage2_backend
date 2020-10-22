@@ -13,10 +13,16 @@ from service.feature_analysis import concatenate_modalities_rois
 from service.feature_transformation import transform_studies_features_to_df
 
 
-def train_survival_model(extraction_id, studies, modalities, rois, gt):
+def train_survival_model(extraction_id, collection_id, studies, modalities, rois, gt):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
-    header, features = transform_studies_features_to_df(extraction, studies)
+    if collection_id:
+        collection = FeatureCollection.find_by_id(collection_id)
+        header, features_df = transform_studies_collection_features_to_df(
+            extraction, studies, collection
+        )
+    else:
+        header, features_df = transform_studies_features_to_df(extraction, studies)
 
     # Transform array to CSV in order to create a DataFrame
     mem_file = io.StringIO()

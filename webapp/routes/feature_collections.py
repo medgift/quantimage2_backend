@@ -31,14 +31,15 @@ def feature_collections():
             request.json["rows"],
         )
 
-        return jsonify(collection.to_dict())
+        return jsonify(collection.format_collection())
 
 
 @bp.route("/feature-collections/extraction/<extraction_id>")
 def feature_collections_by_extraction(extraction_id):
     collections = FeatureCollection.find_by_extraction(extraction_id)
 
-    serialized_collections = list(map(lambda c: c.to_dict(), collections))
+    # TODO - Maybe have another route for this, that returns just the collection objects (more standard)
+    serialized_collections = list(map(lambda c: c.format_collection(), collections))
     return jsonify(serialized_collections)
 
 

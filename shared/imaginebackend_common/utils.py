@@ -97,12 +97,10 @@ def format_extraction(extraction, payload=False, families=True, tasks=False):
 
     # TODO - Make this more robust, check all tasks perhaps
     modalities = list(
-        set(list(map(lambda fv: fv.modality.name, extraction.tasks[0].feature_values)))
+        set(map(lambda fv: fv.modality.name, extraction.tasks[0].feature_values))
     )
 
-    rois = list(
-        set(list(map(lambda fv: fv.roi.name, extraction.tasks[0].feature_values)))
-    )
+    rois = list(set(map(lambda fv: fv.roi.name, extraction.tasks[0].feature_values)))
 
     extraction_dict["feature-number"] = len(all_feature_names)
     extraction_dict["feature-names"] = all_feature_names
