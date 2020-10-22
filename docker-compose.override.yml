@@ -32,7 +32,7 @@ services:
       - PYTHON_ENV=nodebug
     #ports:
       #- 34000-34100:34000-34100
-    command: ["celery", "worker", "--app=tasks", "--loglevel=INFO", "--pool=solo"]
+    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo"]
     #command: ["celery", "worker", "--app=tasks", "--loglevel=INFO"]
 
   flower:
