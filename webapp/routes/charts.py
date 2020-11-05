@@ -8,6 +8,7 @@ from sklearn.preprocessing import StandardScaler
 
 from imaginebackend_common.const import MODEL_TYPES
 from imaginebackend_common.models import FeatureExtraction, Label
+from routes.utils import decorate_if_possible
 from service.feature_extraction import get_studies_from_album
 from service.feature_transformation import (
     transform_studies_features_to_df,
@@ -20,16 +21,34 @@ from service.feature_transformation import (
 bp = Blueprint(__name__, "charts")
 
 
-@bp.route("/charts/<extraction_id>/lasagna")
-def lasagna_chart(extraction_id):
+@bp.before_request
+def before_request():
+    if not request.path.endswith("download"):
+        decorate_if_possible(request)
 
-    # To simplify the access, use album token (for fixed album so far)
 
-    album_token = os.environ["KHEOPS_ALBUM_TOKEN"]
+@bp.route("/charts/<album_id>/lasagna")
+def lasagna_chart(album_id):
+
+    # TODO - Remove this hard-coded test route that's used by Julien
+    if album_id.isnumeric():
+        # To simplify the access, use album token (for fixed album so far)
+        token = os.environ["KHEOPS_ALBUM_TOKEN"]
+        # Album ID is actually an extraction ID in this setting
+        extraction_id = int(album_id)
+    else:
+        token = g.token
+        user_id = g.user
+
+        # Find latest feature extraction for this album
+        latest_extraction_of_album = FeatureExtraction.find_latest_by_user_and_album_id(
+            user_id, album_id
+        )
+
+        extraction_id = latest_extraction_of_album.id
 
     extraction = FeatureExtraction.find_by_id(extraction_id)
-    studies = get_studies_from_album(extraction.album_id, album_token)
-
+    studies = get_studies_from_album(extraction.album_id, token)
     header, features_df = transform_studies_features_to_df(extraction, studies)
 
     # TODO - Determine which labels we want to get???

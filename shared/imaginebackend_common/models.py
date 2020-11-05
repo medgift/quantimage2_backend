@@ -333,6 +333,12 @@ class FeatureDefinition(BaseModel, db.Model):
         "FeatureFamily", back_populates="feature_definitions", lazy="joined"
     )
 
+    @classmethod
+    def find_by_name(cls, feature_names):
+        feature_definitions = cls.query.filter(cls.name.in_(feature_names)).all()
+
+        return feature_definitions
+
 
 # class FeatureCollectionValue(BaseModelAssociation, db.Model):
 #     # Left
@@ -402,10 +408,13 @@ class FeatureValue(BaseModel, db.Model):
         return features_formatted, names
 
     @classmethod
-    def find_by_tasks_modality_roi(cls, task_ids, modality_id, roi_id):
+    def find_by_tasks_modality_roi_features(
+        cls, task_ids, modality_id, roi_id, feature_definition_ids
+    ):
         feature_values = cls.query.filter(
             cls.modality_id == modality_id,
             cls.roi_id == roi_id,
+            cls.feature_definition_id.in_(feature_definition_ids),
             cls.feature_extraction_task_id.in_(task_ids),
         ).all()
 

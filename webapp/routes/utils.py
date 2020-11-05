@@ -36,6 +36,20 @@ def role_required(role_name):
     return decorator
 
 
+def decorate_if_possible(request):
+
+    try:
+        authorization = request.headers["Authorization"]
+
+        if authorization.startswith("Bearer"):
+            g.user = userid_from_token(request.headers["Authorization"].split(" ")[1])
+            g.token = request.headers["Authorization"].split(" ")[1]
+    except KeyError:
+        return True
+
+    return True
+
+
 def validate_decorate(request):
     if request.method != "OPTIONS":
         if not validate_request(request):

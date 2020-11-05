@@ -7,6 +7,7 @@ from imaginebackend_common.models import (
     ROI,
     FeatureValue,
     FeatureCollection,
+    FeatureDefinition,
 )
 from service.feature_extraction import get_studies_from_album
 from service.feature_transformation import MODALITY_FIELD, ROI_FIELD, PATIENT_ID_FIELD
@@ -29,6 +30,7 @@ def feature_collections():
             request.json["featureExtractionID"],
             request.json["name"],
             request.json["rows"],
+            request.json["features"],
         )
 
         return jsonify(collection.format_collection())
@@ -50,7 +52,7 @@ def feature_collection(feature_collection_id):
         return update_feature_collection(feature_collection_id)
 
 
-def save_feature_collection(feature_extraction_id, name, rows):
+def save_feature_collection(feature_extraction_id, name, rows, feature_names):
     print(feature_extraction_id)
     print(name)
     print(rows)
@@ -62,6 +64,9 @@ def save_feature_collection(feature_extraction_id, name, rows):
 
     modalities = Modality.find_all()
     rois = ROI.find_all()
+
+    feature_definitions = FeatureDefinition.find_by_name(feature_names)
+    feature_definition_ids = list(map(lambda fd: fd.id, feature_definitions))
 
     values = []
 
@@ -80,8 +85,11 @@ def save_feature_collection(feature_extraction_id, name, rows):
         modality_id = next(m.id for m in modalities if m.name == modality_name)
         roi_id = next(r.id for r in rois if r.name == roi_name)
 
-        row_values = FeatureValue.find_by_tasks_modality_roi(
-            list(map(lambda t: t.id, tasks)), modality_id, roi_id
+        row_values = FeatureValue.find_by_tasks_modality_roi_features(
+            list(map(lambda t: t.id, tasks)),
+            modality_id,
+            roi_id,
+            feature_definition_ids,
         )
 
         values += row_values
