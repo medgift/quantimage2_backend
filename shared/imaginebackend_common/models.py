@@ -67,8 +67,15 @@ class BaseModel(object):
         db.session.flush()
 
     def update(self, **kwargs):
-        db.session.query(type(self)).filter(type(self).id == self.id).update(**kwargs)
-        db.session.commit()
+        for key, value in kwargs.items():
+            # Check that object has this property, and disregard creation & updated dates
+            try:
+                if hasattr(self, key) and key not in ["created_at", "updated_at"]:
+                    setattr(self, key, value)
+            except TypeError:
+                # Swallow unsuccesful attributions (like associations)
+                print("impossible to set attribute " + key)
+        self.save_to_db()
 
 
 class BaseModelAssociation(object):
@@ -675,7 +682,6 @@ class Annotation(BaseModel, db.Model):
 
     # Parent Annotation
     parent_id = db.Column(db.Integer, ForeignKey("annotation.id"))
-    parent = db.relationship("Annotation", lazy="joined")
 
     # Album ID
     album_id = db.Column(db.String(255), nullable=False, unique=False)
@@ -696,10 +702,8 @@ class Annotation(BaseModel, db.Model):
     user_id = db.Column(db.String(255), nullable=False, unique=False)
 
     @classmethod
-    def find_by_album(cls, album_id, user_id, label_type):
-        instances = cls.query.filter_by(
-            album_id=album_id, user_id=user_id, label_type=label_type
-        ).all()
+    def find_by_album(cls, album_id, user_id):
+        instances = cls.query.filter_by(album_id=album_id, user_id=user_id).all()
         return instances
 
     @classmethod
@@ -708,21 +712,16 @@ class Annotation(BaseModel, db.Model):
         return instances
 
     @classmethod
-    def save_label(cls, album_id, patient_id, label_type, label_content, user_id):
-        old_instance, created = Label.get_or_create(
-            criteria={
-                "album_id": album_id,
-                "patient_id": patient_id,
-                "label_type": label_type,
-                "user_id": user_id,
-            },
-            defaults={"label_content": label_content},
-        )
-        if not created:
-            old_instance.label_content = label_content
-            old_instance.save_to_db()
+    def create_annotation(
+        cls, album_id, parent_id, deleted, title, text, lines, user_id
+    ):
 
-        return old_instance
+        annotation = Annotation(
+            parent_id, album_id, deleted, title, text, lines, user_id
+        )
+        annotation.save_to_db()
+
+        return annotation
 
     def to_dict(self):
         return {
@@ -730,8 +729,20 @@ class Annotation(BaseModel, db.Model):
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "album_id": self.album_id,
-            "patient_id": self.patient_id,
-            "label_type": self.label_type,
-            "label_content": self.label_content,
+            "parent_id": self.parent_id,
+            "parent": self.parent.to_dict() if self.parent_id else None,
+            "deleted": self.deleted,
+            "title": self.title,
+            "text": self.text,
+            "lines": self.lines,
             "user_id": self.user_id,
         }
+
+
+# Establish link to parent annotation
+# Needs to be defined outside because "remote_side" requires a Column-type expression
+# which in this case is not possible inside of the Annotation class because the "id"
+# is defined in the BaseModel superclass
+Annotation.parent = db.relationship(
+    "Annotation", uselist=False, remote_side=[Annotation.id], lazy="joined"
+)
