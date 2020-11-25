@@ -17,7 +17,7 @@ def create_app():
         + os.environ["MYSQL_DATABASE"]
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["SQLALCHEMY_ECHO"] = False
+    app.config["SQLALCHEMY_ECHO"] = True
     app.config["SECRET-KEY"] = "cookies are delicious!"
 
     app.config["CELERY_BROKER_URL"] = os.environ["CELERY_BROKER_URL"]

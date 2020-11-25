@@ -40,6 +40,10 @@ services:
     ports:
       - 5555:5555
 
+  db:
+    ports:
+      - 3307:3306
+
   phpmyadmin:
     ports:
       - 8888:80

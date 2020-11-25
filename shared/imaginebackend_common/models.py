@@ -3,6 +3,7 @@ import pandas
 
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import ForeignKey, Table, Column, Integer
+from sqlalchemy.orm import joinedload
 from ttictoc import tic, toc
 
 from sqlalchemy.dialects.mysql import LONGTEXT
@@ -252,6 +253,18 @@ class FeatureExtraction(BaseModel, db.Model):
 
         return query_results
 
+    @classmethod
+    def find_by_id_populate(cls, id):
+        populated_extraction = (
+            cls.query.filter(cls.id == id)
+            .options(
+                joinedload(cls.tasks).subqueryload(FeatureExtractionTask.feature_values)
+            )
+            .one_or_none()
+        )
+
+        return populated_extraction
+
 
 # A specific feature extraction task for a given study
 class FeatureExtractionTask(BaseModel, db.Model):
@@ -395,14 +408,17 @@ class FeatureValue(BaseModel, db.Model):
 
     @classmethod
     def get_for_extraction(cls, feature_extraction):
-        extraction_task_ids = list(map(lambda task: task.id, feature_extraction.tasks))
 
         tic()
-        instances = cls.query.filter(
-            FeatureValue.feature_extraction_task_id.in_(extraction_task_ids)
-        ).all()
-        elapsed_db = toc()
-        print("DB query took:", elapsed_db)
+        complete_feature_extraction = FeatureExtraction.find_by_id_populate(
+            feature_extraction.id
+        )
+        elapsed = toc()
+        print("Getting populated Extraction from DB took", elapsed)
+
+        instances = []
+        for feature_task in complete_feature_extraction.tasks:
+            instances.extend(feature_task.feature_values)
 
         names = []
         features_formatted = []
