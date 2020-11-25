@@ -288,9 +288,7 @@ class FeatureExtractionTask(BaseModel, db.Model):
 
     # Associate feature extraction task with a feature extraction
     feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
-    feature_extraction = db.relationship(
-        "FeatureExtraction", back_populates="tasks", lazy="joined"
-    )
+    feature_extraction = db.relationship("FeatureExtraction", back_populates="tasks")
 
     # Associate feature extraction task with feature values
     feature_values = db.relationship("FeatureValue")
@@ -350,7 +348,7 @@ class FeatureDefinition(BaseModel, db.Model):
     # Relationships
     feature_family_id = db.Column(db.Integer, ForeignKey("feature_family.id"))
     feature_family = db.relationship(
-        "FeatureFamily", back_populates="feature_definitions", lazy="joined"
+        "FeatureFamily", back_populates="feature_definitions"
     )
 
     @classmethod
@@ -448,11 +446,11 @@ class FeatureValue(BaseModel, db.Model):
 
     # Relationships
     feature_definition_id = db.Column(db.Integer, ForeignKey("feature_definition.id"))
-    feature_definition = db.relationship("FeatureDefinition", lazy="joined")
+    feature_definition = db.relationship("FeatureDefinition")
     feature_extraction_task_id = db.Column(
         db.Integer, ForeignKey("feature_extraction_task.id")
     )
-    feature_extraction_task = db.relationship("FeatureExtractionTask", lazy="joined")
+    feature_extraction_task = db.relationship("FeatureExtractionTask")
     modality_id = db.Column(db.Integer, ForeignKey("modality.id"))
     modality = db.relationship("Modality", lazy="joined")
     roi_id = db.Column(db.Integer, ForeignKey("roi.id"))
@@ -500,7 +498,7 @@ class FeatureCollection(BaseModel, db.Model):
     # Association to a FeatureExtraction
     feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
     feature_extraction = db.relationship(
-        "FeatureExtraction", back_populates="collections", lazy="joined"
+        "FeatureExtraction", back_populates="collections"
     )
 
     # Association to FeatureCollectionValues
@@ -586,9 +584,7 @@ class Model(BaseModel, db.Model):
 
     # Relationships
     feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
-    feature_extraction = db.relationship(
-        "FeatureExtraction", back_populates="models", lazy="joined"
-    )
+    feature_extraction = db.relationship("FeatureExtraction", back_populates="models")
 
     @classmethod
     def find_by_album(cls, album_id, user_id):
