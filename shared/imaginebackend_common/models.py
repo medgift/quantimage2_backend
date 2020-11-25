@@ -258,7 +258,13 @@ class FeatureExtraction(BaseModel, db.Model):
         populated_extraction = (
             cls.query.filter(cls.id == id)
             .options(
-                joinedload(cls.tasks).subqueryload(FeatureExtractionTask.feature_values)
+                joinedload(cls.tasks)
+                .subqueryload(FeatureExtractionTask.feature_values)
+                .options(
+                    joinedload(FeatureValue.modality),
+                    joinedload(FeatureValue.roi),
+                    joinedload(FeatureValue.feature_definition),
+                )
             )
             .one_or_none()
         )
@@ -284,7 +290,7 @@ class FeatureExtractionTask(BaseModel, db.Model):
 
     # Associate feature extraction task with a feature family
     feature_family_id = db.Column(db.Integer, ForeignKey("feature_family.id"))
-    feature_family = db.relationship("FeatureFamily", lazy="joined")
+    feature_family = db.relationship("FeatureFamily")
 
     # Associate feature extraction task with a feature extraction
     feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
@@ -414,17 +420,20 @@ class FeatureValue(BaseModel, db.Model):
         elapsed = toc()
         print("Getting populated Extraction from DB took", elapsed)
 
-        instances = []
-        for feature_task in complete_feature_extraction.tasks:
-            instances.extend(feature_task.feature_values)
-
-        names = []
         features_formatted = []
+        names = []
 
-        for i in instances:
-            features_formatted.append(i.to_formatted_dict())
-            if i.feature_definition.name not in names:
-                names.append(i.feature_definition.name)
+        tic()
+        for feature_task in complete_feature_extraction.tasks:
+            for feature_value in feature_task.feature_values:
+                features_formatted.append(
+                    feature_value.to_formatted_dict(study_uid=feature_task.study_uid)
+                )
+                if feature_value.feature_definition.name not in names:
+                    names.append(feature_value.feature_definition.name)
+
+        elapsed = toc()
+        print("Formatting features took", elapsed)
 
         return features_formatted, names
 
@@ -452,18 +461,20 @@ class FeatureValue(BaseModel, db.Model):
     )
     feature_extraction_task = db.relationship("FeatureExtractionTask")
     modality_id = db.Column(db.Integer, ForeignKey("modality.id"))
-    modality = db.relationship("Modality", lazy="joined")
+    modality = db.relationship("Modality")
     roi_id = db.Column(db.Integer, ForeignKey("roi.id"))
-    roi = db.relationship("ROI", lazy="joined")
+    roi = db.relationship("ROI")
 
     # Association to FeatureCollectionValues
     # collections = db.relationship(
     #     "FeatureCollectionValue", back_populates="feature_value"
     # )
 
-    def to_formatted_dict(self):
+    def to_formatted_dict(self, study_uid=None):
         return {
-            "study_uid": self.feature_extraction_task.study_uid,
+            "study_uid": study_uid
+            if study_uid
+            else self.feature_extraction_task.study_uid,
             "modality": self.modality.name,
             "roi": self.roi.name,
             "name": self.feature_definition.name,
