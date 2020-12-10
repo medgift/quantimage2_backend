@@ -29,7 +29,9 @@ def feature_collections():
         collection = save_feature_collection(
             request.json["featureExtractionID"],
             request.json["name"],
-            request.json["rows"],
+            request.json["modalities"],
+            request.json["rois"],
+            request.json["patients"],
             request.json["features"],
         )
 
@@ -52,47 +54,44 @@ def feature_collection(feature_collection_id):
         return update_feature_collection(feature_collection_id)
 
 
-def save_feature_collection(feature_extraction_id, name, rows, feature_names):
-    print(feature_extraction_id)
-    print(name)
-    print(rows)
-
+def save_feature_collection(
+    feature_extraction_id, name, modalities, rois, patients, feature_names
+):
     token = g.token
 
+    # Get all necessary elements from the DB
     extraction = FeatureExtraction.find_by_id(feature_extraction_id)
     studies = get_studies_from_album(extraction.album_id, token)
 
-    modalities = Modality.find_all()
-    rois = ROI.find_all()
-
-    feature_definitions = FeatureDefinition.find_by_name(feature_names)
-    feature_definition_ids = list(map(lambda fd: fd.id, feature_definitions))
-
-    values = []
+    # Find all FeatureValues corresponding to the supplied criteria
+    values = FeatureValue.find_by_collection_criteria(
+        extraction, studies, modalities, rois, patients, feature_names
+    )
 
     # Go through rows and build up the list of feature values to keep
-    for row in rows:
-        patient_id = row[PATIENT_ID_FIELD]
-        study_uid = next(
-            s[dicomFields.STUDY_UID][dicomFields.VALUE][0]
-            for s in studies
-            if s[dicomFields.PATIENT_ID][dicomFields.VALUE][0] == patient_id
-        )
-        tasks = list(filter(lambda t: t.study_uid == study_uid, extraction.tasks))
-        modality_name = row[MODALITY_FIELD]
-        roi_name = row[ROI_FIELD]
-
-        modality_id = next(m.id for m in modalities if m.name == modality_name)
-        roi_id = next(r.id for r in rois if r.name == roi_name)
-
-        row_values = FeatureValue.find_by_tasks_modality_roi_features(
-            list(map(lambda t: t.id, tasks)),
-            modality_id,
-            roi_id,
-            feature_definition_ids,
-        )
-
-        values += row_values
+    # values = []
+    # for row in rows:
+    #     patient_id = row[PATIENT_ID_FIELD]
+    #     study_uid = next(
+    #         s[dicomFields.STUDY_UID][dicomFields.VALUE][0]
+    #         for s in studies
+    #         if s[dicomFields.PATIENT_ID][dicomFields.VALUE][0] == patient_id
+    #     )
+    #     tasks = list(filter(lambda t: t.study_uid == study_uid, extraction.tasks))
+    #     modality_name = row[MODALITY_FIELD]
+    #     roi_name = row[ROI_FIELD]
+    #
+    #     modality_id = next(m.id for m in modalities if m.name == modality_name)
+    #     roi_id = next(r.id for r in rois if r.name == roi_name)
+    #
+    #     row_values = FeatureValue.find_by_tasks_modality_roi_features(
+    #         list(map(lambda t: t.id, tasks)),
+    #         modality_id,
+    #         roi_id,
+    #         feature_definition_ids,
+    #     )
+    #
+    #     values += row_values
 
     collection, created = FeatureCollection.get_or_create(
         criteria={"name": name, "feature_extraction_id": feature_extraction_id},

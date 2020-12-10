@@ -8,6 +8,7 @@ from ttictoc import tic, toc
 
 from sqlalchemy.dialects.mysql import LONGTEXT
 
+from imaginebackend_common.kheops_utils import dicomFields
 
 db = SQLAlchemy()
 
@@ -33,8 +34,15 @@ class BaseModel(object):
         return instance
 
     @classmethod
-    def delete_by_id(cls, id):
-        instance = db.session.query(cls).filter_by(id=id).one_or_none()
+    def delete_by_id(cls, id, options=None):
+
+        if options is not None:
+            instance = (
+                db.session.query(cls).options(options).filter_by(id=id).one_or_none()
+            )
+        else:
+            instance = db.session.query(cls).filter_by(id=id).one_or_none()
+
         if instance:
             db.session.delete(instance)
             db.session.commit()
@@ -436,6 +444,65 @@ class FeatureValue(BaseModel, db.Model):
         print("Formatting features took", elapsed)
 
         return features_formatted, names
+
+    @classmethod
+    def find_by_collection_criteria(
+        cls,
+        feature_extraction,
+        feature_studies,
+        modalities,
+        rois,
+        patients,
+        feature_names,
+    ):
+        # Get necessary info from the DB
+        db_modalities = Modality.find_all()
+        db_rois = ROI.find_all()
+
+        # Map Patient IDs to corresponding study IDs
+        study_uids = []
+        for patient in patients:
+            study_uid = next(
+                s[dicomFields.STUDY_UID][dicomFields.VALUE][0]
+                for s in feature_studies
+                if s[dicomFields.PATIENT_ID][dicomFields.VALUE][0] == patient
+            )
+            study_uids.append(study_uid)
+
+        # Get all task IDs related to the corresponding study UIDs
+        task_ids = []
+        for task in feature_extraction.tasks:
+            if task.study_uid in study_uids:
+                task_ids.append(task.id)
+
+        # Map modality names to modality instance IDs
+        modality_ids = []
+        for modality in modalities:
+            modality_id = next(
+                db_modality.id
+                for db_modality in db_modalities
+                if db_modality.name == modality
+            )
+            modality_ids.append(modality_id)
+
+        # Map ROI names to ROI instance IDs
+        roi_ids = []
+        for roi in rois:
+            roi_id = next(db_roi.id for db_roi in db_rois if db_roi.name == roi)
+            roi_ids.append(roi_id)
+
+        # Map feature names to Feature Definition instance IDs
+        feature_definitions = FeatureDefinition.find_by_name(feature_names)
+        feature_definition_ids = list(map(lambda fd: fd.id, feature_definitions))
+
+        feature_values = cls.query.filter(
+            cls.feature_extraction_task_id.in_(task_ids),
+            cls.modality_id.in_(modality_ids),
+            cls.roi_id.in_(roi_ids),
+            cls.feature_definition_id.in_(feature_definition_ids),
+        ).all()
+
+        return feature_values
 
     @classmethod
     def find_by_tasks_modality_roi_features(

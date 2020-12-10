@@ -7,6 +7,8 @@ import jsonpickle.ext.pandas as jsonpickle_pd
 
 from time import time
 
+from sqlalchemy.orm import joinedload
+
 jsonpickle_pd.register_handlers()
 
 from imaginebackend_common.const import MODEL_TYPES
@@ -166,7 +168,7 @@ def models_by_album(album_id):
 
 @bp.route("/models/<id>", methods=["DELETE"])
 def model(id):
-    the_model = Model.delete_by_id(id)
+    the_model = Model.delete_by_id(id, options=joinedload(Model.feature_extraction))
     formatted_model = format_model(the_model)
     model_path = the_model.model_path
     try:

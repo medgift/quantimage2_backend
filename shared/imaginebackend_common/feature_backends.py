@@ -172,6 +172,9 @@ class PyRadiomicsFeatureBackend(FeatureBackend):
             parameters_key: self.config["setting"]
             if "setting" in self.config.keys()
             else None,
+            "imageType": self.config["imageType"]
+            if "imageType" in self.config.keys()
+            else None,
         }
 
         return normalized_config
@@ -185,7 +188,10 @@ class PyRadiomicsFeatureBackend(FeatureBackend):
         parsed_config = {
             "featureClass": parsed_features,
             "setting": self.config[parameters_key]
-            if self.config[parameters_key] is not None
+            if parameters_key in self.config.keys()
+            else {},
+            "imageType": self.config["imageType"]
+            if "imageType" in self.config.keys()
             else {},
         }
 
