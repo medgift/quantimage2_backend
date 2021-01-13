@@ -582,6 +582,9 @@ class FeatureCollection(BaseModel, db.Model):
     # Association to FeatureCollectionValues
     values = db.relationship("FeatureValue", secondary="feature_collection_value")
 
+    # Association to Models
+    models = db.relationship("Model")
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -594,7 +597,13 @@ class FeatureCollection(BaseModel, db.Model):
     def format_collection(self):
         modalities = list(set(map(lambda v: v.modality.name, self.values)))
         rois = list(set(map(lambda v: v.roi.name, self.values)))
-        return {"collection": self.to_dict(), "modalities": modalities, "rois": rois}
+        features = list(set(map(lambda v: v.feature_definition.name, self.values)))
+        return {
+            "collection": self.to_dict(),
+            "modalities": modalities,
+            "rois": rois,
+            "features": features,
+        }
 
 
 # Machine learning model
@@ -605,6 +614,7 @@ class Model(BaseModel, db.Model):
         type,
         algorithm,
         validation_strategy,
+        data_normalization,
         feature_selection,
         feature_names,
         modalities,
@@ -613,11 +623,13 @@ class Model(BaseModel, db.Model):
         user_id,
         album_id,
         feature_extraction_id,
+        feature_collection_id=None,
     ):
         self.name = name
         self.type = type
         self.algorithm = algorithm
         self.validation_strategy = validation_strategy
+        self.data_normalization = data_normalization
         self.feature_selection = feature_selection
         self.feature_names = feature_names
         self.modalities = modalities
@@ -626,6 +638,8 @@ class Model(BaseModel, db.Model):
         self.user_id = user_id
         self.album_id = album_id
         self.feature_extraction_id = feature_extraction_id
+        if feature_collection_id is not None:
+            self.feature_collection_id = feature_collection_id
 
     # Name of the model
     name = db.Column(db.String(255), nullable=False, unique=False)
@@ -638,6 +652,9 @@ class Model(BaseModel, db.Model):
 
     # Validation strategy used for the model (Stratified K-Fold, Train/Test split, etc.)
     validation_strategy = db.Column(db.String(255), nullable=True, unique=False)
+
+    # Data normalization used for the model (L2 norm, standardization, etc.)
+    data_normalization = db.Column(db.String(255), nullable=True, unique=False)
 
     # Feature selection used for the model (variance thresholding, correlation, etc.)
     feature_selection = db.Column(db.String(255), nullable=True, unique=False)
@@ -664,6 +681,10 @@ class Model(BaseModel, db.Model):
     feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
     feature_extraction = db.relationship("FeatureExtraction", back_populates="models")
 
+    # Collection
+    feature_collection_id = db.Column(db.Integer, ForeignKey("feature_collection.id"))
+    feature_collection = db.relationship("FeatureCollection", back_populates="models")
+
     @classmethod
     def find_by_album(cls, album_id, user_id):
         instances = cls.query.filter_by(album_id=album_id, user_id=user_id).all()
@@ -683,6 +704,7 @@ class Model(BaseModel, db.Model):
             "type": self.type,
             "algorithm": self.algorithm,
             "validation_strategy": self.validation_strategy,
+            "data_normalization": self.data_normalization,
             "feature_selection": self.feature_selection,
             "feature_names": self.feature_names,
             "modalities": self.modalities,
@@ -690,6 +712,7 @@ class Model(BaseModel, db.Model):
             "model_path": self.model_path,
             "user_id": self.user_id,
             "album_id": self.album_id,
+            "feature_collection_id": self.feature_collection_id,
         }
 
 

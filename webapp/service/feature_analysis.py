@@ -15,7 +15,14 @@ from melampus.classifier import MelampusClassifier
 
 
 def train_model_with_metric(
-    extraction_id, collection_id, studies, algorithm_type, modalities, rois, gt
+    extraction_id,
+    collection_id,
+    studies,
+    algorithm_type,
+    data_normalization,
+    modalities,
+    rois,
+    gt,
 ):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
@@ -74,8 +81,16 @@ def train_model_with_metric(
         # Save filtered DataFrame to CSV file (to feed it to Melampus)
         features_df.to_csv(temp.name, index=False)
 
-        # Call Melampus classifier
-        myClassifier = MelampusClassifier(temp.name, algorithm_type, labelsList)
+        # Call Melampus classifier with the right parameters
+        standardization = True if data_normalization == "standardization" else False
+        l2norm = True if data_normalization == "l2norm" else False
+        myClassifier = MelampusClassifier(
+            temp.name,
+            algorithm_type,
+            labelsList,
+            scaling=standardization,
+            normalize=l2norm,
+        )
 
         model, cv_strategy, cv_params = myClassifier.train_and_evaluate(
             random_state=extraction_id

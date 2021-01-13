@@ -108,6 +108,7 @@ def models_by_album(album_id):
         modalities = body["modalities"]
         rois = body["rois"]
         validation_strategy = None
+        data_normalization = body["data-normalization"]
         feature_selection = None
         feature_names = None
 
@@ -117,6 +118,7 @@ def models_by_album(album_id):
                 collection_id,
                 studies,
                 algorithm_type,
+                data_normalization,
                 modalities,
                 rois,
                 gt,
@@ -152,6 +154,7 @@ def models_by_album(album_id):
             f"{validation_strategy} ({validation_params['k']} folds, {validation_params['n']} repetitions)"
             if validation_strategy
             else None,
+            data_normalization,
             feature_selection,
             feature_names,
             modalities,
@@ -160,6 +163,7 @@ def models_by_album(album_id):
             g.user,
             album["album_id"],
             feature_extraction_id,
+            collection_id,
         )
         db_model.save_to_db()
 

@@ -168,7 +168,7 @@ class PyRadiomicsFeatureBackend(FeatureBackend):
 
     def format_config(self):
         normalized_config = {
-            features_key: list(self.config["featureClass"].keys()),
+            features_key: self.config["featureClass"],
             parameters_key: self.config["setting"]
             if "setting" in self.config.keys()
             else None,
@@ -180,13 +180,8 @@ class PyRadiomicsFeatureBackend(FeatureBackend):
         return normalized_config
 
     def parse_config(self):
-
-        parsed_features = {}
-        for featureName in self.config[features_key]:
-            parsed_features[featureName] = None
-
         parsed_config = {
-            "featureClass": parsed_features,
+            "featureClass": self.config[features_key],
             "setting": self.config[parameters_key]
             if parameters_key in self.config.keys()
             else {},
@@ -214,7 +209,7 @@ class RieszFeatureBackend(FeatureBackend):
 
     def format_config(self):
         normalized_config = {
-            features_key: ["riesz3d"],
+            features_key: {"riesz3d": None},
             parameters_key: self.config,
         }
 
