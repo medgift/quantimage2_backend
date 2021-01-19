@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request, g, current_app, Response
 from sklearn.preprocessing import StandardScaler
 
 from imaginebackend_common.const import MODEL_TYPES
-from imaginebackend_common.models import FeatureExtraction, Label
+from imaginebackend_common.models import FeatureExtraction, Label, FeatureCollection
 from routes.utils import decorate_if_possible
 from service.feature_extraction import get_studies_from_album
 from service.feature_transformation import (
@@ -16,6 +16,7 @@ from service.feature_transformation import (
     MODALITY_FIELD,
     ROI_FIELD,
     OUTCOME_FIELD_CLASSIFICATION,
+    transform_studies_collection_features_to_df,
 )
 
 bp = Blueprint(__name__, "charts")
@@ -27,8 +28,11 @@ def before_request():
         decorate_if_possible(request)
 
 
-@bp.route("/charts/<album_id>/lasagna")
-def lasagna_chart(album_id):
+@bp.route("/charts/<album_id>/lasagna", defaults={"collection_id": None})
+@bp.route("/charts/<album_id>/<collection_id>/lasagna")
+def lasagna_chart(album_id, collection_id):
+
+    print("collection_id", collection_id)
 
     # TODO - Remove this hard-coded test route that's used by Julien
     if album_id.isnumeric():
@@ -49,7 +53,16 @@ def lasagna_chart(album_id):
 
     extraction = FeatureExtraction.find_by_id(extraction_id)
     studies = get_studies_from_album(extraction.album_id, token)
-    header, features_df = transform_studies_features_to_df(extraction, studies)
+
+    # Whole extraction or sub-collection?
+    if collection_id:
+        collection = FeatureCollection.find_by_id(collection_id)
+
+        header, features_df = transform_studies_collection_features_to_df(
+            extraction, studies, collection
+        )
+    else:
+        header, features_df = transform_studies_features_to_df(extraction, studies)
 
     # TODO - Determine which labels we want to get???
     labels = Label.find_by_album(
