@@ -15,7 +15,7 @@ ptvsd
 Flask
 Flask-SQLAlchemy
 Flask-CORS
-Flask-SocketIO
+Flask-SocketIO<5
 
 # Celery
 Celery

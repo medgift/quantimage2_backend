@@ -13,7 +13,7 @@ requests-toolbelt
 # Flask
 Flask
 Flask-SQLAlchemy
-Flask-SocketIO
+Flask-SocketIO<5
 
 # MySQL
 mysqlclient
