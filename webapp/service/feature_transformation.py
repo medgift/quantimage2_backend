@@ -224,4 +224,8 @@ def make_study_file_name(patient_id, study_date, families):
 
 
 def make_album_file_name(album_name, families):
-    return f"features_album_{album_name}_{'-'.join(families)}.zip"
+    return f"features_album_{album_name.replace(' ', '-')}_{'-'.join(families)}.zip"
+
+
+def make_album_collection_file_name(album_name, collection_name):
+    return f"features_album_{album_name.replace(' ', '-')}_{collection_name.replace(' ', '-')}.zip"

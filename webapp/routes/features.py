@@ -234,7 +234,7 @@ def download_extraction_by_id(id):
         for group_name, group_data in grouped_features:
             group_csv_content = group_data.to_csv(index=False)
 
-            group_file_name = f"features_album_{album_name}_{'-'.join(feature_families)}_{'-'.join(group_name)}.csv"
+            group_file_name = f"features_album_{album_name.replace(' ', '-')}_{'-'.join(feature_families)}_{'-'.join(group_name)}.csv"
             zip_file.writestr(group_file_name, group_csv_content)
 
     file_name = make_album_file_name(album_name, feature_families)
@@ -242,7 +242,10 @@ def download_extraction_by_id(id):
     return Response(
         zip_buffer.getvalue(),
         mimetype="application/zip",
-        headers={"Content-disposition": f"attachment; filename={file_name}"},
+        headers={
+            "Content-disposition": f"attachment; filename={file_name}",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
     )
 
 
