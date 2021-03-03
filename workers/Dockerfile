@@ -39,7 +39,7 @@ RUN pip install --no-cache-dir -r requirements-okapy.txt
 
 # Install okapy manually (temporary)
 #RUN pip install --index-url https://test.pypi.org/simple/ --no-deps okapy==0.2.0
-RUN pip install git+https://${GIT_ACCESS_TOKEN}@github.com/voreille/okapy.git
+RUN pip install git+https://${GIT_ACCESS_TOKEN}@github.com/voreille/okapy.git@quantimage2
 
 
 ENV MCR_HOME /mcr/v97
