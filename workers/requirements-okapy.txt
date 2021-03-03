@@ -8,3 +8,4 @@ pyradiomics
 six
 scikit-image
 termcolor
+tqdm

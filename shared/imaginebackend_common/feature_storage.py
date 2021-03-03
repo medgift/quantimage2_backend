@@ -33,6 +33,8 @@ def store_features(feature_extraction_task_id, feature_family_id, features):
     # Store feature values
     feature_value_instances = []
 
+    # Build instances to save in bulk
+
     # For each modality
     for modality, rois in features.items():
 
@@ -56,18 +58,27 @@ def store_features(feature_extraction_task_id, feature_family_id, features):
                     and fd.feature_family_id == feature_family_id,
                 )
 
-                feature_value_instance = FeatureValue(
-                    feature_value,
-                    feature_definition_instance.id,
-                    feature_extraction_task_id,
-                    modality_instance.id,
-                    roi_instance.id,
-                )
-                feature_value_instance.save_to_db()
+                # feature_value_instance = FeatureValue(
+                #     feature_value,
+                #     feature_definition_instance.id,
+                #     feature_extraction_task_id,
+                #     modality_instance.id,
+                #     roi_instance.id,
+                # )
+                # feature_value_instance.save_to_db()
+
+                feature_value_instance = {
+                    "value": feature_value,
+                    "feature_definition_id": feature_definition_instance.id,
+                    "feature_extraction_task_id": feature_extraction_task_id,
+                    "modality_id": modality_instance.id,
+                    "roi_id": roi_instance.id,
+                }
 
                 feature_value_instances.append(feature_value_instance)
 
-    print(feature_value_instances)
+    # Batch create the instances
+    FeatureValue.save_features_batch(feature_value_instances)
     return feature_value_instances
 
 

@@ -420,6 +420,11 @@ class FeatureValue(BaseModel, db.Model):
         self.roi_id = roi_id
 
     @classmethod
+    def save_features_batch(cls, feature_instances):
+        db.session.bulk_insert_mappings(cls, feature_instances)
+        db.session.commit()
+
+    @classmethod
     def get_for_collection(cls, collection):
         names = []
         features_formatted = []

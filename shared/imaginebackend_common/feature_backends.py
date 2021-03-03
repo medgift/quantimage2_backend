@@ -160,7 +160,7 @@ class OkapyFeatureBackend(FeatureBackend):
         extractor = OkapyFeatureExtractor(parsed_config)
 
         print(
-            f"Extracting PyRadiomics Features with image {image_path} and labels {mask_path} for modality {modality}"
+            f"Extracting Okapy Features with image {image_path} and labels {mask_path} for modality {modality}"
         )
 
         result = extractor.extract(image_path, mask_path, modality)
