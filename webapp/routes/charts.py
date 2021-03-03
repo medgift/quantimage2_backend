@@ -1,3 +1,4 @@
+import json
 import os
 
 import pandas
@@ -115,7 +116,9 @@ def format_lasagna_data(features_df, labels):
     )
 
     # Features
-    features_list = full_df.to_dict(orient="records")
+    # features_list = full_df.to_dict(orient="records")
+
+    features_list = json.loads(full_df.to_json(orient="records"))
 
     formatted_features = []
 

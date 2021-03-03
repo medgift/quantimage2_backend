@@ -13,6 +13,8 @@ RUN /mcr_setup/MATLAB_Runtime_R2019b_Update_1_glnxa64/install -inputFile /instal
 FROM python:3.6
 MAINTAINER Roger Schaer
 
+ARG GIT_ACCESS_TOKEN
+
 # Copy the MCR
 COPY --from=build-env /mcr /mcr
 
@@ -36,7 +38,8 @@ RUN pip install git+https://github.com/orfi2017/quantimage-melampus.git@developm
 RUN pip install --no-cache-dir -r requirements-okapy.txt
 
 # Install okapy manually (temporary)
-RUN pip install --index-url https://test.pypi.org/simple/ --no-deps okapy==0.1.9
+#RUN pip install --index-url https://test.pypi.org/simple/ --no-deps okapy==0.2.0
+RUN pip install git+https://${GIT_ACCESS_TOKEN}@github.com/voreille/okapy.git
 
 
 ENV MCR_HOME /mcr/v97

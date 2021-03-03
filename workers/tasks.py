@@ -440,7 +440,9 @@ def extract_all_features(
 
                         print(f"    Processing label {label}")
 
-                        features = extractor.extract_features(image_path, mask_path)
+                        features = extractor.extract_features(
+                            image_path, mask_path, modality=modality
+                        )
                         features_dict[modality][label].update(features)
 
                 print(f"!!!!!!!!!!!!Final Features Dictionary!!!!!!!!!")

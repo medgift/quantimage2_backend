@@ -28,6 +28,8 @@ services:
     build:
       context: .
       dockerfile: ./workers/Dockerfile
+      args:
+        - GIT_ACCESS_TOKEN=${GIT_ACCESS_TOKEN}
     environment:
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}

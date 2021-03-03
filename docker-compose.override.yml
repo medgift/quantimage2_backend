@@ -24,6 +24,7 @@ services:
       - "roger:153.109.130.143"
     volumes:
       - ./workers:/usr/src/app
+      - ./venv/src/okapy:/usr/local/lib/python3.6/site-packages/okapy
       - /data/imagine-data:/imagine-data
     environment:
       #- CELERY_RDB_HOST=0.0.0.0
@@ -33,8 +34,8 @@ services:
       - PYTHON_ENV=nodebug
     #ports:
       #- 34000-34100:34000-34100
-    #command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo"]
-    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO"]
+    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo"]
+    #command: ["celery", "--app=tasks", "worker", "--loglevel=INFO"]
 
   flower:
     ports:

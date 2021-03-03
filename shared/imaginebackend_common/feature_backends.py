@@ -152,8 +152,49 @@ class FeatureBackend:
         pass
 
 
+class OkapyFeatureBackend(FeatureBackend):
+    def extract_features(self, image_path, mask_path, modality=None):
+        from .feature_extractors import OkapyFeatureExtractor
+
+        parsed_config = self.parse_config()
+        extractor = OkapyFeatureExtractor(parsed_config)
+
+        print(
+            f"Extracting PyRadiomics Features with image {image_path} and labels {mask_path} for modality {modality}"
+        )
+
+        result = extractor.extract(image_path, mask_path, modality)
+        return result
+
+    def format_config(self):
+        normalized_config = {
+            features_key: self.config["featureClass"],
+            parameters_key: self.config["setting"]
+            if "setting" in self.config.keys()
+            else {},
+            "imageType": self.config["imageType"]
+            if "imageType" in self.config.keys()
+            else {},
+        }
+
+        return normalized_config
+
+    def parse_config(self):
+        parsed_config = {
+            "featureClass": self.config[features_key],
+            "setting": self.config[parameters_key]
+            if parameters_key in self.config.keys()
+            else {},
+            "imageType": self.config["imageType"]
+            if "imageType" in self.config.keys()
+            else {},
+        }
+
+        return parsed_config
+
+
 class PyRadiomicsFeatureBackend(FeatureBackend):
-    def extract_features(self, image_path, mask_path):
+    def extract_features(self, image_path, mask_path, **kwargs):
         from .feature_extractors import PyRadiomicsFeatureExtractor
 
         parsed_config = self.parse_config()
@@ -194,7 +235,7 @@ class PyRadiomicsFeatureBackend(FeatureBackend):
 
 
 class RieszFeatureBackend(FeatureBackend):
-    def extract_features(self, image_path, mask_path):
+    def extract_features(self, image_path, mask_path, **kwargs):
         from .feature_extractors import RieszFeatureExtractor
 
         parsed_config = self.parse_config()
@@ -241,4 +282,5 @@ class FeatureParameter:
 feature_backends_map = {
     "pyradiomics": PyRadiomicsFeatureBackend,
     "riesz": RieszFeatureBackend,
+    "okapy": OkapyFeatureBackend,
 }

@@ -8,20 +8,29 @@ def store_features(feature_extraction_task_id, feature_family_id, features):
     modalities = list(features.keys())
     modality_instances = store_modalities(modalities)
 
-    first_modality = next(iter(features.values()))
-    rois = list(first_modality.keys())
+    # Get feature names from all modalities at least
+    # as there can be different features for them
+    feature_names = set()
+    rois = set()
+    for modality in features:
+        rois |= set(features[modality].keys())
+        for region in features[modality]:
+            feature_names |= set(features[modality][region].keys())
+
+    # first_modality = next(iter(features.values()))
+    # rois = list(first_modality.keys())
     roi_instances = store_rois(rois)
 
-    first_roi = next(iter(first_modality.values()))
+    # first_roi = next(iter(first_modality.values()))
 
-    filtered_features = filter_out_diagnostics(first_roi)
-    feature_names = list(filtered_features.keys())
+    filtered_feature_names = filter_out_diagnostic_feature_names(feature_names)
+    # filtered_features = filter_out_diagnostics(first_roi)
+    # feature_names = list(filtered_features.keys())
     feature_definition_instances = store_feature_definitions(
-        feature_names, feature_family_id
+        filtered_feature_names, feature_family_id
     )
 
     # Store feature values
-
     feature_value_instances = []
 
     # For each modality
@@ -107,3 +116,9 @@ def filter_out_diagnostics(features_dict):
     }
 
     return filtered_features_dict
+
+
+def filter_out_diagnostic_feature_names(feature_names):
+    leave_out_prefix = "diagnostics"
+
+    return [n for n in feature_names if not n.startswith(leave_out_prefix)]

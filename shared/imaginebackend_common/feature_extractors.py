@@ -2,9 +2,20 @@ import json
 
 import os
 import subprocess
+from okapy.featureextractor import featureextractor as okapy_featureextractor
 from radiomics import featureextractor
 from subprocess import PIPE
 from celery.contrib import rdb
+
+
+class OkapyFeatureExtractor:
+    def __init__(self, config):
+        self.config = config
+
+    def extract(self, images_path, labels_path, modality):
+        extractor = okapy_featureextractor.create_extractor(modality, self.config)
+        result = extractor.execute(images_path, labels_path)
+        return result
 
 
 class PyRadiomicsFeatureExtractor:

@@ -1,3 +1,5 @@
+import json
+
 from flask import Blueprint, jsonify, request, g, current_app, Response
 
 import numpy
@@ -127,9 +129,9 @@ def extraction_features_by_id(id):
     # Concatenate modalities & ROIs for now
     # features_df = concatenate_modalities_rois(features_df, [], [])
 
-    return jsonify(
-        {"header": header, "features": features_df.to_dict(orient="records")}
-    )
+    features_json = json.loads(features_df.to_json(orient="records"))
+
+    return jsonify({"header": header, "features": features_json})
 
 
 # Get data points (PatientID/ROI) for a given extraction

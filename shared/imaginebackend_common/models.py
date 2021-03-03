@@ -213,15 +213,28 @@ class FeatureExtraction(BaseModel, db.Model):
     collections = db.relationship("FeatureCollection")
 
     def feature_names(self):
-        feature_names = []
+        feature_names = set()
+        feature_family_names = []
 
         for feature_extraction_family in self.families:
             family_definitions = (
                 feature_extraction_family.feature_family.feature_definitions
             )
-            feature_names.extend(list(map(lambda fd: fd.name, family_definitions)))
+            feature_family_names.extend(
+                list(map(lambda fd: fd.name, family_definitions))
+            )
 
-        return feature_names
+        all_features_used = False
+
+        for feature_extraction_task in self.tasks:
+            if all_features_used:
+                break
+            for feature_value in feature_extraction_task.feature_values:
+                if all_features_used:
+                    break
+                feature_names.add(feature_value.feature_definition.name)
+
+        return sorted(list(feature_names))
 
     def to_dict(self):
         return {
