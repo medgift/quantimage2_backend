@@ -109,9 +109,9 @@ def extraction_collection_features(extraction_id, collection_id):
         extraction, studies, collection
     )
 
-    return jsonify(
-        {"header": header, "features": features_df.to_dict(orient="records")}
-    )
+    features_json = json.loads(features_df.to_json(orient="records"))
+
+    return jsonify({"header": header, "features": features_json})
 
 
 # Get feature details for a given extraction
