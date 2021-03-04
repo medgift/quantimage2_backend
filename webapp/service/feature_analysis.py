@@ -138,6 +138,8 @@ def concatenate_modalities_rois(featuresDf, modalities, rois):
             )
             prefix = "-".join(group)
             withoutModalityAndROIDf = withoutModalityAndROIDf.add_prefix(prefix + "_")
+            # Drop columns with NaNs (should not exist anyway)
+            withoutModalityAndROIDf.dropna(axis=1, inplace=True)
             to_concat.append(withoutModalityAndROIDf)
 
     # Add back the Patient ID at the end
