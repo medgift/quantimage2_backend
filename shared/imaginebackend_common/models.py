@@ -2,6 +2,7 @@ import decimal, datetime
 import pandas
 
 from flask_sqlalchemy import SQLAlchemy
+from more_itertools import first_true
 from sqlalchemy import ForeignKey, Table, Column, Integer
 from sqlalchemy.orm import joinedload
 from ttictoc import tic, toc
@@ -224,17 +225,7 @@ class FeatureExtraction(BaseModel, db.Model):
                 list(map(lambda fd: fd.name, family_definitions))
             )
 
-        all_features_used = False
-
-        for feature_extraction_task in self.tasks:
-            if all_features_used:
-                break
-            for feature_value in feature_extraction_task.feature_values:
-                if all_features_used:
-                    break
-                feature_names.add(feature_value.feature_definition.name)
-
-        return sorted(list(feature_names))
+        return sorted(list(feature_family_names))
 
     def to_dict(self):
         return {
@@ -438,25 +429,53 @@ class FeatureValue(BaseModel, db.Model):
 
     @classmethod
     def get_for_extraction(cls, feature_extraction):
+        modalities = Modality.find_all()
+        rois = ROI.find_all()
+        definitions = FeatureDefinition.find_all()
+        feature_extraction_tasks = FeatureExtractionTask.query.filter_by(
+            feature_extraction_id=feature_extraction.id
+        )
+
+        modalities_map = {modality.id: modality.name for modality in modalities}
+        rois_map = {roi.id: roi.name for roi in rois}
+        definitions_map = {definition.id: definition.name for definition in definitions}
+        feature_tasks_map = {
+            task.id: task.study_uid for task in feature_extraction_tasks
+        }
+
+        feature_extraction_task_ids = list(
+            map(
+                lambda feature_extraction_task: feature_extraction_task.id,
+                feature_extraction_tasks,
+            )
+        )
 
         tic()
-        complete_feature_extraction = FeatureExtraction.find_by_id_populate(
-            feature_extraction.id
-        )
+        feature_values = FeatureValue.query.filter(
+            FeatureValue.feature_extraction_task_id.in_(feature_extraction_task_ids)
+        ).all()
         elapsed = toc()
-        print("Getting populated Extraction from DB took", elapsed)
+        print("Getting the feature values from the DB took", elapsed)
 
         features_formatted = []
         names = []
 
         tic()
-        for feature_task in complete_feature_extraction.tasks:
-            for feature_value in feature_task.feature_values:
-                features_formatted.append(
-                    feature_value.to_formatted_dict(study_uid=feature_task.study_uid)
-                )
-                if feature_value.feature_definition.name not in names:
-                    names.append(feature_value.feature_definition.name)
+        for feature_value in feature_values:
+            features_formatted.append(
+                {
+                    "study_uid": feature_tasks_map[
+                        feature_value.feature_extraction_task_id
+                    ],
+                    "modality": modalities_map[feature_value.modality_id],
+                    "roi": rois_map[feature_value.roi_id],
+                    "name": definitions_map[feature_value.feature_definition_id],
+                    "value": feature_value.value,
+                }
+            )
+
+            if feature_value.feature_definition.name not in names:
+                names.append(feature_value.feature_definition.name)
 
         elapsed = toc()
         print("Formatting features took", elapsed)

@@ -19,7 +19,7 @@ Flask-SocketIO<5
 mysqlclient
 
 # SQLAlchemy
-SQLAlchemy
+SQLAlchemy<1.4
 
 # Keycloak
 python-keycloak-client

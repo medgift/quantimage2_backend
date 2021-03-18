@@ -30,7 +30,7 @@ requests
 python-keycloak-client
 
 # SQLAlchemy
-SQLAlchemy
+SQLAlchemy<1.4
 
 # MySQL
 mysqlclient
@@ -57,3 +57,6 @@ ttictoc
 scikit-learn
 pandas
 lifelines
+
+# Iteration
+more-itertools
