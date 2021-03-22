@@ -32,7 +32,7 @@ RUN pip install --no-cache-dir -r requirements-melampus.txt
 
 # Install melampus manually (temporary)
 #RUN pip install --index-url https://test.pypi.org/simple/ --no-deps quantimage-melampus==0.0.7
-RUN pip install git+https://github.com/orfi2017/quantimage-melampus.git@development
+RUN pip install git+https://github.com/medgift/quantimage-melampus.git@dev-da
 
 # Install okapy dependencies (temporary)
 RUN pip install --no-cache-dir -r requirements-okapy.txt
