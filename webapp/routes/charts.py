@@ -10,6 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from imaginebackend_common.const import MODEL_TYPES
 from imaginebackend_common.models import FeatureExtraction, Label, FeatureCollection
 from routes.utils import decorate_if_possible
+from service.feature_analysis import concatenate_modalities_rois
 from service.feature_extraction import get_studies_from_album
 from service.feature_transformation import (
     transform_studies_features_to_df,
@@ -19,6 +20,8 @@ from service.feature_transformation import (
     OUTCOME_FIELD_CLASSIFICATION,
     transform_studies_collection_features_to_df,
 )
+
+from melampus.feature_ranking import MelampusFeatureRank
 
 bp = Blueprint(__name__, "charts")
 
@@ -93,6 +96,39 @@ def format_chart_labels(labels):
 
 def format_lasagna_data(features_df, labels):
 
+    # Flatten features by Modality & ROI to calculate ranks
+    concatenated_features_df = concatenate_modalities_rois(
+        features_df,
+        list(features_df[MODALITY_FIELD].unique()),
+        list(features_df[ROI_FIELD].unique()),
+    )
+
+    # Reset the index to avoid problems with Melampus
+    concatenated_features_df.reset_index(drop=True, inplace=True)
+
+    # Get the outcomes in the same order as they appear in the DataFrame
+    outcomes = []
+    for index, row in concatenated_features_df.iterrows():
+        label_to_add = next(
+            label.label_content[OUTCOME_FIELD_CLASSIFICATION]
+            for label in labels
+            if (label.patient_id == row[PATIENT_ID_FIELD])
+        )
+        outcomes.append(label_to_add)
+
+    # Feature Ranking
+    feature_ranking = MelampusFeatureRank(
+        None,
+        concatenated_features_df,
+        None,
+        outcomes,
+        id_names_map={"patient_id": PATIENT_ID_FIELD},
+    )
+
+    ranked_features = feature_ranking.rank_by_univariate_f(return_type="names")
+
+    feature_rank_map = {k: v for v, k in enumerate(list(ranked_features))}
+
     features_df_reindexed = features_df.reset_index(drop=True)
 
     # Standardize features (by column)
@@ -130,14 +166,17 @@ def format_lasagna_data(features_df, labels):
         roi = patient_record[ROI_FIELD]
 
         for feature_name, feature_value in patient_record.items():
+            feature_id = "-".join([modality, roi]) + "-" + feature_name
+
             # Don't add the Patient ID as another feature
-            if feature_name not in always_present_fields:
+            if feature_name not in always_present_fields and feature_value is not None:
                 formatted_features.append(
                     {
                         PATIENT_ID_FIELD: patient_id,
                         MODALITY_FIELD: modality,
                         ROI_FIELD: roi,
-                        "feature_id": "-".join([modality, roi]) + "-" + feature_name,
+                        "feature_rank": feature_rank_map[feature_id],
+                        "feature_id": feature_id,
                         "feature_name": feature_name,
                         "feature_value": feature_value,
                     }

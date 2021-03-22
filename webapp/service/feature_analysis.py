@@ -86,8 +86,10 @@ def train_model_with_metric(
         l2norm = True if data_normalization == "l2norm" else False
         myClassifier = MelampusClassifier(
             temp.name,
-            algorithm_type,
+            None,
+            None,
             labelsList,
+            algorithm_name=algorithm_type,
             scaling=standardization,
             normalize=l2norm,
         )
@@ -137,7 +139,7 @@ def concatenate_modalities_rois(featuresDf, modalities, rois):
                 "PatientID", drop=True
             )
             prefix = "-".join(group)
-            withoutModalityAndROIDf = withoutModalityAndROIDf.add_prefix(prefix + "_")
+            withoutModalityAndROIDf = withoutModalityAndROIDf.add_prefix(prefix + "-")
             # Drop columns with NaNs (should not exist anyway)
             withoutModalityAndROIDf.dropna(axis=1, inplace=True)
             to_concat.append(withoutModalityAndROIDf)
