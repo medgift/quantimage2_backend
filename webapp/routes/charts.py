@@ -125,7 +125,9 @@ def format_lasagna_data(features_df, labels):
         id_names_map={"patient_id": PATIENT_ID_FIELD},
     )
 
-    ranked_features = feature_ranking.rank_by_univariate_f(return_type="names")
+    ranked_features = feature_ranking.rank_by_univariate_f(
+        return_type="names", ascending=False
+    )
 
     feature_rank_map = {k: v for v, k in enumerate(list(ranked_features))}
 
@@ -169,13 +171,15 @@ def format_lasagna_data(features_df, labels):
             feature_id = "-".join([modality, roi]) + "-" + feature_name
 
             # Don't add the Patient ID as another feature
-            if feature_name not in always_present_fields and feature_value is not None:
+            if feature_name not in always_present_fields:
                 formatted_features.append(
                     {
                         PATIENT_ID_FIELD: patient_id,
                         MODALITY_FIELD: modality,
                         ROI_FIELD: roi,
-                        "feature_rank": feature_rank_map[feature_id],
+                        "feature_rank": feature_rank_map[feature_id]
+                        if feature_value is not None
+                        else None,
                         "feature_id": feature_id,
                         "feature_name": feature_name,
                         "feature_value": feature_value,
