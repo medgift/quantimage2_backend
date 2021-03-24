@@ -896,3 +896,37 @@ class Annotation(BaseModel, db.Model):
 Annotation.parent = db.relationship(
     "Annotation", uselist=False, remote_side=[Annotation.id], lazy="joined"
 )
+
+# Navigation History
+class NavigationHistory(BaseModel, db.Model):
+    def __init__(self, path, user_id):
+        self.path = path
+        self.user_id = user_id
+
+    # Path
+    path = db.Column(db.String(255), nullable=False, unique=False)
+
+    # User who created the label
+    user_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    @classmethod
+    def find_by_user(cls, user_id):
+        instances = cls.query.filter_by(user_id=user_id).all()
+        return instances
+
+    @classmethod
+    def create_entry(cls, path, user_id):
+
+        entry = NavigationHistory(path, user_id)
+        entry.save_to_db()
+
+        return entry
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "path": self.path,
+            "user_id": self.user_id,
+        }
