@@ -58,7 +58,9 @@ class BaseModel(object):
 
     @classmethod
     def get_or_create(cls, criteria=None, defaults=None):
-        instance = db.session.query(cls).filter_by(**criteria).one_or_none()
+        instance = (
+            db.session.query(cls).filter_by(**criteria).with_for_update().one_or_none()
+        )
         if instance:
             return instance, False
         else:
