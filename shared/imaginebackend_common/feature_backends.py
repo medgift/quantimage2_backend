@@ -14,10 +14,10 @@ class FeatureBackend:
         self.config = config
 
     @classmethod
-    def pre_process_data(cls, dicom_dir):
+    def pre_process_data(cls, dicom_dir, labels=None):
         # Use Valentin's DicomWalker to convert DICOM to NII
         # as well as resample the images (based on modality)
-        conversion_result, output_dir = cls.convert_dicom_to_nii(dicom_dir)
+        conversion_result, output_dir = cls.convert_dicom_to_nii(dicom_dir, labels)
 
         return conversion_result, output_dir
         # Go through results files and extract features

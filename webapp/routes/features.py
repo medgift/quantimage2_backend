@@ -287,9 +287,13 @@ def extract_album(album_id):
 
     feature_families_map = request.json
 
+    # TODO - Remove this
+    # Get album metadata for hard-coded labels mapping
+    album_metadata = get_album_details(album_id, token)
+
     # Define feature families to extract
     feature_extraction = run_feature_extraction(
-        user_id, album_id, feature_families_map, token
+        user_id, album_id, album_metadata["name"], feature_families_map, token
     )
 
     return jsonify(format_extraction(feature_extraction))

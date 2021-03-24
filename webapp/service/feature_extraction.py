@@ -25,7 +25,9 @@ from imaginebackend_common.models import (
 )
 
 
-def run_feature_extraction(user_id, album_id, feature_families_map, token=None):
+def run_feature_extraction(
+    user_id, album_id, album_name, feature_families_map, token=None
+):
 
     tic()
 
@@ -100,6 +102,7 @@ def run_feature_extraction(user_id, album_id, feature_families_map, token=None):
                     feature_extraction_task.id,
                     study_uid,
                     # features_path,
+                    album_name,
                     config_path,
                 ],
                 kwargs={},

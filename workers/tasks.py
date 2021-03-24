@@ -95,6 +95,7 @@ def run_extraction(
     feature_extraction_task_id,
     study_uid,
     # features_path,
+    album_name,
     config_path,
 ):
     try:
@@ -158,6 +159,7 @@ def run_extraction(
             feature_extraction_task_id=feature_extraction_task_id,
             current_step=current_step,
             steps=steps,
+            album_name=album_name,
         )
 
         # Delete download DIR
@@ -371,6 +373,7 @@ def extract_all_features(
     feature_extraction_task_id: int = None,
     current_step: int = None,
     steps: int = None,
+    album_name: str = None,
 ) -> Dict[str, Any]:
     """
     Update the progress of a feature extraction Task
@@ -382,6 +385,7 @@ def extract_all_features(
     :param feature_extraction_task_id: The ID of the specific Feature Task (for a given study)
     :param current_step: The current step (out of N steps) in the extraction process (should be 1 at this point)
     :param steps: The total number of steps in the extraction process (currently 3 - Download, Conversion, Extraction)
+    :param album_name: The name of the Kheops album to which the study belongs (for customizing label extraction)
     :returns: A dictionary with the extracted features
     """
     try:
@@ -401,8 +405,18 @@ def extract_all_features(
             status_message,
         )
 
+        # TODO - Remove these hard-coded cases
+        if "HECKTOR" in album_name:
+            labels = ["GTVt", "GTVn"]
+        elif "Lymphangitis" in album_name:
+            labels = ["GTV T", "GTV L"]
+        else:
+            labels = None
+
         # Pre-process the data ONCE for all backends
-        conversion_result, dir_to_delete = FeatureBackend.pre_process_data(dicom_dir)
+        conversion_result, dir_to_delete = FeatureBackend.pre_process_data(
+            dicom_dir, labels=labels
+        )
 
         # Get input files map to process (MODALITY -> [LABEL, ...])
         input_files = FeatureBackend.get_input_files(conversion_result)
