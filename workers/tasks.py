@@ -407,7 +407,7 @@ def extract_all_features(
 
         # TODO - Remove these hard-coded cases
         if "HECKTOR" in album_name:
-            labels = ["GTVt", "GTVn"]
+            labels = ["GTVt"]
         elif "Lymphangitis" in album_name:
             labels = ["GTV T", "GTV L"]
         else:
