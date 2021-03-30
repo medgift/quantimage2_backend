@@ -34,34 +34,8 @@ def train_model_with_metric(
     else:
         header, features_df = transform_studies_features_to_df(extraction, studies)
 
-    # # Transform array to CSV in order to create a DataFrame
-    # mem_file = io.StringIO()
-    # csv_writer = csv.writer(mem_file)
-    # csv_writer.writerow(header)
-    # csv_writer.writerows(features)
-    # mem_file.seek(0)
-    #
-    # # Create DataFrame from CSV data
-    # featuresDf = pandas.read_csv(mem_file, dtype={"PatientID": np.str})
-
-    # TODO - How to deal with multiple modalities & ROIs? - Concatenate for now...
-    # Grab just CT & GTV_L as a test
-    # featuresDf = featuresDf[
-    #     (featuresDf["Modality"] == "CT") & (featuresDf["ROI"] == "GTV_L")
-    # ]
-
-    # Keep just GTV_L for now
-    # featuresDf = featuresDf[(featuresDf["ROI"] == "GTV_L")]
-
-    # Drop the ROI column
-    # featuresDf = featuresDf.drop(["ROI"], axis=1)
-
     # TODO - Analyze what is the best thing to do, try concatenation so far
-    features_df = concatenate_modalities_rois(features_df, modalities, rois)
-
-    # TODO - Should Melampus be able to deal with string columns?
-    # Drop modality & ROI from the dataframe, as Melampus doesn't support string values
-    # featuresDf = featuresDf.drop(["Modality", "ROI"], axis=1)
+    features_df = concatenate_modalities_rois(features_df)
 
     # Get Labels DataFrame
     # TODO - Allow choosing a mode (Patient only or Patient + ROI)
@@ -119,7 +93,7 @@ def train_model_with_metric(
     return model, cv_strategy, cv_params
 
 
-def concatenate_modalities_rois(featuresDf, modalities, rois):
+def concatenate_modalities_rois(featuresDf, keep_identifiers=False):
     # Concatenate features from the various modalities & ROIs (if necessary)
 
     # Keep PatientID
@@ -131,18 +105,15 @@ def concatenate_modalities_rois(featuresDf, modalities, rois):
     # Groupe dataframes by Modality & ROI
     for group, groupDf in featuresDf.groupby(["Modality", "ROI"]):
         # Only keep selected modalities & ROIs
-        if (len(modalities) == 0 and len(rois) == 0) or (
-            group[0] in modalities and group[1] in rois
-        ):
-            withoutModalityAndROIDf = groupDf.drop(["Modality", "ROI"], axis=1)
-            withoutModalityAndROIDf = withoutModalityAndROIDf.set_index(
-                "PatientID", drop=True
-            )
-            prefix = "-".join(group)
-            withoutModalityAndROIDf = withoutModalityAndROIDf.add_prefix(prefix + "-")
-            # Drop columns with NaNs (should not exist anyway)
-            withoutModalityAndROIDf.dropna(axis=1, inplace=True)
-            to_concat.append(withoutModalityAndROIDf)
+        withoutModalityAndROIDf = groupDf.drop(["Modality", "ROI"], axis=1)
+        withoutModalityAndROIDf = withoutModalityAndROIDf.set_index(
+            "PatientID", drop=True
+        )
+        prefix = "-".join(group)
+        withoutModalityAndROIDf = withoutModalityAndROIDf.add_prefix(prefix + "-")
+        # Drop columns with NaNs (should not exist anyway)
+        withoutModalityAndROIDf.dropna(axis=1, inplace=True)
+        to_concat.append(withoutModalityAndROIDf)
 
     # Add back the Patient ID at the end
     concatenatedDf = pandas.concat(to_concat, axis=1)

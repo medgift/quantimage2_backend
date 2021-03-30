@@ -90,86 +90,7 @@ def transform_studies_features_to_df(feature_extraction, studies):
     # Get features of all studies directly in a single request, for more efficiency
     features_df, names = get_extraction_features(feature_extraction, studies)
 
-    # for study in studies:
-    #     patient_id = study[dicomFields.PATIENT_ID][dicomFields.VALUE][0]
-    #     study_uid = study[dicomFields.STUDY_UID][dicomFields.VALUE][0]
-    #     study_date = study[dicomFields.STUDY_DATE][dicomFields.VALUE][0]
-    #
-    #     # Stop this for now, it should be unique usually
-    #     # dated_patient_id = f"{patient_id}_{study_date}"
-    #
-    #     study_tasks = list(
-    #         filter(lambda task: task.study_uid == study_uid, feature_extraction.tasks)
-    #     )
-    #
-    #     [study_header, study_data] = transform_study_features_to_tabular(
-    #         study_tasks, patient_id
-    #     )
-    #
-    #     if not header:
-    #         header = study_header
-    #     data += study_data
-    #
-    #     i += 1
-    #     print(f"Transformed {i}/{len(studies)} studies")
-
     return names, features_df
-
-
-def transform_study_features_to_tabular(tasks, patient_id):
-    feature_contents = []
-
-    # Get the feature contents
-    for task in tasks:
-        feature_content = read_feature_file(task.features_path)
-        feature_contents.append(feature_content)
-
-    # Group the features by modality & region
-    grouped_filtered_features = {}
-    leave_out_prefix = "diagnostics_"
-    for feature_content in feature_contents:
-        for modality, modality_features in feature_content.items():
-            if modality not in grouped_filtered_features:
-                grouped_filtered_features[modality] = {}
-
-            for label, label_features in modality_features.items():
-                if label not in grouped_filtered_features[modality]:
-                    grouped_filtered_features[modality][
-                        label
-                    ] = collections.OrderedDict({"patientID": patient_id})
-
-                filtered_label_features = {
-                    feature_name: feature_value
-                    for feature_name, feature_value in label_features.items()
-                    if not feature_name.startswith(leave_out_prefix)
-                }
-
-                grouped_filtered_features[modality][label].update(
-                    filtered_label_features
-                )
-
-    csv_header = assemble_csv_header(grouped_filtered_features)
-    csv_data = assemble_csv_data_lines(grouped_filtered_features, csv_header)
-
-    return [csv_header, csv_data]
-
-
-def separate_features_by_modality_and_roi(all_features_as_csv):
-    string_mem = io.StringIO(all_features_as_csv)
-    df = pandas.read_csv(string_mem)
-
-    # Group data by modality & label in order
-    # to save separate CSV files in a ZIP file
-    features_by_group = {}
-    for idx, row in df.iterrows():
-        key = f"{row.Modality}_{row.ROI}"
-
-        if key not in features_by_group:
-            features_by_group[key] = []
-
-        features_by_group[key].append(row.values.tolist())
-
-    return features_by_group
 
 
 def assemble_csv_header(features_by_modality_and_label):
@@ -219,12 +140,12 @@ def get_csv_file_content(rows):
     return mem_file.getvalue()
 
 
-def make_study_file_name(patient_id, study_date, families):
-    return f"features_{patient_id}_{study_date}_{'-'.join(families)}.csv"
+def make_study_file_name(patient_id, study_date):
+    return f"features_{patient_id}_{study_date}.csv"
 
 
-def make_album_file_name(album_name, families):
-    return f"features_album_{album_name.replace(' ', '-')}_{'-'.join(families)}.zip"
+def make_album_file_name(album_name):
+    return f"features_album_{album_name.replace(' ', '-')}.zip"
 
 
 def make_album_collection_file_name(album_name, collection_name):

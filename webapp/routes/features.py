@@ -2,6 +2,8 @@ import json
 
 from flask import Blueprint, jsonify, request, g, current_app, Response
 
+import yaml
+
 import numpy
 
 from random import randint
@@ -31,12 +33,8 @@ from imaginebackend_common.models import (
     FeatureCollection,
 )
 from service.feature_transformation import (
-    transform_study_features_to_tabular,
-    make_study_file_name,
     transform_studies_features_to_df,
-    get_csv_file_content,
     make_album_file_name,
-    separate_features_by_modality_and_roi,
     MODALITY_FIELD,
     ROI_FIELD,
     transform_studies_collection_features_to_df,
@@ -70,24 +68,6 @@ def hello():
     return "Hello IMAGINE!"
 
 
-# Extraction of a study
-@bp.route("/extractions/study/<study_uid>")
-def extraction_by_study(study_uid):
-    user_id = g.user
-
-    # Find the latest task linked to this study
-    latest_task_of_study = FeatureExtractionTask.find_latest_by_user_and_study(
-        user_id, study_uid
-    )
-
-    # Use the latest feature extraction for this study OR an album that includes this study
-    if latest_task_of_study:
-        latest_extraction_of_study = latest_task_of_study.feature_extraction
-        return jsonify(format_extraction(latest_extraction_of_study))
-    else:
-        return jsonify(None)
-
-
 # Get feature payload for a given feature extraction
 @bp.route("/extractions/<id>")
 def extraction_by_id(id):
@@ -117,17 +97,12 @@ def extraction_collection_features(extraction_id, collection_id):
 # Get feature details for a given extraction
 @bp.route("/extractions/<id>/feature-details")
 def extraction_features_by_id(id):
-    # TODO - Add support for making this work for a single study as well
     token = g.token
 
     extraction = FeatureExtraction.find_by_id(id)
     studies = get_studies_from_album(extraction.album_id, token)
 
     header, features_df = transform_studies_features_to_df(extraction, studies)
-
-    # TODO - Check why this was done here, seems like it shouldn't!
-    # Concatenate modalities & ROIs for now
-    # features_df = concatenate_modalities_rois(features_df, [], [])
 
     features_json = json.loads(features_df.to_json(orient="records"))
 
@@ -137,7 +112,6 @@ def extraction_features_by_id(id):
 # Get data points (PatientID/ROI) for a given extraction
 @bp.route("/extractions/<extraction_id>/collections/<collection_id>/data-points")
 def extraction_collection_data_points(extraction_id, collection_id):
-    # TODO - Add support for making this work for a single study as well
     token = g.token
 
     extraction = FeatureExtraction.find_by_id(extraction_id)
@@ -165,7 +139,6 @@ def extraction_collection_data_points(extraction_id, collection_id):
 # Get data points (PatientID/ROI) for a given extraction
 @bp.route("/extractions/<id>/data-points")
 def extraction_data_points_by_id(id):
-    # TODO - Add support for making this work for a single study as well
     token = g.token
 
     extraction = FeatureExtraction.find_by_id(id)
@@ -179,18 +152,6 @@ def extraction_data_points_by_id(id):
             patient_ids.append(patient_id)
 
     # TODO - Allow choosing a mode (patient only or patient + roi)
-    # Get ROIs from a first feature file
-    # first_task = extraction.tasks[0]
-    # features_content = read_feature_file(first_task.features_path)
-    # first_modality = next(iter(features_content))
-    # rois = features_content[first_modality].keys()
-
-    # Generate data points
-    # data_points = []
-    # for patient_id in patient_ids:
-    # for roi in rois:
-    #     data_points.append([patient_id, roi])
-
     return jsonify({"data-points": patient_ids})
 
 
@@ -200,11 +161,6 @@ def download_extraction_by_id(id):
 
     # Get the feature extraction to process from the DB
     feature_extraction = FeatureExtraction.find_by_id(id)
-
-    # Get the names of the used feature families (for the file name so far)
-    feature_families = []
-    for extraction_family in feature_extraction.families:
-        feature_families.append(extraction_family.feature_family.name)
 
     # Identify user (in order to get a token)
     user_id = request.args.get("userID", None)
@@ -236,10 +192,10 @@ def download_extraction_by_id(id):
         for group_name, group_data in grouped_features:
             group_csv_content = group_data.to_csv(index=False)
 
-            group_file_name = f"features_album_{album_name.replace(' ', '-')}_{'-'.join(feature_families)}_{'-'.join(group_name)}.csv"
+            group_file_name = f"features_album_{album_name.replace(' ', '-')}_{'-'.join(group_name)}.csv"
             zip_file.writestr(group_file_name, group_csv_content)
 
-    file_name = make_album_file_name(album_name, feature_families)
+    file_name = make_album_file_name(album_name)
 
     return Response(
         zip_buffer.getvalue(),
@@ -285,15 +241,14 @@ def extract_album(album_id):
     user_id = g.user
     token = g.token
 
-    feature_families_map = request.json
+    feature_extraction_config_dict = request.json
 
-    # TODO - Remove this
     # Get album metadata for hard-coded labels mapping
     album_metadata = get_album_details(album_id, token)
 
-    # Define feature families to extract
+    # Run the feature extraction
     feature_extraction = run_feature_extraction(
-        user_id, album_id, album_metadata["name"], feature_families_map, token
+        user_id, album_id, album_metadata["name"], feature_extraction_config_dict, token
     )
 
     return jsonify(format_extraction(feature_extraction))

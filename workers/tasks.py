@@ -13,6 +13,8 @@ import pydevd_pycharm
 import requests
 import warnings
 
+import yaml
+
 from typing import List, Dict, Any
 from flask_socketio import SocketIO
 from keycloak.realm import KeycloakRealm
@@ -36,9 +38,10 @@ from imaginebackend_common.utils import (
     send_extraction_status_message,
 )
 
+from okapy.dicomconverter.converter import ExtractorConverter
+
 warnings.filterwarnings("ignore", message="Failed to parse headers")
 
-from imaginebackend_common.feature_backends import feature_backends_map, FeatureBackend
 from imaginebackend_common.kheops_utils import endpoints
 
 # Setup Debugger
@@ -101,24 +104,15 @@ def run_extraction(
     try:
 
         current_step = 1
-        steps = 3
+        steps = 2
 
         db.session.commit()
-
-        # TODO - Remove this at the end
-        # all_tasks = FeatureExtractionTask.query.order_by(
-        #     db.desc(FeatureExtractionTask.id)
-        # ).all()
-        # print(f"There are {len(all_tasks)} tasks in the table")
-        # print(f"The latest task has id {all_tasks[0].id}")
 
         # Affect celery task ID to task (if needed)
         print(f"Getting Feature Extraction Task with id {feature_extraction_task_id}")
         feature_extraction_task = FeatureExtractionTask.find_by_id(
             feature_extraction_task_id
         )
-
-        feature_family_id = feature_extraction_task.feature_family_id
 
         feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
 
@@ -170,20 +164,17 @@ def run_extraction(
         # os.makedirs(os.path.dirname(features_path), exist_ok=True)
         # Path(features_path).write_text(json_features)
         store_features(
-            feature_extraction_task_id, feature_family_id, features,
+            feature_extraction_task_id, feature_extraction_id, features,
         )
 
         # Extraction is complete
         status_message = "Extraction Complete"
 
-        # Check if parent is done - TODO Find a better way to do this, not from the task level hopefully
+        # TODO Find a better way to do this, not from the task level hopefully
+        # Check if parent is done
         extraction_status = fetch_extraction_result(
             celery, feature_extraction.result_id
         )
-
-        # TODO - Remove this
-        print("PARENT STATUS : ")
-        print(vars(extraction_status))
 
         return {
             "feature_extraction_task_id": feature_extraction_task_id,
@@ -389,13 +380,9 @@ def extract_all_features(
     :returns: A dictionary with the extracted features
     """
     try:
-        config = json.loads(Path(config_path).read_text()) if config_path else None
-
-        features_dict = {}
-
-        # Status update - CONVERT
+        # Status update - PROCESS
         current_step += 1
-        status_message = "Pre-processing data"
+        status_message = "Processing data"
         update_progress(
             task,
             feature_extraction_id,
@@ -413,68 +400,15 @@ def extract_all_features(
         else:
             labels = None
 
-        # Pre-process the data ONCE for all backends
-        conversion_result, dir_to_delete = FeatureBackend.pre_process_data(
-            dicom_dir, labels=labels
-        )
+        # Get results directly from Okapy
+        converter = ExtractorConverter.from_params(config_path)
 
-        # Get input files map to process (MODALITY -> [LABEL, ...])
-        input_files = FeatureBackend.get_input_files(conversion_result)
+        conversion_result = converter(dicom_dir, labels=labels)
 
-        # Status update - EXTRACT
-        current_step += 1
-        status_message = "Extracting features"
-        update_progress(
-            task,
-            feature_extraction_id,
-            feature_extraction_task_id,
-            current_step,
-            steps,
-            status_message,
-        )
+        print(f"!!!!!!!!!!!!Final Features!!!!!!!!!")
+        print(conversion_result)
 
-        for backend in config["backends"]:
-
-            # only if some features were selected for this backend
-            if len(config["backends"][backend]["features"]) > 0:
-                # get extractor from feature backends
-                extractor = feature_backends_map[backend](config["backends"][backend])
-
-                # extract features for all modalities & labels
-                for modality, content in input_files.items():
-                    if modality not in features_dict:
-                        features_dict[modality] = {}
-
-                    print(f"Processing modality {modality}")
-                    image_path = content["image"]
-                    labels = content["labels"]
-                    for label, mask_path in labels.items():
-                        if label not in features_dict[modality]:
-                            features_dict[modality][label] = {}
-
-                        print(f"    Processing label {label}")
-
-                        features = extractor.extract_features(
-                            image_path, mask_path, modality=modality
-                        )
-                        features_dict[modality][label].update(features)
-
-                print(f"!!!!!!!!!!!!Final Features Dictionary!!!!!!!!!")
-                print(features_dict)
-                # TODO - Remove this
-                # print("CONFIG!!!!")
-                # print(config["backends"][backend])
-                #
-                # print("BACKEND INPUT!!! ")
-                # print(json.dumps(backend_input))
-                #
-                # print("FEATURES!!!")
-                # print(features)
-
-        # Delete the directory generated by okapy here!
-        shutil.rmtree(dir_to_delete, True)
-
-        result = features_dict
+        result = conversion_result
 
         return result
 
@@ -483,11 +417,6 @@ def extract_all_features(
         # logging.error(e)
 
         print("!!!!!Caught an error while pre-processing or something!!!!!")
-
-        try:
-            shutil.rmtree(dir_to_delete, True)
-        except NameError:
-            print("Could not delete directory, variable does not exist")
 
         current_step = 0
         status_message = "Failure!"

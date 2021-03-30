@@ -38,34 +38,6 @@ def format_model(model):
 
     model_dict = model.to_dict()
 
-    # Format feature extraction to get feature n° and names
-    # if extraction_formatted is None:
-    # formatted_extraction = format_extraction(model.feature_extraction, families=True)
-    # else:
-    # formatted_extraction = extraction_formatted
-
-    # model_dict["extraction"] = formatted_extraction
-    #
-    # # Assign feature number & names based on the saved features
-    # # if feature selection was performed, otherwise use the
-    # # ones given by the feature extraction (all features)
-    # model_dict["feature-number"] = (
-    #     len(model.feature_names)
-    #     if model.feature_names
-    #     else formatted_extraction["feature-number"]
-    # )
-    # model_dict["feature-names"] = (
-    #     model.feature_names
-    #     if model.feature_names
-    #     else formatted_extraction["feature-names"]
-    # )
-
-    # Get number of observations from labels so far
-    # labels = Label.find_by_album(
-    #     formatted_extraction["album_id"], formatted_extraction["user_id"], model.type
-    # )
-    # model_dict["observations"] = len(labels)
-
     # De-serialize model (for metrics etc.)
     f = open(model.model_path)
     json_str = f.read()

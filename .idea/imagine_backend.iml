@@ -12,6 +12,7 @@
       <excludeFolder url="file://$MODULE_DIR$/keycloak_theme" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
       <excludeFolder url="file://$MODULE_DIR$/venv/src/melampus" />
+      <excludeFolder url="file://$MODULE_DIR$/docs" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.6 (imagine_backend)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

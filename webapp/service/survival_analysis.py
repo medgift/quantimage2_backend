@@ -53,22 +53,8 @@ def train_survival_model(extraction_id, collection_id, studies, modalities, rois
         [featuresDfCategoricalOnly, filteredFeatures], axis=1
     )
 
-    # TODO - How to deal with multiple modalities & ROIs? - Concatenate for now...
-    # Grab just CT & GTV_L as a test
-    # featuresDf = featuresDf[
-    #     (featuresDf["Modality"] == "CT") & (featuresDf["ROI"] == "GTV_L")
-    # ]
-
-    # Keep just GTV_L for now
-    # featuresDf = featuresDf[(featuresDf["ROI"] == "GTV_L")]
-
-    # Drop the ROI column
-    # featuresDf = featuresDf.drop(["ROI"], axis=1)
-
     # TODO - Analyze what is the best thing to do, try concatenation so far
-    featuresDf = concatenate_modalities_rois(
-        filteredFeaturesWithCategorical, modalities, rois
-    )
+    featuresDf = concatenate_modalities_rois(filteredFeaturesWithCategorical)
 
     # Index the features Dataframe (for combining with the labels)
     featuresDf.set_index("PatientID", drop=False, inplace=True)

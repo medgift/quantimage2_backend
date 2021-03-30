@@ -105,32 +105,6 @@ class BaseModelAssociation(object):
         db.session.flush()
 
 
-# Link between a feature extraction and feature families
-class FeatureExtractionFamily(BaseModelAssociation, db.Model):
-    # Left
-    feature_family_id = db.Column(
-        db.Integer, db.ForeignKey("feature_family.id"), primary_key=True,
-    )
-
-    # Right
-    feature_extraction_id = db.Column(
-        db.Integer, db.ForeignKey("feature_extraction.id"), primary_key=True,
-    )
-
-    # Extra Data
-    family_config_path = db.Column(db.String(255))
-
-    # Relationships
-    feature_extraction = db.relationship("FeatureExtraction", back_populates="families")
-    feature_family = db.relationship("FeatureFamily", back_populates="extractions")
-
-    def to_dict(self):
-        return {
-            "feature_family": self.feature_family.to_dict(),
-            "family_config_path": self.family_config_path,
-        }
-
-
 # Modality (CT, PET, MRI, ...)
 class Modality(BaseModel, db.Model):
     def __init__(self, name):
@@ -149,27 +123,16 @@ class ROI(BaseModel, db.Model):
     name = db.Column(db.String(255), nullable=False, unique=True)
 
 
-# Global family of features (Intensity, Texture, ...)
-class FeatureFamily(BaseModel, db.Model):
+# Feature extraction preset (YAML file)
+class FeaturePreset(BaseModel, db.Model):
     def __init__(self, name, config_path):
         self.name = name
         self.config_path = config_path
 
-    # Name of the family
     name = db.Column(db.String(255), nullable=False, unique=True)
 
-    # Path to JSON configuration file of the family
+    # Path to JSON configuration file
     config_path = db.Column(db.String(255), nullable=False, unique=True)
-
-    # Association to FeatureExtractionFamily
-    extractions = db.relationship(
-        "FeatureExtractionFamily", back_populates="feature_family"
-    )
-
-    # Association to FeatureDefinition
-    feature_definitions = db.relationship(
-        "FeatureDefinition", back_populates="feature_family"
-    )
 
     @classmethod
     def find_by_name(cls, name):
@@ -201,10 +164,19 @@ class FeatureExtraction(BaseModel, db.Model):
     # Celery Result ID
     result_id = db.Column(db.String(255))
 
-    # Families selected for this extraction
-    families = db.relationship(
-        "FeatureExtractionFamily", back_populates="feature_extraction"
+    # Extraction configuration file
+    config_file = db.Column(db.String(255))
+
+    # Association to FeatureDefinition
+    feature_definitions = db.relationship(
+        "FeatureDefinition", secondary="feature_extraction_definition"
     )
+
+    # Association to Modality
+    modalities = db.relationship("Modality", secondary="feature_extraction_modality")
+
+    # Association to ROI
+    rois = db.relationship("ROI", secondary="feature_extraction_roi")
 
     # Tasks for this feature extraction
     tasks = db.relationship("FeatureExtractionTask")
@@ -216,18 +188,11 @@ class FeatureExtraction(BaseModel, db.Model):
     collections = db.relationship("FeatureCollection")
 
     def feature_names(self):
-        feature_names = set()
-        feature_family_names = []
+        feature_names = self.feature_definitions(
+            list(map(lambda fd: fd.name, self.feature_definitions))
+        )
 
-        for feature_extraction_family in self.families:
-            family_definitions = (
-                feature_extraction_family.feature_family.feature_definitions
-            )
-            feature_family_names.extend(
-                list(map(lambda fd: fd.name, family_definitions))
-            )
-
-        return sorted(list(feature_family_names))
+        return sorted(list(feature_names))
 
     def to_dict(self):
         return {
@@ -236,12 +201,14 @@ class FeatureExtraction(BaseModel, db.Model):
             "updated_at": self.updated_at,
             "user_id": self.user_id,
             "album_id": self.album_id,
-            "families": list(
+            "feature_definitions": list(
                 map(
-                    lambda feature_extraction_family: feature_extraction_family.to_dict(),
-                    self.families,
+                    lambda feature_definition: feature_definition.name,
+                    self.feature_definitions,
                 )
             ),
+            "modalities": list(map(lambda modality: modality.name, self.modalities)),
+            "rois": list(map(lambda roi: roi.name, self.rois)),
             "tasks": list(
                 map(
                     lambda feature_extraction_task: feature_extraction_task.to_dict(),
@@ -286,14 +253,37 @@ class FeatureExtraction(BaseModel, db.Model):
         return populated_extraction
 
 
+# A link between a feature definition and a feature extraction
+feature_extraction_definition = Table(
+    "feature_extraction_definition",
+    db.metadata,
+    Column("feature_extraction_id", Integer, ForeignKey("feature_extraction.id")),
+    Column("feature_definition_id", Integer, ForeignKey("feature_definition.id")),
+)
+
+# A link between a modality and a feature extraction
+feature_extraction_modality = Table(
+    "feature_extraction_modality",
+    db.metadata,
+    Column("feature_extraction_id", Integer, ForeignKey("feature_extraction.id")),
+    Column("modality_id", Integer, ForeignKey("modality.id")),
+)
+
+# A link between a ROI and a feature extraction
+feature_extraction_roi = Table(
+    "feature_extraction_roi",
+    db.metadata,
+    Column("feature_extraction_id", Integer, ForeignKey("feature_extraction.id")),
+    Column("roi_id", Integer, ForeignKey("roi.id")),
+)
+
 # A specific feature extraction task for a given study
 class FeatureExtractionTask(BaseModel, db.Model):
     def __init__(
-        self, feature_extraction_id, study_uid, feature_family_id, task_id,
+        self, feature_extraction_id, study_uid, task_id,
     ):
         self.feature_extraction_id = feature_extraction_id
         self.study_uid = study_uid
-        self.feature_family_id = feature_family_id
         self.task_id = task_id
 
     # Kheops Study UID
@@ -301,10 +291,6 @@ class FeatureExtractionTask(BaseModel, db.Model):
 
     # Celery task ID to get information about the status etc.
     task_id = db.Column(db.String(255), nullable=True)
-
-    # Associate feature extraction task with a feature family
-    feature_family_id = db.Column(db.Integer, ForeignKey("feature_family.id"))
-    feature_family = db.relationship("FeatureFamily")
 
     # Associate feature extraction task with a feature extraction
     feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
@@ -350,26 +336,18 @@ class FeatureExtractionTask(BaseModel, db.Model):
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "feature_extraction_id": self.feature_extraction_id,
-            "feature_family_id": self.feature_family_id,
             "study_uid": self.study_uid,
             "task_id": self.task_id,
         }
 
 
-# One type of feature that is associated to a given family
+# One type of feature
 class FeatureDefinition(BaseModel, db.Model):
-    def __init__(self, name, feature_family_id):
+    def __init__(self, name):
         self.name = name
-        self.feature_family_id = feature_family_id
 
     # Name of the feature
     name = db.Column(db.String(255), nullable=False, unique=False)
-
-    # Relationships
-    feature_family_id = db.Column(db.Integer, ForeignKey("feature_family.id"))
-    feature_family = db.relationship(
-        "FeatureFamily", back_populates="feature_definitions"
-    )
 
     @classmethod
     def find_by_name(cls, feature_names):
@@ -377,23 +355,13 @@ class FeatureDefinition(BaseModel, db.Model):
 
         return feature_definitions
 
-
-# class FeatureCollectionValue(BaseModelAssociation, db.Model):
-#     # Left
-#     feature_collection_id = db.Column(
-#         db.Integer, db.ForeignKey("feature_collection.id"), primary_key=True,
-#     )
-#
-#     # Right
-#     feature_value_id = db.Column(
-#         db.Integer, db.ForeignKey("feature_value.id"), primary_key=True,
-#     )
-#
-#     # TODO : Extra Data (could contain modified value e.g.)
-#
-#     # Relationships
-#     feature_collection = db.relationship("FeatureCollection", back_populates="values")
-#     feature_value = db.relationship("FeatureValue", back_populates="collections")
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "name": self.name,
+        }
 
 
 # The value of a given feature

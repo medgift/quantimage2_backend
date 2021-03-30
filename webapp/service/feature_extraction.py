@@ -4,6 +4,8 @@ import os
 import requests
 
 from pathlib import Path
+
+import yaml
 from ttictoc import tic, toc
 from celery import chord
 from flask import current_app
@@ -18,15 +20,14 @@ from imaginebackend_common.utils import (
 )
 from imaginebackend_common.models import (
     FeatureExtraction,
-    FeatureFamily,
-    FeatureExtractionFamily,
+    FeaturePreset,
     FeatureExtractionTask,
     db,
 )
 
 
 def run_feature_extraction(
-    user_id, album_id, album_name, feature_families_map, token=None
+    user_id, album_id, album_name, feature_extraction_config, token=None
 ):
 
     tic()
@@ -39,8 +40,6 @@ def run_feature_extraction(
     print(toc())
     print(f"---------------------------------------------------------")
 
-    # For each feature family, create the association with the extraction
-    # as well as the feature extraction task
     task_signatures = []
 
     tic()
@@ -55,65 +54,40 @@ def run_feature_extraction(
     )
     print(study_uids)
 
-    # Go through each study assembled above
+    # Save config for this extraction
+    config_path = save_config(
+        feature_extraction, feature_extraction_config, user_id, album_id
+    )
+    feature_extraction.config_file = config_path
+    feature_extraction.save_to_db()
 
-    for feature_family_id in feature_families_map:
-        # Convert feature family ID to int
-        feature_family_id_int = int(feature_family_id)
-
-        # Get the feature family from the DB
-        feature_family = FeatureFamily.query.get(feature_family_id_int)
-
-        # Save config for this extraction & family
-        feature_config = feature_families_map[feature_family_id]
-        config_path = save_config(
-            feature_extraction, feature_family, feature_config, user_id, album_id,
+    # Create extraction task and run it
+    for study_uid in study_uids:
+        feature_extraction_task = FeatureExtractionTask(
+            feature_extraction.id, study_uid, None,
         )
+        feature_extraction_task.save_to_db()
 
-        # Create the association
-        feature_extraction_family = FeatureExtractionFamily(
-            feature_extraction=feature_extraction,
-            feature_family=feature_family,
-            family_config_path=config_path,
-        )
-
-        # Save the association to the DB
-        feature_extraction_family.save_to_db()
-
-        # Create extraction task and run it
-        for study_uid in study_uids:
-            # features_path = get_features_path(user_id, study_uid, feature_family.name)
-
-            feature_extraction_task = FeatureExtractionTask(
+        # Create new task signature
+        task_signature = current_app.my_celery.signature(
+            "imaginetasks.extract",
+            args=[
                 feature_extraction.id,
+                user_id,
+                feature_extraction_task.id,
                 study_uid,
-                feature_family_id_int,
-                None,
-                # features_path,
-            )
-            feature_extraction_task.save_to_db()
+                album_name,
+                config_path,
+            ],
+            kwargs={},
+            countdown=1,
+            link=current_app.my_celery.signature(
+                "imaginetasks.finalize_extraction_task",
+                args=[feature_extraction.id, feature_extraction_task.id],
+            ),
+        )
 
-            # Create new task signature
-            task_signature = current_app.my_celery.signature(
-                "imaginetasks.extract",
-                args=[
-                    feature_extraction.id,
-                    user_id,
-                    feature_extraction_task.id,
-                    study_uid,
-                    # features_path,
-                    album_name,
-                    config_path,
-                ],
-                kwargs={},
-                countdown=1,
-                link=current_app.my_celery.signature(
-                    "imaginetasks.finalize_extraction_task",
-                    args=[feature_extraction.id, feature_extraction_task.id],
-                ),
-            )
-
-            task_signatures.append(task_signature)
+        task_signatures.append(task_signature)
 
     print(f"Creating the task signatures (and FeatureExtractionTasks)")
     print(toc())
@@ -203,15 +177,18 @@ def get_studies_from_album(album_id, token):
 #     return features_path
 
 
-def save_config(feature_extraction, feature_family, feature_config, user_id, album_id):
+def save_config(feature_extraction, feature_config, user_id, album_id):
     # Define config path for storing the feature family configuration
     config_dir = os.path.join(EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, user_id, album_id)
 
-    config_filename = feature_family.name + ".json"
+    config_filename = f"extraction-{feature_extraction.id}-config.yaml"
     config_path = os.path.join(config_dir, config_filename)
 
     # Save the customized config
     os.makedirs(os.path.dirname(config_path), exist_ok=True)
-    Path(config_path).write_text(json.dumps(feature_config))
+
+    stream = open(config_path, "w")
+    yaml.dump(feature_config, stream)
+    stream.close()
 
     return config_path

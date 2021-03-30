@@ -66,7 +66,7 @@ class MessageType(Enum):
 
 
 # Format feature extraction
-def format_extraction(extraction, payload=False, families=True, tasks=False):
+def format_extraction(extraction, payload=False, tasks=False):
     extraction_dict = extraction.to_dict()
 
     status = fetch_extraction_result(
@@ -75,86 +75,16 @@ def format_extraction(extraction, payload=False, families=True, tasks=False):
     extraction_dict["status"] = vars(status)
 
     # fetch info about the features extracted
-    feature_family_task = {}
-    for task in extraction.tasks:
-        if task.feature_family_id not in feature_family_task:
-            feature_family_task[task.feature_family_id] = task
-
-    all_feature_names = extraction.feature_names()
-
-    # all_feature_names = []
-    # for family_id, task in feature_family_task.items():
-    #     features_dict = read_feature_file(task.features_path)
-    #     feature_names = get_feature_names(features_dict)
-    #
-    #     all_feature_names += feature_names
-
-    # modalities = list(features_dict.keys())
-
-    # if bool(features_dict):
-    #     first_modality = features_dict[next(iter(features_dict.keys()))]
-    #     rois = list(first_modality.keys())
-
-    # TODO - Make this more robust, check all tasks perhaps
-    modalities = list(
-        set(map(lambda fv: fv.modality.name, extraction.tasks[0].feature_values))
-    )
-
-    rois = list(set(map(lambda fv: fv.roi.name, extraction.tasks[0].feature_values)))
-
-    extraction_dict["feature-number"] = len(all_feature_names)
-    extraction_dict["feature-names"] = all_feature_names
-    extraction_dict["extraction-modalities"] = modalities
-    extraction_dict["extraction-rois"] = rois
-
-    if families:
-        formatted_families = {"families": format_feature_families(extraction.families)}
-        extraction_dict.update(formatted_families)
+    extraction_dict["feature-number"] = len(extraction_dict["feature_definitions"])
+    extraction_dict["feature-names"] = extraction_dict["feature_definitions"]
+    extraction_dict["extraction-modalities"] = extraction_dict["modalities"]
+    extraction_dict["extraction-rois"] = extraction_dict["rois"]
 
     if tasks:
         formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks, payload)}
         extraction_dict.update(formatted_tasks)
 
     return extraction_dict
-
-
-# Get features names from dictionary
-def get_feature_names(features_dict):
-    feature_names = []
-
-    if bool(features_dict):
-
-        first_modality = features_dict[next(iter(features_dict.keys()))]
-        first_roi = first_modality[next(iter(first_modality.keys()))]
-
-        leave_out_prefix = "diagnostics_"
-        for feature_name, feature_value in first_roi.items():
-            if not feature_name.startswith(leave_out_prefix):
-                feature_names.append(feature_name)
-
-    return feature_names
-
-
-# Format feature families
-def format_feature_families(families):
-    # Gather the feature families
-    families_list = []
-
-    if families:
-        for family in families:
-            formatted_family = format_family(family)
-            families_list.append(formatted_family)
-
-    return families_list
-
-
-# Format feature family
-def format_family(family):
-    config_str = read_config_file(family.family_config_path)
-
-    config = json.loads(config_str)
-
-    return {**family.to_dict(), "config": config}
 
 
 # Format feature tasks
@@ -208,9 +138,6 @@ def format_feature_task(feature_task, payload=True):
         "status": status,
         "status_message": status_message,
         "study_uid": feature_task.study_uid,
-        # "feature_family_id": feature.feature_family_id,
-        "feature_family": feature_task.feature_family.to_dict(),
-        # "config": json.loads(config),
     }
 
     # If the payload should be included, add it to the response dictionary
@@ -407,7 +334,7 @@ def send_extraction_status_message(
 
     print("Send extraction is  " + str(send_extraction))
     if send_extraction:
-        print(f"Sending whole feature extraction object with tasks and families etc. !")
+        print(f"Sending whole feature extraction object with tasks etc. !")
         socketio_body = format_extraction(feature_extraction, tasks=True)
     else:
         extraction_status = fetch_extraction_result(

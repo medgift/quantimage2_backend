@@ -1,81 +1,61 @@
-from imaginebackend_common.models import Modality, ROI, FeatureDefinition, FeatureValue
+from imaginebackend_common.models import (
+    Modality,
+    ROI,
+    FeatureDefinition,
+    FeatureValue,
+    FeatureExtraction,
+)
 from more_itertools import first_true
 
+OKAPY_PATIENT_ID_FIELD = "patient"
+OKAPY_MODALITY_FIELD = "modality"
+OKAPY_ROI_FIELD = "VOI"
+OKAPY_FEATURE_NAME_FIELD = "feature_name"
+OKAPY_FEATURE_VALUE_FIELD = "feature_value"
 
-def store_features(feature_extraction_task_id, feature_family_id, features):
+
+def store_features(feature_extraction_task_id, feature_extraction_id, features):
+
+    feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
 
     # Store or retrieve metadata (modalities, ROIs & feature definitions) first
-    modalities = list(features.keys())
-    modality_instances = store_modalities(modalities)
-
-    # Get feature names from all modalities at least
-    # as there can be different features for them
-    feature_names = set()
-    rois = set()
-    for modality in features:
-        rois |= set(features[modality].keys())
-        for region in features[modality]:
-            feature_names |= set(features[modality][region].keys())
-
-    # first_modality = next(iter(features.values()))
-    # rois = list(first_modality.keys())
-    roi_instances = store_rois(rois)
-
-    # first_roi = next(iter(first_modality.values()))
-
-    filtered_feature_names = filter_out_diagnostic_feature_names(feature_names)
-    # filtered_features = filter_out_diagnostics(first_roi)
-    # feature_names = list(filtered_features.keys())
-    feature_definition_instances = store_feature_definitions(
-        filtered_feature_names, feature_family_id
+    modalities = list(features[OKAPY_MODALITY_FIELD].unique())
+    modality_instances = store_extraction_associations(
+        Modality, modalities, feature_extraction.modalities
     )
+    feature_extraction.modalities = modality_instances
+
+    rois = list(features[OKAPY_ROI_FIELD].unique())
+    roi_instances = store_extraction_associations(ROI, rois, feature_extraction.rois)
+    feature_extraction.rois = roi_instances
+
+    feature_names = list(features[OKAPY_FEATURE_NAME_FIELD].unique())
+    feature_definition_instances = store_extraction_associations(
+        FeatureDefinition, feature_names, feature_extraction.feature_definitions
+    )
+    feature_extraction.feature_definitions = feature_definition_instances
+    feature_extraction.save_to_db()
+
+    modalities_map = {modality.name: modality.id for modality in modality_instances}
+    rois_map = {roi.name: roi.id for roi in roi_instances}
+    definitions_map = {
+        definition.name: definition.id for definition in feature_definition_instances
+    }
 
     # Store feature values
     feature_value_instances = []
 
     # Build instances to save in bulk
+    for idx, row in features.iterrows():
+        feature_value_instance = {
+            "value": row[OKAPY_FEATURE_VALUE_FIELD],
+            "feature_definition_id": definitions_map[row[OKAPY_FEATURE_NAME_FIELD]],
+            "feature_extraction_task_id": feature_extraction_task_id,
+            "modality_id": modalities_map[row[OKAPY_MODALITY_FIELD]],
+            "roi_id": rois_map[row[OKAPY_ROI_FIELD]],
+        }
 
-    # For each modality
-    for modality, rois in features.items():
-
-        modality_instance = first_true(
-            modality_instances, None, lambda m: m.name == modality
-        )
-        # For each ROI
-        for roi, roi_features in features[modality].items():
-
-            roi_instance = first_true(roi_instances, None, lambda r: r.name == roi)
-
-            filtered_features = filter_out_diagnostics(roi_features)
-
-            # Store each feature (not diagnostics)
-            for feature_name, feature_value in filtered_features.items():
-
-                feature_definition_instance = first_true(
-                    feature_definition_instances,
-                    None,
-                    lambda fd: fd.name == feature_name
-                    and fd.feature_family_id == feature_family_id,
-                )
-
-                # feature_value_instance = FeatureValue(
-                #     feature_value,
-                #     feature_definition_instance.id,
-                #     feature_extraction_task_id,
-                #     modality_instance.id,
-                #     roi_instance.id,
-                # )
-                # feature_value_instance.save_to_db()
-
-                feature_value_instance = {
-                    "value": feature_value,
-                    "feature_definition_id": feature_definition_instance.id,
-                    "feature_extraction_task_id": feature_extraction_task_id,
-                    "modality_id": modality_instance.id,
-                    "roi_id": roi_instance.id,
-                }
-
-                feature_value_instances.append(feature_value_instance)
+        feature_value_instances.append(feature_value_instance)
 
     # Batch create the instances
     FeatureValue.save_features_batch(feature_value_instances)
@@ -94,42 +74,44 @@ def store_modalities(modalities):
     return modality_instances
 
 
-def store_rois(rois):
+def store_rois(rois, feature_extraction_id):
     roi_instances = []
 
     for roi in rois:
-        instance, created = ROI.get_or_create(
+        roi_instance, created = ROI.get_or_create(
             criteria={"name": roi,}, defaults={"name": roi}
         )
+
+        # Link ROI to feature extraction
+        extraction_definition, created = Fea.get_or_create(
+            criteria={
+                "feature_extraction_id": feature_extraction_id,
+                "roi_id": roi_instance.id,
+            },
+            defaults={
+                "feature_extraction_id": feature_extraction_id,
+                "roi_id": roi_instance.id,
+            },
+        )
+
         roi_instances.append(instance)
 
     return roi_instances
 
 
-def store_feature_definitions(feature_names, feature_family_id):
-    feature_definition_instances = []
+def store_extraction_associations(model, names, existing):
+    instances = []
 
-    for feature_name in feature_names:
-        instance, created = FeatureDefinition.get_or_create(
-            criteria={"name": feature_name, "feature_family_id": feature_family_id},
-            defaults={"name": feature_name, "feature_family_id": feature_family_id},
-        )
-        feature_definition_instances.append(instance)
+    existing_map = {x.name: x for x in existing}
 
-    return feature_definition_instances
+    for name in names:
+        if name not in existing_map:
+            instance, created = model.get_or_create(
+                criteria={"name": name}, defaults={"name": name},
+            )
+        else:
+            instance = existing_map[name]
 
+        instances.append(instance)
 
-def filter_out_diagnostics(features_dict):
-    leave_out_prefix = "diagnostics"
-
-    filtered_features_dict = {
-        k: v for (k, v) in features_dict.items() if not k.startswith(leave_out_prefix)
-    }
-
-    return filtered_features_dict
-
-
-def filter_out_diagnostic_feature_names(feature_names):
-    leave_out_prefix = "diagnostics"
-
-    return [n for n in feature_names if not n.startswith(leave_out_prefix)]
+    return instances

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 import pandas
 from flask import Blueprint, jsonify, request, g, current_app, Response
@@ -97,11 +98,7 @@ def format_chart_labels(labels):
 def format_lasagna_data(features_df, labels):
 
     # Flatten features by Modality & ROI to calculate ranks
-    concatenated_features_df = concatenate_modalities_rois(
-        features_df,
-        list(features_df[MODALITY_FIELD].unique()),
-        list(features_df[ROI_FIELD].unique()),
-    )
+    concatenated_features_df = concatenate_modalities_rois(features_df)
 
     # Reset the index to avoid problems with Melampus
     concatenated_features_df.reset_index(drop=True, inplace=True)
@@ -131,47 +128,49 @@ def format_lasagna_data(features_df, labels):
 
     feature_rank_map = {k: v for v, k in enumerate(list(ranked_features))}
 
-    features_df_reindexed = features_df.reset_index(drop=True)
-
-    # Standardize features (by column)
-    features_df_standardized = pandas.DataFrame(
+    # Standardize features (by CONCATENATED columns!)
+    concatenated_features_df_standardized = pandas.DataFrame(
         StandardScaler().fit_transform(
-            features_df_reindexed.loc[
-                :, ~features_df_reindexed.columns.isin(["PatientID", "Modality", "ROI"])
+            concatenated_features_df.loc[
+                :, ~concatenated_features_df.columns.isin(["PatientID"])
             ]
         )
     )
-    features_df_standardized.columns = features_df_reindexed.columns[3:]
 
     full_df = pandas.concat(
         [
-            features_df_reindexed.loc[
-                :, features_df_reindexed.columns.isin(["PatientID", "Modality", "ROI"])
+            concatenated_features_df.loc[
+                :, concatenated_features_df.columns.isin(["PatientID"])
             ],
-            features_df_standardized,
+            concatenated_features_df_standardized,
         ],
         axis=1,
     )
 
-    # Features
-    # features_list = full_df.to_dict(orient="records")
+    # Put back columns names from concatenated dataframe
+    full_df.columns = concatenated_features_df.columns
 
+    # Features
     features_list = json.loads(full_df.to_json(orient="records"))
 
     formatted_features = []
 
+    # Compile regex for getting modality, ROI & feature name from feature IDs
+    feature_regex = re.compile("^(?P<modality>.*?)-(?P<roi>.*?)-(?P<feature>.*?)$")
+
     for patient_record in features_list:
-        always_present_fields = [PATIENT_ID_FIELD, MODALITY_FIELD, ROI_FIELD]
-
         patient_id = patient_record[PATIENT_ID_FIELD]
-        modality = patient_record[MODALITY_FIELD]
-        roi = patient_record[ROI_FIELD]
 
-        for feature_name, feature_value in patient_record.items():
-            feature_id = "-".join([modality, roi]) + "-" + feature_name
-
+        for feature_id, feature_value in patient_record.items():
             # Don't add the Patient ID as another feature
-            if feature_name not in always_present_fields:
+            if feature_id != PATIENT_ID_FIELD:
+                # Get modality, ROI & feature based on the feature name
+                matches = feature_regex.match(feature_id)
+
+                modality = matches.group("modality")
+                roi = matches.group("roi")
+                feature_name = matches.group("feature")
+
                 formatted_features.append(
                     {
                         PATIENT_ID_FIELD: patient_id,

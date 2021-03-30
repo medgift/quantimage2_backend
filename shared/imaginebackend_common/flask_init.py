@@ -23,9 +23,9 @@ def create_app():
     app.config["CELERY_BROKER_URL"] = os.environ["CELERY_BROKER_URL"]
     app.config["CELERY_RESULT_BACKEND"] = os.environ["CELERY_RESULT_BACKEND"]
 
-    app.config["UPLOAD_FOLDER"] = "/imagine-data/feature-families"
+    app.config["UPLOAD_FOLDER"] = "/imagine-data/feature-presets"
 
-    # Create feature-families folder (if necessary)
+    # Create feature presets folder (if necessary)
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
     # Setup plugins etc.
