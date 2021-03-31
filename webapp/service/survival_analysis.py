@@ -13,7 +13,7 @@ from service.feature_analysis import concatenate_modalities_rois
 from service.feature_transformation import transform_studies_features_to_df
 
 
-def train_survival_model(extraction_id, collection_id, studies, modalities, rois, gt):
+def train_survival_model(extraction_id, collection_id, studies, gt):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
     if collection_id:

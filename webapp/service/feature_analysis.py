@@ -15,14 +15,7 @@ from melampus.classifier import MelampusClassifier
 
 
 def train_model_with_metric(
-    extraction_id,
-    collection_id,
-    studies,
-    algorithm_type,
-    data_normalization,
-    modalities,
-    rois,
-    gt,
+    extraction_id, collection_id, studies, algorithm_type, data_normalization, gt,
 ):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 

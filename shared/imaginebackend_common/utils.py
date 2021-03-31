@@ -74,12 +74,6 @@ def format_extraction(extraction, payload=False, tasks=False):
     )
     extraction_dict["status"] = vars(status)
 
-    # fetch info about the features extracted
-    extraction_dict["feature-number"] = len(extraction_dict["feature_definitions"])
-    extraction_dict["feature-names"] = extraction_dict["feature_definitions"]
-    extraction_dict["extraction-modalities"] = extraction_dict["modalities"]
-    extraction_dict["extraction-rois"] = extraction_dict["rois"]
-
     if tasks:
         formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks, payload)}
         extraction_dict.update(formatted_tasks)

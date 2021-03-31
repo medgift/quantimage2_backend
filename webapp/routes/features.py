@@ -17,10 +17,6 @@ from imaginebackend_common.utils import (
     format_extraction,
     read_feature_file,
 )
-from service.feature_analysis import (
-    train_model_with_metric,
-    concatenate_modalities_rois,
-)
 from service.feature_extraction import (
     run_feature_extraction,
     get_studies_from_album,

@@ -16,7 +16,7 @@ from imaginebackend_common.const import MODEL_TYPES
 from flask import Blueprint, jsonify, request, g, current_app, Response
 
 from config import MODELS_BASE_DIR
-from imaginebackend_common.models import Model
+from imaginebackend_common.models import Model, FeatureExtraction, FeatureCollection
 from imaginebackend_common.models import Label
 from pathlib import Path
 
@@ -80,12 +80,23 @@ def models_by_album(album_id):
         gt = body["labels"]
         model_type = body["model-type"]
         algorithm_type = body["algorithm-type"]
-        modalities = body["modalities"]
-        rois = body["rois"]
         validation_strategy = None
         data_normalization = body["data-normalization"]
         feature_selection = None
-        feature_names = None
+
+        if collection_id:
+            feature_collection = FeatureCollection.find_by_id(collection_id)
+            formatted_collection = feature_collection.format_collection()
+            modalities = formatted_collection["modalities"]
+            rois = formatted_collection["rois"]
+            feature_names = formatted_collection["features"]
+        else:
+            feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
+            modalities = list(map(lambda m: m.name, feature_extraction.modalities))
+            rois = list(map(lambda r: r.name, feature_extraction.rois))
+            feature_names = list(
+                map(lambda f: f.name, feature_extraction.feature_definitions)
+            )
 
         if MODEL_TYPES(model_type) == MODEL_TYPES.CLASSIFICATION:
             model, validation_strategy, validation_params = train_model_with_metric(
@@ -94,8 +105,6 @@ def models_by_album(album_id):
                 studies,
                 algorithm_type,
                 data_normalization,
-                modalities,
-                rois,
                 gt,
             )
 
@@ -104,7 +113,7 @@ def models_by_album(album_id):
             )
         elif MODEL_TYPES(model_type) == MODEL_TYPES.SURVIVAL:
             model, feature_selection, feature_names = train_survival_model(
-                feature_extraction_id, collection_id, studies, modalities, rois, gt
+                feature_extraction_id, collection_id, studies, gt
             )
 
             model_path = get_model_path(
