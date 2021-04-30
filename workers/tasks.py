@@ -98,6 +98,7 @@ def run_extraction(
     feature_extraction_task_id,
     study_uid,
     # features_path,
+    album_id,
     album_name,
     config_path,
 ):
@@ -142,7 +143,7 @@ def run_extraction(
         )["access_token"]
 
         # Download study and write files to directory
-        dicom_dir = download_study(token, study_uid)
+        dicom_dir = download_study(token, study_uid, album_id)
 
         # Extract all the features
         features = extract_all_features(
@@ -306,22 +307,25 @@ def update_task_state(task: celery.Task, state: str, meta: Dict[str, Any]) -> No
     task.update_state(state=state, meta=meta)
 
 
-def download_study(token: str, study_uid: str) -> str:
+def download_study(token: str, study_uid: str, album_id: str) -> str:
     """"
     Download a study and write all files to a directory
 
     :param token: Valid access token for the backend
     :param study_uid: The UID of the study to download
+    :param album_id: The ID of the Kheops album to filter the output by
     :returns: Path to the directory of downloaded files
     """
     tmp_dir = tempfile.mkdtemp()
     tmp_file = tempfile.mktemp(".zip")
 
-    study_metadata_url = endpoints.studies + "/" + study_uid + "?accept=application/zip"
+    study_download_url = (
+        f"{endpoints.studies}/{study_uid}?accept=application/zip&album={album_id}"
+    )
 
     access_token = get_token_header(token)
 
-    response = requests.get(study_metadata_url, headers=access_token,)
+    response = requests.get(study_download_url, headers=access_token,)
 
     # Save to ZIP file
     with open(tmp_file, "wb") as f:

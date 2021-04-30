@@ -76,6 +76,7 @@ def run_feature_extraction(
                 user_id,
                 feature_extraction_task.id,
                 study_uid,
+                album_id,
                 album_name,
                 config_path,
             ],
