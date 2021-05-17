@@ -12,7 +12,7 @@ pydevd-pycharm==202.7319.64
 ptvsd
 
 # Flask
-Flask
+Flask<2.0
 Flask-SQLAlchemy
 Flask-CORS
 Flask-SocketIO<5
