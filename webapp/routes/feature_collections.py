@@ -3,6 +3,7 @@ import os
 from zipfile import ZipFile, ZIP_DEFLATED
 
 from flask import Blueprint, abort, jsonify, request, current_app, g, Response
+from ttictoc import tic, toc
 
 from config import oidc_client
 from imaginebackend_common.kheops_utils import dicomFields
@@ -24,7 +25,6 @@ from service.feature_transformation import (
     make_album_collection_file_name,
 )
 from .utils import validate_decorate
-
 
 # Define blueprint
 bp = Blueprint(__name__, "feature_collections")
@@ -51,6 +51,19 @@ def feature_collections():
         return jsonify(collection.format_collection())
 
 
+@bp.route("/feature-collections/new", methods=["POST"])
+def feature_collections_new():
+    if request.method == "POST":
+        collection = save_feature_collection_new(
+            request.json["featureExtractionID"],
+            request.json["name"],
+            request.json["featureIDs"],
+            request.json["patients"],
+        )
+
+        return jsonify(collection.format_collection())
+
+
 @bp.route("/feature-collections/extraction/<extraction_id>")
 def feature_collections_by_extraction(extraction_id):
     collections = FeatureCollection.find_by_extraction(extraction_id)
@@ -64,7 +77,6 @@ def feature_collections_by_extraction(extraction_id):
     "/feature-collections/<feature_collection_id>", methods=("GET", "PATCH", "DELETE")
 )
 def feature_collection(feature_collection_id):
-
     if request.method == "GET":
         return get_feature_collection(feature_collection_id)
 
@@ -78,7 +90,6 @@ def feature_collection(feature_collection_id):
 # Download features in CSV format
 @bp.route("/feature-collections/<feature_collection_id>/download")
 def download_collection_by_id(feature_collection_id):
-
     # Get the feature collection from the DB
     feature_collection = FeatureCollection.find_by_id(feature_collection_id)
 
@@ -132,6 +143,43 @@ def download_collection_by_id(feature_collection_id):
     )
 
 
+def save_feature_collection_new(feature_extraction_id, name, feature_ids, patients):
+    token = g.token
+
+    # Get all necessary elements from the DB
+    extraction = FeatureExtraction.find_by_id(feature_extraction_id)
+    studies = get_studies_from_album(extraction.album_id, token)
+
+    # Find all FeatureValues corresponding to the supplied criteria
+    tic()
+    value_ids = FeatureValue.find_id_by_collection_criteria_new(
+        extraction, studies, feature_ids, patients
+    )
+    elapsed = toc()
+    print("Getting the collection values from the DB took", elapsed)
+
+    collection, created = FeatureCollection.get_or_create(
+        criteria={"name": name, "feature_extraction_id": feature_extraction_id},
+        defaults={"name": name, "feature_extraction_id": feature_extraction_id},
+    )
+
+    # Build instances to save in bulk
+    feature_collection_value_instances = [
+        {"feature_collection_id": collection.id, "feature_value_id": value_id.id}
+        for value_id in value_ids
+    ]
+
+    # Batch create the instances
+    tic()
+    FeatureCollection.save_feature_collection_values_batch(
+        feature_collection_value_instances
+    )
+    elapsed = toc()
+    print("Saving the collection values to the DB took", elapsed)
+
+    return collection
+
+
 def save_feature_collection(
     feature_extraction_id, name, modalities, rois, patients, feature_names
 ):
@@ -142,17 +190,31 @@ def save_feature_collection(
     studies = get_studies_from_album(extraction.album_id, token)
 
     # Find all FeatureValues corresponding to the supplied criteria
-    values = FeatureValue.find_by_collection_criteria(
+    tic()
+    value_ids = FeatureValue.find_id_by_collection_criteria(
         extraction, studies, modalities, rois, patients, feature_names
     )
+    elapsed = toc()
+    print("Getting the collection values from the DB took", elapsed)
 
     collection, created = FeatureCollection.get_or_create(
         criteria={"name": name, "feature_extraction_id": feature_extraction_id},
         defaults={"name": name, "feature_extraction_id": feature_extraction_id},
     )
 
-    collection.values = values
-    collection.save_to_db()
+    # Build instances to save in bulk
+    feature_collection_value_instances = [
+        {"feature_collection_id": collection.id, "feature_value_id": value_id.id}
+        for value_id in value_ids
+    ]
+
+    # Batch create the instances
+    tic()
+    FeatureCollection.save_feature_collection_values_batch(
+        feature_collection_value_instances
+    )
+    elapsed = toc()
+    print("Saving the collection values to the DB took", elapsed)
 
     return collection
 

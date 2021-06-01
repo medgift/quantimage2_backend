@@ -1,10 +1,12 @@
 import decimal, datetime
+import re
+
 import pandas
 
 from flask_sqlalchemy import SQLAlchemy
 from more_itertools import first_true
 from sqlalchemy import ForeignKey, Table, Column, Integer
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, load_only
 from ttictoc import tic, toc
 
 from sqlalchemy.dialects.mysql import LONGTEXT
@@ -280,7 +282,10 @@ feature_extraction_roi = Table(
 # A specific feature extraction task for a given study
 class FeatureExtractionTask(BaseModel, db.Model):
     def __init__(
-        self, feature_extraction_id, study_uid, task_id,
+        self,
+        feature_extraction_id,
+        study_uid,
+        task_id,
     ):
         self.feature_extraction_id = feature_extraction_id
         self.study_uid = study_uid
@@ -387,13 +392,45 @@ class FeatureValue(BaseModel, db.Model):
 
     @classmethod
     def get_for_collection(cls, collection):
-        names = []
-        features_formatted = []
 
-        for i in collection.values:
-            features_formatted.append(i.to_formatted_dict())
-            if i.feature_definition.name not in names:
-                names.append(i.feature_definition.name)
+        modalities = Modality.find_all()
+        rois = ROI.find_all()
+        definitions = FeatureDefinition.find_all()
+
+        modalities_map = {modality.id: modality.name for modality in modalities}
+        rois_map = {roi.id: roi.name for roi in rois}
+        definitions_map = {definition.id: definition.name for definition in definitions}
+
+        tic()
+        collection_loaded = (
+            db.session.query(FeatureCollection)
+            .options(
+                joinedload(FeatureCollection.values).options(
+                    joinedload(FeatureValue.feature_extraction_task).options(
+                        load_only("study_uid")
+                    ),
+                )
+            )
+            .filter(FeatureCollection.id == collection.id)
+            .one_or_none()
+        )
+        elapsed = toc()
+        print("Getting the feature collection values from the DB took", elapsed)
+
+        tic()
+        features_formatted = [
+            {
+                "study_uid": feature_value.feature_extraction_task.study_uid,
+                "modality": modalities_map[feature_value.modality_id],
+                "roi": rois_map[feature_value.roi_id],
+                "name": definitions_map[feature_value.feature_definition_id],
+                "value": feature_value.value,
+            }
+            for feature_value in collection_loaded.values
+        ]
+        names = list(dict.fromkeys([f["name"] for f in features_formatted]))
+        elapsed = toc()
+        print("Formatting the feature collection value took", elapsed)
 
         return features_formatted, names
 
@@ -427,30 +464,85 @@ class FeatureValue(BaseModel, db.Model):
         elapsed = toc()
         print("Getting the feature values from the DB took", elapsed)
 
-        features_formatted = []
-        names = []
-
         tic()
-        for feature_value in feature_values:
-            features_formatted.append(
-                {
-                    "study_uid": feature_tasks_map[
-                        feature_value.feature_extraction_task_id
-                    ],
-                    "modality": modalities_map[feature_value.modality_id],
-                    "roi": rois_map[feature_value.roi_id],
-                    "name": definitions_map[feature_value.feature_definition_id],
-                    "value": feature_value.value,
-                }
-            )
-
-            if feature_value.feature_definition.name not in names:
-                names.append(feature_value.feature_definition.name)
+        features_formatted = [
+            {
+                "study_uid": feature_tasks_map[
+                    feature_value.feature_extraction_task_id
+                ],
+                "modality": modalities_map[feature_value.modality_id],
+                "roi": rois_map[feature_value.roi_id],
+                "name": definitions_map[feature_value.feature_definition_id],
+                "value": feature_value.value,
+            }
+            for feature_value in feature_values
+        ]
+        names = list(dict.fromkeys([f["name"] for f in features_formatted]))
 
         elapsed = toc()
         print("Formatting features took", elapsed)
 
         return features_formatted, names
+
+    @classmethod
+    def find_id_by_collection_criteria_new(
+        cls, feature_extraction, feature_studies, feature_ids, patients
+    ):
+        # Get necessary info from the DB
+        db_modalities = Modality.find_all()
+        db_rois = ROI.find_all()
+        db_feature_definitions = FeatureDefinition.find_all()
+
+        # Map names to DB IDs
+        db_modality_map = {
+            db_modality.name: db_modality.id for db_modality in db_modalities
+        }
+        db_roi_map = {db_roi.name: db_roi.id for db_roi in db_rois}
+        db_feature_map = {
+            db_feature.name: db_feature.id for db_feature in db_feature_definitions
+        }
+
+        # Map Patient IDs to corresponding study IDs
+        study_uids = []
+        for patient in patients:
+            study_uid = next(
+                s[dicomFields.STUDY_UID][dicomFields.VALUE][0]
+                for s in feature_studies
+                if s[dicomFields.PATIENT_ID][dicomFields.VALUE][0] == patient
+            )
+            study_uids.append(study_uid)
+
+        # Get all task IDs related to the corresponding study UIDs
+        task_ids = []
+        for task in feature_extraction.tasks:
+            if task.study_uid in study_uids:
+                task_ids.append(task.id)
+
+        # Transform feature IDs to triplets of Modality ID, ROI ID & Feature Definition ID
+        conditions = []
+        matcher = re.compile(r"(?P<modality>.*?)-(?P<roi>.*?)-(?P<feature>.*)")
+        for feature_id in feature_ids:
+            modality_name, roi_name, feature_name = matcher.match(feature_id).groups()
+            conditions.append(
+                (
+                    db_modality_map[modality_name],
+                    db_roi_map[roi_name],
+                    db_feature_map[feature_name],
+                )
+            )
+
+        feature_value_ids = (
+            cls.query.with_entities(cls.id)
+            .filter(
+                cls.feature_extraction_task_id.in_(task_ids),
+                db.tuple_(cls.modality_id, cls.roi_id, cls.feature_definition_id).in_(
+                    conditions
+                ),
+            )
+            .all()
+        )
+
+        return feature_value_ids
 
     @classmethod
     def find_by_collection_criteria(
@@ -576,6 +668,13 @@ class FeatureCollection(BaseModel, db.Model):
         ).all()
 
         return feature_collections
+
+    @classmethod
+    def save_feature_collection_values_batch(cls, feature_collection_value_instances):
+        db.session.connection().execute(
+            feature_collection_value.insert(), feature_collection_value_instances
+        )
+        db.session.commit()
 
     # Name of the collection
     name = db.Column(db.String(255), nullable=False, unique=False)
