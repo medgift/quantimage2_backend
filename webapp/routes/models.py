@@ -13,7 +13,7 @@ jsonpickle_pd.register_handlers()
 
 from imaginebackend_common.const import MODEL_TYPES
 
-from flask import Blueprint, jsonify, request, g, current_app, Response
+from flask import Blueprint, jsonify, request, g, current_app, Response, make_response
 
 from config import MODELS_BASE_DIR
 from imaginebackend_common.models import Model, FeatureExtraction, FeatureCollection
@@ -98,66 +98,75 @@ def models_by_album(album_id):
                 map(lambda f: f.name, feature_extraction.feature_definitions)
             )
 
-        if MODEL_TYPES(model_type) == MODEL_TYPES.CLASSIFICATION:
-            (
-                model,
-                validation_strategy,
-                validation_params,
+        try:
+            if MODEL_TYPES(model_type) == MODEL_TYPES.CLASSIFICATION:
+                (
+                    model,
+                    validation_strategy,
+                    validation_params,
+                    patient_ids,
+                ) = train_classification_model(
+                    feature_extraction_id,
+                    collection_id,
+                    studies,
+                    algorithm_type,
+                    data_normalization,
+                    gt,
+                )
+
+                model_path = get_model_path(
+                    g.user,
+                    album["album_id"],
+                    model_type,
+                    algorithm_type,
+                    modalities,
+                    rois,
+                )
+            elif MODEL_TYPES(model_type) == MODEL_TYPES.SURVIVAL:
+                model, feature_selection, feature_names = train_survival_model(
+                    feature_extraction_id, collection_id, studies, gt
+                )
+
+                model_path = get_model_path(
+                    g.user, album["album_id"], model_type, None, modalities, rois
+                )
+            else:
+                raise NotImplementedError
+
+            # Persist model in DB and on disk (pickle it)
+            json_model = jsonpickle.encode(model)
+            os.makedirs(os.path.dirname(model_path), exist_ok=True)
+            Path(model_path).write_text(json_model)
+
+            # Generate model name (for now)
+            (file, ext) = os.path.splitext(os.path.basename(model_path))
+            model_name = f"{album['name']}_{file}"
+
+            db_model = Model(
+                model_name,
+                model_type,
+                algorithm_type,
+                f"{validation_strategy} ({validation_params['k']} folds, {validation_params['n']} repetitions)"
+                if validation_strategy
+                else None,
+                data_normalization,
+                feature_selection,
+                feature_names,
+                modalities,
+                rois,
                 patient_ids,
-            ) = train_classification_model(
+                model_path,
+                g.user,
+                album["album_id"],
                 feature_extraction_id,
                 collection_id,
-                studies,
-                algorithm_type,
-                data_normalization,
-                gt,
             )
+            db_model.save_to_db()
 
-            model_path = get_model_path(
-                g.user, album["album_id"], model_type, algorithm_type, modalities, rois
-            )
-        elif MODEL_TYPES(model_type) == MODEL_TYPES.SURVIVAL:
-            model, feature_selection, feature_names = train_survival_model(
-                feature_extraction_id, collection_id, studies, gt
-            )
-
-            model_path = get_model_path(
-                g.user, album["album_id"], model_type, None, modalities, rois
-            )
-        else:
-            raise NotImplementedError
-
-        # Persist model in DB and on disk (pickle it)
-        json_model = jsonpickle.encode(model)
-        os.makedirs(os.path.dirname(model_path), exist_ok=True)
-        Path(model_path).write_text(json_model)
-
-        # Generate model name (for now)
-        (file, ext) = os.path.splitext(os.path.basename(model_path))
-        model_name = f"{album['name']}_{file}"
-
-        db_model = Model(
-            model_name,
-            model_type,
-            algorithm_type,
-            f"{validation_strategy} ({validation_params['k']} folds, {validation_params['n']} repetitions)"
-            if validation_strategy
-            else None,
-            data_normalization,
-            feature_selection,
-            feature_names,
-            modalities,
-            rois,
-            patient_ids,
-            model_path,
-            g.user,
-            album["album_id"],
-            feature_extraction_id,
-            collection_id,
-        )
-        db_model.save_to_db()
-
-        return jsonify(format_model(db_model))
+            return jsonify(format_model(db_model))
+        except Exception as e:
+            error_message = {"error": str(e)}
+            return make_response(jsonify(error_message), 500)
 
 
 @bp.route("/models/<id>", methods=["DELETE"])
