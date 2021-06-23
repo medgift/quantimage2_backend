@@ -165,7 +165,9 @@ def run_extraction(
         # os.makedirs(os.path.dirname(features_path), exist_ok=True)
         # Path(features_path).write_text(json_features)
         store_features(
-            feature_extraction_task_id, feature_extraction_id, features,
+            feature_extraction_task_id,
+            feature_extraction_id,
+            features,
         )
 
         # Extraction is complete
@@ -308,7 +310,7 @@ def update_task_state(task: celery.Task, state: str, meta: Dict[str, Any]) -> No
 
 
 def download_study(token: str, study_uid: str, album_id: str) -> str:
-    """"
+    """ "
     Download a study and write all files to a directory
 
     :param token: Valid access token for the backend
@@ -325,7 +327,10 @@ def download_study(token: str, study_uid: str, album_id: str) -> str:
 
     access_token = get_token_header(token)
 
-    response = requests.get(study_download_url, headers=access_token,)
+    response = requests.get(
+        study_download_url,
+        headers=access_token,
+    )
 
     # Save to ZIP file
     with open(tmp_file, "wb") as f:

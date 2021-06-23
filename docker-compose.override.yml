@@ -35,7 +35,6 @@ services:
     #ports:
       #- 34000-34100:34000-34100
     #command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo"]
-    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO"]
 
   flower:
     ports:

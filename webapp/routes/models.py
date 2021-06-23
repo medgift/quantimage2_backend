@@ -23,7 +23,7 @@ from pathlib import Path
 # Define blueprint
 from imaginebackend_common.utils import format_extraction
 from routes.utils import validate_decorate
-from service.feature_analysis import train_model_with_metric
+from service.feature_analysis import train_classification_model
 from service.survival_analysis import train_survival_model
 
 bp = Blueprint(__name__, "models")
@@ -99,7 +99,12 @@ def models_by_album(album_id):
             )
 
         if MODEL_TYPES(model_type) == MODEL_TYPES.CLASSIFICATION:
-            model, validation_strategy, validation_params = train_model_with_metric(
+            (
+                model,
+                validation_strategy,
+                validation_params,
+                patient_ids,
+            ) = train_classification_model(
                 feature_extraction_id,
                 collection_id,
                 studies,
@@ -143,6 +148,7 @@ def models_by_album(album_id):
             feature_names,
             modalities,
             rois,
+            patient_ids,
             model_path,
             g.user,
             album["album_id"],

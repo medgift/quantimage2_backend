@@ -725,6 +725,7 @@ class Model(BaseModel, db.Model):
         feature_names,
         modalities,
         rois,
+        patient_ids,
         model_path,
         user_id,
         album_id,
@@ -740,6 +741,7 @@ class Model(BaseModel, db.Model):
         self.feature_names = feature_names
         self.modalities = modalities
         self.rois = rois
+        self.patient_ids = patient_ids
         self.model_path = model_path
         self.user_id = user_id
         self.album_id = album_id
@@ -773,6 +775,9 @@ class Model(BaseModel, db.Model):
 
     # ROIs used for training the model
     rois = db.Column(db.JSON, nullable=False, unique=False)
+
+    # Patients used for training the model
+    patient_ids = db.Column(db.JSON, nullable=False, unique=False)
 
     # Path to pickled version of the model
     model_path = db.Column(db.String(255), nullable=False, unique=True)
@@ -815,6 +820,7 @@ class Model(BaseModel, db.Model):
             "feature_names": self.feature_names,
             "modalities": self.modalities,
             "rois": self.rois,
+            "patient_ids": self.patient_ids,
             "model_path": self.model_path,
             "user_id": self.user_id,
             "album_id": self.album_id,

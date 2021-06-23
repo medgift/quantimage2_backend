@@ -53,4 +53,4 @@ RUN apt-get update && apt-get install ncdu && rm -rf /var/lib/apt/lists/*
 COPY ./workers .
 
 # Start app
-CMD ["celery", "--app=tasks", "worker", "--loglevel=INFO"]
+CMD ["celery", "--app=tasks", "worker", "--pool=prefork", "--loglevel=INFO"]

@@ -107,9 +107,15 @@ def format_lasagna_data(features_df, labels):
     outcomes = []
     for index, row in concatenated_features_df.iterrows():
         label_to_add = next(
-            label.label_content[OUTCOME_FIELD_CLASSIFICATION]
-            for label in labels
-            if (label.patient_id == row[PATIENT_ID_FIELD])
+            (
+                label.label_content[OUTCOME_FIELD_CLASSIFICATION]
+                for label in labels
+                if (
+                    label.patient_id == row[PATIENT_ID_FIELD]
+                    and label.label_content[OUTCOME_FIELD_CLASSIFICATION] != ""
+                )
+            ),
+            "UNKNOWN",
         )
         outcomes.append(label_to_add)
 
@@ -158,8 +164,21 @@ def format_lasagna_data(features_df, labels):
     # Compile regex for getting modality, ROI & feature name from feature IDs
     feature_regex = re.compile("^(?P<modality>.*?)-(?P<roi>.*?)-(?P<feature>.*?)$")
 
+    formatted_labels = []
+    patientIdx = 0
     for patient_record in features_list:
         patient_id = patient_record[PATIENT_ID_FIELD]
+
+        # Add outcome on the backend already to avoid doing this in React
+        patient_outcome = outcomes[patientIdx]
+
+        # Add formatted label to list
+        formatted_labels.append(
+            {
+                PATIENT_ID_FIELD: patient_id,
+                OUTCOME_FIELD_CLASSIFICATION: patient_outcome,
+            }
+        )
 
         for feature_id, feature_value in patient_record.items():
             # Don't add the Patient ID as another feature
@@ -176,6 +195,7 @@ def format_lasagna_data(features_df, labels):
                         PATIENT_ID_FIELD: patient_id,
                         MODALITY_FIELD: modality,
                         ROI_FIELD: roi,
+                        OUTCOME_FIELD_CLASSIFICATION: patient_outcome,
                         "feature_rank": feature_rank_map[feature_id]
                         if feature_value is not None
                         else None,
@@ -185,8 +205,10 @@ def format_lasagna_data(features_df, labels):
                     }
                 )
 
+        patientIdx += 1
+
     # Labels
-    formatted_labels = format_chart_labels(labels)
+    # formatted_labels = format_chart_labels(labels)
 
     return {"features": formatted_features, "outcomes": formatted_labels}
 

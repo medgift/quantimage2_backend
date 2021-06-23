@@ -14,8 +14,13 @@ from service.feature_transformation import (
 from melampus.classifier import MelampusClassifier
 
 
-def train_model_with_metric(
-    extraction_id, collection_id, studies, algorithm_type, data_normalization, gt,
+def train_classification_model(
+    extraction_id,
+    collection_id,
+    studies,
+    algorithm_type,
+    data_normalization,
+    gt,
 ):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
@@ -27,12 +32,18 @@ def train_model_with_metric(
     else:
         header, features_df = transform_studies_features_to_df(extraction, studies)
 
-    # TODO - Analyze what is the best thing to do, try concatenation so far
-    features_df = concatenate_modalities_rois(features_df)
-
     # Get Labels DataFrame
     # TODO - Allow choosing a mode (Patient only or Patient + ROI)
     labels_df = pandas.DataFrame(gt, columns=["PatientID", "Label"])
+
+    # TODO - Check how to best deal with this, so far we ignore unlabelled patients
+    labelled_patients = list(labels_df[labels_df["Label"] != ""]["PatientID"])
+
+    # Filter out unlabelled patients
+    features_df = features_df[features_df.PatientID.isin(labelled_patients)]
+
+    # TODO - Analyze what is the best thing to do, try concatenation so far
+    features_df = concatenate_modalities_rois(features_df)
 
     # Get labels for each patient (to make sure they are in the same order)
     labelsList = []
@@ -83,7 +94,7 @@ def train_model_with_metric(
 
         # os.unlink(temp.name)
 
-    return model, cv_strategy, cv_params
+    return model, cv_strategy, cv_params, labelled_patients
 
 
 def concatenate_modalities_rois(featuresDf, keep_identifiers=False):
