@@ -777,7 +777,7 @@ class Model(BaseModel, db.Model):
     rois = db.Column(db.JSON, nullable=False, unique=False)
 
     # Patients used for training the model
-    patient_ids = db.Column(db.JSON, nullable=False, unique=False)
+    patient_ids = db.Column(db.JSON, nullable=True, unique=False)
 
     # Path to pickled version of the model
     model_path = db.Column(db.String(255), nullable=False, unique=True)
