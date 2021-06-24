@@ -332,7 +332,7 @@ def send_extraction_status_message(
         socketio_body = format_extraction(feature_extraction, tasks=True)
     else:
         extraction_status = fetch_extraction_result(
-            celery, feature_extraction.result_id
+            celery, feature_extraction.result_id, tasks=feature_extraction.tasks
         )
 
         # Send Socket.IO message
