@@ -68,6 +68,7 @@ def get_rois_from_kheops(album_id):
         series = get_series_from_study(
             study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
             ["RTSTRUCT", "SEG"],
+            album_id,
             token,
         )
         roi_series += series
@@ -144,4 +145,5 @@ def parse_roi_files(files):
 
         return rois_map
     except Exception as err:
+        print(err.stdout.decode().strip())
         raise err

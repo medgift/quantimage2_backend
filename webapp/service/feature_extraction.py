@@ -172,12 +172,12 @@ def get_studies_from_album(album_id, token):
     return album_studies
 
 
-def get_series_from_study(study_uid, modalities, token):
-    study_series_url = f"{endpoints.studies}/{study_uid}/series"
+def get_series_from_study(study_uid, modalities, album_id, token):
+    study_series_url = f"{endpoints.studies}/{study_uid}/series?album={album_id}"
 
     if modalities is not None:
         params = [
-            f'{"?" if i == 0 else "&"}{dicomFields.MODALITY}={modality}'
+            f"&{dicomFields.MODALITY}={modality}"
             for i, modality in enumerate(modalities)
         ]
 
