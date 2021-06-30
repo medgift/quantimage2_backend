@@ -5,6 +5,8 @@ import requests
 
 from pathlib import Path
 
+from urllib.parse import urlencode
+
 import yaml
 from ttictoc import tic, toc
 from celery import chord
@@ -64,7 +66,9 @@ def run_feature_extraction(
     # Create extraction task and run it
     for study_uid in study_uids:
         feature_extraction_task = FeatureExtractionTask(
-            feature_extraction.id, study_uid, None,
+            feature_extraction.id,
+            study_uid,
+            None,
         )
         feature_extraction_task.save_to_db()
 
@@ -95,7 +99,8 @@ def run_feature_extraction(
     print(f"---------------------------------------------------------")
 
     finalize_signature = current_app.my_celery.signature(
-        "imaginetasks.finalize_extraction", args=[feature_extraction.id],
+        "imaginetasks.finalize_extraction",
+        args=[feature_extraction.id],
     )
 
     tic()
@@ -165,6 +170,24 @@ def get_studies_from_album(album_id, token):
     album_studies = requests.get(album_studies_url, headers=access_token).json()
 
     return album_studies
+
+
+def get_series_from_study(study_uid, modalities, token):
+    study_series_url = f"{endpoints.studies}/{study_uid}/series"
+
+    if modalities is not None:
+        params = [
+            f'{"?" if i == 0 else "&"}{dicomFields.MODALITY}={modality}'
+            for i, modality in enumerate(modalities)
+        ]
+
+        study_series_url += "".join(params)
+
+    access_token = get_token_header(token)
+
+    study_series = requests.get(study_series_url, headers=access_token).json()
+
+    return study_series
 
 
 # def get_features_path(user_id, study_uid, feature_family_name):

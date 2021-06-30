@@ -34,6 +34,7 @@ from routes.labels import bp as labels_bp
 from routes.charts import bp as charts_bp
 from routes.annotations import bp as annotations_bp
 from routes.navigation_history import bp as navigation_bp
+from routes.albums import bp as albums_bp
 
 print("App is Starting!")
 
@@ -123,7 +124,8 @@ def setup_app(app):
 
     # Socket.IO
     my_socketio.init_app(
-        app, message_queue=os.environ["SOCKET_MESSAGE_QUEUE"],
+        app,
+        message_queue=os.environ["SOCKET_MESSAGE_QUEUE"],
     )
 
     app.my_celery = my_celery
@@ -139,6 +141,7 @@ def setup_app(app):
         app.register_blueprint(charts_bp)
         app.register_blueprint(annotations_bp)
         app.register_blueprint(navigation_bp)
+        app.register_blueprint(albums_bp)
 
 
 if __name__ == "__main__":

@@ -1005,3 +1005,37 @@ class NavigationHistory(BaseModel, db.Model):
             "path": self.path,
             "user_id": self.user_id,
         }
+
+
+class Album(BaseModel, db.Model):
+    def __init__(self, album_id):
+        self.album_id = album_id
+
+    album_id = db.Column(db.String(255), nullable=False, unique=True)
+    rois = db.Column(db.JSON, nullable=True, unique=False)
+
+    @classmethod
+    def save_rois(cls, album_id, rois):
+        album = cls.find_by_album_id(album_id)
+        album.rois = rois
+        album.save_to_db()
+
+        return album
+
+    @classmethod
+    def find_by_album_id(cls, album_id):
+        (instance, created) = cls.get_or_create(
+            criteria={
+                "album_id": album_id,
+            },
+            defaults={"album_id": album_id},
+        )
+        return instance
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "album_id": self.path,
+        }

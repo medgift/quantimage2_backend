@@ -88,3 +88,7 @@ docs/build
 
 # Python Bytecode Files
 *.pyc
+
+# Node.js
+package-lock.json
+node_modules
