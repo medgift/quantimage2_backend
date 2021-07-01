@@ -40,15 +40,20 @@ def album_rois(album_id, rois=None):
         return get_rois(album_id)
 
 
+@bp.route("/albums/<album_id>/force")
+def album_rois_force(album_id):
+    return get_rois(album_id, force=True)
+
+
 def save_rois(album_id, rois):
     album = Album.save_rois(album_id, rois)
     return jsonify(album.to_dict())
 
 
-def get_rois(album_id):
+def get_rois(album_id, force=False):
     album = Album.find_by_album_id(album_id)
 
-    if album.rois is None:
+    if album.rois is None or force == True:
         rois_map = get_rois_from_kheops(album_id)
         Album.save_rois(album_id, rois_map)
 
