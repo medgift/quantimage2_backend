@@ -29,7 +29,7 @@ from imaginebackend_common.models import (
 
 
 def run_feature_extraction(
-    user_id, album_id, album_name, feature_extraction_config, token=None
+    user_id, album_id, album_name, feature_extraction_config, rois, token=None
 ):
 
     tic()
@@ -83,6 +83,7 @@ def run_feature_extraction(
                 album_id,
                 album_name,
                 config_path,
+                rois,
             ],
             kwargs={},
             countdown=1,

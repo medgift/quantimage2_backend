@@ -202,7 +202,7 @@ def fetch_extraction_result(celery_app, result_id, tasks=None):
 
         result = celery_app.GroupResult.restore(result_id)
 
-        # Make in inventory of errors (if tasks are provided)
+        # Make an inventory of errors (if tasks are provided)
         if tasks is not None:
 
             for child in result.children:

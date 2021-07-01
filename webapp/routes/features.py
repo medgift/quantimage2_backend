@@ -138,11 +138,23 @@ def extraction_data_points_by_id(id):
     token = g.token
 
     extraction = FeatureExtraction.find_by_id(id)
+
+    result = fetch_extraction_result(
+        current_app.my_celery, extraction.result_id, extraction.tasks
+    )
+
     studies = get_studies_from_album(extraction.album_id, token)
+
+    # Filter out studies that weren't processed successfully
+    successful_studies = [
+        study
+        for study in studies
+        if study[dicomFields.STUDY_UID][dicomFields.VALUE][0] not in result.errors
+    ]
 
     # Get Patient IDs from studies
     patient_ids = []
-    for study in studies:
+    for study in successful_studies:
         patient_id = study[dicomFields.PATIENT_ID][dicomFields.VALUE][0]
         if not patient_id in patient_ids:
             patient_ids.append(patient_id)
@@ -237,14 +249,22 @@ def extract_album(album_id):
     user_id = g.user
     token = g.token
 
-    feature_extraction_config_dict = request.json
+    request_body = request.json
+
+    feature_extraction_config_dict = request_body["config"]
+    rois = request_body["rois"]
 
     # Get album metadata for hard-coded labels mapping
     album_metadata = get_album_details(album_id, token)
 
     # Run the feature extraction
     feature_extraction = run_feature_extraction(
-        user_id, album_id, album_metadata["name"], feature_extraction_config_dict, token
+        user_id,
+        album_id,
+        album_metadata["name"],
+        feature_extraction_config_dict,
+        rois,
+        token,
     )
 
     return jsonify(format_extraction(feature_extraction))

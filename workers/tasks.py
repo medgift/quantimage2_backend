@@ -101,6 +101,7 @@ def run_extraction(
     album_id,
     album_name,
     config_path,
+    rois,
 ):
     try:
 
@@ -150,6 +151,7 @@ def run_extraction(
             self,
             dicom_dir,
             config_path,
+            rois,
             feature_extraction_id,
             feature_extraction_task_id=feature_extraction_task_id,
             current_step=current_step,
@@ -369,6 +371,7 @@ def extract_all_features(
     task: celery.Task,
     dicom_dir: str,
     config_path: str,
+    rois: list,
     feature_extraction_id: int,
     feature_extraction_task_id: int = None,
     current_step: int = None,
@@ -401,13 +404,7 @@ def extract_all_features(
             status_message,
         )
 
-        # TODO - Remove these hard-coded cases
-        if "HECKTOR" in album_name:
-            labels = ["GTVt"]
-        elif "Lymphangitis" in album_name:
-            labels = ["GTV T", "GTV L"]
-        else:
-            labels = None
+        labels = rois
 
         # Get results directly from Okapy
         converter = ExtractorConverter.from_params(config_path)
