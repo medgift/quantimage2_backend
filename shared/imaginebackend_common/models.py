@@ -689,7 +689,7 @@ class FeatureCollection(BaseModel, db.Model):
     values = db.relationship("FeatureValue", secondary="feature_collection_value")
 
     # Association to Models
-    models = db.relationship("Model")
+    models = db.relationship("Model", cascade="all, delete")
 
     def to_dict(self):
         return {
