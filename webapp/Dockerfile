@@ -1,14 +1,6 @@
 FROM python:3.6
 MAINTAINER Roger Schaer
 
-# Install nodejs
-RUN apt install curl
-RUN curl -fsSL https://deb.nodesource.com/setup_14.x | bash -
-RUN apt install -y nodejs
-
-# Install dicom-parser dependency
-RUN npm install dicom-parser
-
 # Define app folder
 WORKDIR /usr/src/app
 

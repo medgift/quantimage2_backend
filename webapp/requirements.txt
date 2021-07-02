@@ -60,9 +60,3 @@ lifelines
 
 # Iteration
 more-itertools
-
-# pydicom
-pydicom
-
-# Naked shell
-Naked

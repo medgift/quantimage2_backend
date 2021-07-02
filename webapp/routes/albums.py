@@ -1,14 +1,11 @@
 import io
 import os.path
-from subprocess import CalledProcessError
 from zipfile import ZipFile
 
 import requests
-import pydicom
 
 import glob
 
-from Naked.toolshed.shell import muterun_js
 from flask import Blueprint, jsonify, request, g, current_app, Response
 from ttictoc import tic, toc
 
@@ -21,7 +18,12 @@ from tempfile import TemporaryDirectory
 
 # Define blueprint
 from routes.utils import validate_decorate
-from service.feature_extraction import get_studies_from_album, get_series_from_study
+from service.feature_extraction import (
+    get_studies_from_album,
+    get_series_from_study,
+    get_instances_from_series,
+    get_instance_metadata_from_instance,
+)
 
 bp = Blueprint(__name__, "albums")
 
@@ -65,90 +67,87 @@ def get_rois_from_kheops(album_id):
 
     studies = get_studies_from_album(album_id, token)
 
-    roi_series = []
+    studies_dicts = [
+        {
+            "album_id": album_id,
+            "token": token,
+            "study": study,
+        }
+        for study in studies
+    ]
 
-    # Get list of ROI series to download
-    for study in studies:
-        # TODO - This might be more dynamic, not hard-coded to RTSTRUCT & SEG
-        series = get_series_from_study(
-            study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
-            ["RTSTRUCT", "SEG"],
-            album_id,
-            token,
-        )
-        roi_series += series
+    tic()
+    # Get list of ROI series to examine
+    roi_instances = ThreadPool(8).map(get_roi_metadata, studies_dicts)
 
-    # Download all ROI series instances
-    (roi_file_paths, temp_dir) = download_roi_files(roi_series, token)
+    # Filter out None values from studies without ROIs
+    roi_instances = [r for r in roi_instances if r]
 
-    # read_dicom_files_sync(roi_file_paths)
-    # read_dicom_files_sync(roi_file_paths)
+    elapsed = toc()
+    print("Getting all the ROIs metadata took", elapsed)
 
     # Create map of ROI -> Number of studies from ROI files
-    rois_map = parse_roi_files(roi_file_paths)
-
-    # Clean up the temporary directory
-    temp_dir.cleanup()
+    rois_map = parse_roi_instances(roi_instances)
 
     return rois_map
 
 
-def download_roi_files(series, token):
-    temp_dir = TemporaryDirectory()
+def get_roi_metadata(study_dict):
+    study = study_dict["study"]
+    album_id = study_dict["album_id"]
+    token = study_dict["token"]
 
-    urls = [
-        {
-            "url": s[dicomFields.RETRIEVE_URL][dicomFields.VALUE][0],
-            "token": token,
-            "dir": temp_dir.name,
-        }
-        for s in series
-    ]
-
-    tic()
-
-    # Download & extract ZIP files to temp directory
-    ThreadPool(8).map(download_roi_file, urls)
-
-    file_paths = glob.glob(f"{temp_dir.name}/**/*", recursive=True)
-
-    file_paths = [file_path for file_path in file_paths if os.path.isfile(file_path)]
-
-    elapsed = toc()
-    print("Downloading ROI files took", elapsed)
-
-    return (file_paths, temp_dir)
-
-
-def download_roi_file(url_map):
-    access_token = get_token_header(url_map["token"])
-
-    response = requests.get(
-        f'{url_map["url"]}?accept=application/zip', headers=access_token
+    # TODO - This might be more dynamic, not hard-coded to RTSTRUCT & SEG
+    series = get_series_from_study(
+        study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
+        ["RTSTRUCT", "SEG"],
+        album_id,
+        token,
     )
 
-    z = ZipFile(io.BytesIO(response.content))
-    z.extractall(url_map["dir"])
+    if len(series) == 0:
+        return None
 
-    return
+    # Get list of instances
+    instances = get_instances_from_series(
+        study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
+        series[0][dicomFields.SERIES_UID][dicomFields.VALUE][0],
+        token,
+    )
+
+    # Get instance metadata
+    instance_metadata = get_instance_metadata_from_instance(
+        study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
+        series[0][dicomFields.SERIES_UID][dicomFields.VALUE][0],
+        instances[0][dicomFields.INSTANCE_UID][dicomFields.VALUE][0],
+        token,
+    )
+
+    return instance_metadata[0]
 
 
-NODEJS_SCRIPT_PATH = "/usr/src/app/bin/parse-dicom.js"
+def parse_roi_instances(instances):
+    # RTSTRUCT Tags
+    STRUCTURE_SET_ROI_SEQUENCE_TAG = "30060020"
+    ROI_NAME_TAG = "30060026"
 
+    # SEG Tags
+    SEGMENT_SEQUENCE_TAG = "00620002"
+    SEGMENT_DESCRIPTION_TAG = "00620006"
 
-def parse_roi_files(files):
+    all_rois = []
 
-    try:
-        tic()
-        # Parse DICOM files using node.js script (faster than pydicom)
-        response = muterun_js(NODEJS_SCRIPT_PATH, ",".join(files))
-        all_rois = response.stdout.decode().strip().split("\t")
-        elapsed = toc()
-        print("Parsing dicom files took", elapsed)
+    for instance in instances:
+        modality = instance[dicomFields.MODALITY][dicomFields.VALUE][0]
+        if modality == "RTSTRUCT":
+            for roi in instance[STRUCTURE_SET_ROI_SEQUENCE_TAG][dicomFields.VALUE]:
+                all_rois.append(roi[ROI_NAME_TAG][dicomFields.VALUE][0])
+        elif modality == "SEG":
+            for roi in instance[SEGMENT_SEQUENCE_TAG][dicomFields.VALUE]:
+                all_rois.append(roi[SEGMENT_DESCRIPTION_TAG][dicomFields.VALUE][0])
+        else:
+            raise ValueError("Unsupported ROI modality")
 
-        rois_map = {r: all_rois.count(r) for r in all_rois}
+    rois_map = {r: all_rois.count(r) for r in all_rois}
 
-        return rois_map
-    except Exception as err:
-        print(err.stdout.decode().strip())
-        raise err
+    return rois_map

@@ -191,6 +191,28 @@ def get_series_from_study(study_uid, modalities, album_id, token):
     return study_series
 
 
+def get_instances_from_series(study_uid, series_uid, token):
+    series_instances_url = (
+        f"{endpoints.studies}/{study_uid}/series/{series_uid}/instances"
+    )
+
+    access_token = get_token_header(token)
+
+    series_instances = requests.get(series_instances_url, headers=access_token).json()
+
+    return series_instances
+
+
+def get_instance_metadata_from_instance(study_uid, series_uid, instance_uid, token):
+    instance_metadata_url = f"{endpoints.studies}/{study_uid}/series/{series_uid}/instances/{instance_uid}/metadata"
+
+    access_token = get_token_header(token)
+
+    instance_metadata = requests.get(instance_metadata_url, headers=access_token).json()
+
+    return instance_metadata
+
+
 # def get_features_path(user_id, study_uid, feature_family_name):
 #     # Define features path for storing the results
 #     features_dir = os.path.join(
