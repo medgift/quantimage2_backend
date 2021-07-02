@@ -127,24 +127,20 @@ def get_roi_metadata(study_dict):
 
 
 def parse_roi_instances(instances):
-    # RTSTRUCT Tags
-    STRUCTURE_SET_ROI_SEQUENCE_TAG = "30060020"
-    ROI_NAME_TAG = "30060026"
-
-    # SEG Tags
-    SEGMENT_SEQUENCE_TAG = "00620002"
-    SEGMENT_DESCRIPTION_TAG = "00620006"
-
     all_rois = []
 
     for instance in instances:
         modality = instance[dicomFields.MODALITY][dicomFields.VALUE][0]
         if modality == "RTSTRUCT":
-            for roi in instance[STRUCTURE_SET_ROI_SEQUENCE_TAG][dicomFields.VALUE]:
-                all_rois.append(roi[ROI_NAME_TAG][dicomFields.VALUE][0])
+            for roi in instance[dicomFields.STRUCTURE_SET_ROI_SEQUENCE][
+                dicomFields.VALUE
+            ]:
+                all_rois.append(roi[dicomFields.ROI_NAME][dicomFields.VALUE][0])
         elif modality == "SEG":
-            for roi in instance[SEGMENT_SEQUENCE_TAG][dicomFields.VALUE]:
-                all_rois.append(roi[SEGMENT_DESCRIPTION_TAG][dicomFields.VALUE][0])
+            for roi in instance[dicomFields.SEGMENT_SEQUENCE][dicomFields.VALUE]:
+                all_rois.append(
+                    roi[dicomFields.SEGMENT_DESCRIPTION][dicomFields.VALUE][0]
+                )
         else:
             raise ValueError("Unsupported ROI modality")
 

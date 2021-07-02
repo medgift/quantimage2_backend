@@ -44,3 +44,11 @@ dicomFields.VALUE = "Value"
 dicomFields.BULK_DATA_URI = "BulkDataURI"
 dicomFields.ALPHABETIC = "Alphabetic"
 dicomFields.DATE_FORMAT = "YYYYMMDD"
+
+# RTSTRUCT
+dicomFields.STRUCTURE_SET_ROI_SEQUENCE = "30060020"
+dicomFields.ROI_NAME = "30060026"
+
+# SEG
+dicomFields.SEGMENT_SEQUENCE = "00620002"
+dicomFields.SEGMENT_DESCRIPTION = "00620006"
