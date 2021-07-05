@@ -119,10 +119,16 @@ def format_lasagna_data(features_df, labels):
         )
         outcomes.append(label_to_add)
 
+    # TODO - This will be done in Melampus also in the future
+    # Imput mean values for NaNs to avoid problems for feature ranking
+    no_nan_concatenated_features_df = concatenated_features_df.fillna(
+        concatenated_features_df.mean()
+    )
+
     # Feature Ranking
     feature_ranking = MelampusFeatureRank(
         None,
-        concatenated_features_df,
+        no_nan_concatenated_features_df,
         None,
         outcomes,
         id_names_map={"patient_id": PATIENT_ID_FIELD},
