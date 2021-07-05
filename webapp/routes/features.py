@@ -11,6 +11,7 @@ from random import randint
 from keycloak.realm import KeycloakRealm
 
 from config import oidc_client
+from imaginebackend_common.const import MODEL_TYPES
 from imaginebackend_common.kheops_utils import dicomFields
 from imaginebackend_common.utils import (
     fetch_extraction_result,
@@ -27,6 +28,7 @@ from imaginebackend_common.models import (
     FeatureExtraction,
     FeatureExtractionTask,
     FeatureCollection,
+    Label,
 )
 from service.feature_transformation import (
     transform_studies_features_to_df,
@@ -35,6 +37,7 @@ from service.feature_transformation import (
     ROI_FIELD,
     transform_studies_collection_features_to_df,
 )
+from .charts import format_lasagna_data
 
 from .utils import validate_decorate
 
@@ -72,37 +75,41 @@ def extraction_by_id(id):
     return jsonify(format_extraction(feature_extraction, payload=True, tasks=True))
 
 
-# Get feature details for a given collection
+# Get feature details for a given extraction
+# INCLUDING the data for the lasagna chart (to improve performance)
+@bp.route(
+    "/extractions/<extraction_id>/feature-details", defaults={"collection_id": None}
+)
 @bp.route("/extractions/<extraction_id>/collections/<collection_id>/feature-details")
-def extraction_collection_features(extraction_id, collection_id):
+def extraction_features_by_id(extraction_id, collection_id):
     token = g.token
 
     extraction = FeatureExtraction.find_by_id(extraction_id)
     studies = get_studies_from_album(extraction.album_id, token)
-    collection = FeatureCollection.find_by_id(collection_id)
 
-    header, features_df = transform_studies_collection_features_to_df(
-        extraction, studies, collection
+    if collection_id:
+        collection = FeatureCollection.find_by_id(collection_id)
+        header, features_df = transform_studies_collection_features_to_df(
+            extraction, studies, collection
+        )
+    else:
+        header, features_df = transform_studies_features_to_df(extraction, studies)
+
+    labels = Label.find_by_album(
+        extraction.album_id, extraction.user_id, MODEL_TYPES.CLASSIFICATION.value
     )
 
-    features_json = json.loads(features_df.to_json(orient="records"))
-
-    return jsonify({"header": header, "features": features_json})
-
-
-# Get feature details for a given extraction
-@bp.route("/extractions/<id>/feature-details")
-def extraction_features_by_id(id):
-    token = g.token
-
-    extraction = FeatureExtraction.find_by_id(id)
-    studies = get_studies_from_album(extraction.album_id, token)
-
-    header, features_df = transform_studies_features_to_df(extraction, studies)
+    formatted_lasagna_data = format_lasagna_data(features_df, labels)
 
     features_json = json.loads(features_df.to_json(orient="records"))
 
-    return jsonify({"header": header, "features": features_json})
+    return jsonify(
+        {
+            "header": header,
+            "features": features_json,
+            "visualization": formatted_lasagna_data,
+        }
+    )
 
 
 # Get data points (PatientID/ROI) for a given extraction
