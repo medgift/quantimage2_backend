@@ -45,6 +45,10 @@ def train_classification_model(
     # TODO - Analyze what is the best thing to do, try concatenation so far
     features_df = concatenate_modalities_rois(features_df)
 
+    # TODO - This will be done in Melampus also in the future
+    # Impute mean for NaNs
+    features_df = features_df.fillna(features_df.mean())
+
     # Get labels for each patient (to make sure they are in the same order)
     labelsList = []
     for index, row in features_df.iterrows():
