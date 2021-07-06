@@ -2,7 +2,12 @@ import os
 
 from flask import Flask
 
+from flask_compress import Compress
+
 from imaginebackend_common.models import db
+
+# Initialize Flask Compress
+compress = Compress()
 
 
 def create_app():
@@ -25,6 +30,10 @@ def create_app():
 
     app.config["UPLOAD_FOLDER"] = "/imagine-data/feature-presets"
 
+    # app.config[
+    #    "COMPRESS_REGISTER"
+    # ] = False  # disable default compression of all eligible requests
+
     # Create feature presets folder (if necessary)
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
@@ -37,3 +46,5 @@ def create_app():
 def init_extensions(app):
     # Init SQLAlchemy & create all tables
     db.init_app(app)
+
+    compress.init_app(app)

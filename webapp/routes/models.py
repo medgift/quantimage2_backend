@@ -86,7 +86,9 @@ def models_by_album(album_id):
 
         if collection_id:
             feature_collection = FeatureCollection.find_by_id(collection_id)
-            formatted_collection = feature_collection.format_collection()
+            formatted_collection = feature_collection.format_collection(
+                with_values=True
+            )
             modalities = formatted_collection["modalities"]
             rois = formatted_collection["rois"]
             feature_names = formatted_collection["features"]

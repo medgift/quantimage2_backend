@@ -9,6 +9,7 @@ import numpy
 from random import randint
 
 from keycloak.realm import KeycloakRealm
+from ttictoc import tic, toc
 
 from config import oidc_client
 from imaginebackend_common.const import MODEL_TYPES
@@ -103,13 +104,15 @@ def extraction_features_by_id(extraction_id, collection_id):
 
     features_json = json.loads(features_df.to_json(orient="records"))
 
-    return jsonify(
+    response = jsonify(
         {
             "header": header,
             "features": features_json,
             "visualization": formatted_lasagna_data,
         }
     )
+
+    return response
 
 
 # Get data points (PatientID/ROI) for a given extraction

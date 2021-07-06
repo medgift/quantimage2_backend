@@ -48,7 +48,7 @@ def feature_collections():
             request.json["features"],
         )
 
-        return jsonify(collection.format_collection())
+        return jsonify(collection.format_collection(with_values=True))
 
 
 @bp.route("/feature-collections/new", methods=["POST"])
@@ -61,7 +61,14 @@ def feature_collections_new():
             request.json["patients"],
         )
 
-        return jsonify(collection.format_collection())
+        return jsonify(collection.format_collection(with_values=True))
+
+
+@bp.route("/feature-collections/<collection_id>")
+def feature_collection_details(collection_id):
+    collection = FeatureCollection.find_by_id(collection_id)
+
+    return jsonify(collection.format_collection(with_values=True))
 
 
 @bp.route("/feature-collections/extraction/<extraction_id>")

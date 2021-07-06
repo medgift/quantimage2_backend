@@ -279,6 +279,7 @@ feature_extraction_roi = Table(
     Column("roi_id", Integer, ForeignKey("roi.id")),
 )
 
+
 # A specific feature extraction task for a given study
 class FeatureExtractionTask(BaseModel, db.Model):
     def __init__(
@@ -655,6 +656,7 @@ feature_collection_value = Table(
     Column("feature_value_id", Integer, ForeignKey("feature_value.id")),
 )
 
+
 # Customized Feature Collection (filtered rows & columns so far)
 class FeatureCollection(BaseModel, db.Model):
     def __init__(self, name, feature_extraction_id):
@@ -662,10 +664,16 @@ class FeatureCollection(BaseModel, db.Model):
         self.feature_extraction_id = feature_extraction_id
 
     @classmethod
-    def find_by_extraction(cls, extraction_id):
-        feature_collections = cls.query.filter(
+    def find_by_extraction(cls, extraction_id, with_values=False):
+
+        query = cls.query.filter(
             cls.feature_extraction_id == extraction_id,
-        ).all()
+        )
+
+        if with_values:
+            query.options(joinedload(cls.values))
+
+        feature_collections = query.all()
 
         return feature_collections
 
@@ -700,16 +708,20 @@ class FeatureCollection(BaseModel, db.Model):
             "feature_extraction_id": self.feature_extraction_id,
         }
 
-    def format_collection(self):
-        modalities = list(set(map(lambda v: v.modality.name, self.values)))
-        rois = list(set(map(lambda v: v.roi.name, self.values)))
-        features = list(set(map(lambda v: v.feature_definition.name, self.values)))
-        return {
-            "collection": self.to_dict(),
-            "modalities": modalities,
-            "rois": rois,
-            "features": features,
-        }
+    def format_collection(self, with_values=False):
+
+        if with_values:
+            modalities = list(set(map(lambda v: v.modality.name, self.values)))
+            rois = list(set(map(lambda v: v.roi.name, self.values)))
+            features = list(set(map(lambda v: v.feature_definition.name, self.values)))
+            return {
+                "collection": self.to_dict(),
+                "modalities": modalities,
+                "rois": rois,
+                "features": features,
+            }
+        else:
+            return {"collection": self.to_dict()}
 
 
 # Machine learning model
@@ -940,7 +952,6 @@ class Annotation(BaseModel, db.Model):
     def create_annotation(
         cls, album_id, parent_id, deleted, title, text, lines, user_id
     ):
-
         annotation = Annotation(
             parent_id, album_id, deleted, title, text, lines, user_id
         )
@@ -972,6 +983,7 @@ Annotation.parent = db.relationship(
     "Annotation", uselist=False, remote_side=[Annotation.id], lazy="joined"
 )
 
+
 # Navigation History
 class NavigationHistory(BaseModel, db.Model):
     def __init__(self, path, user_id):
@@ -991,7 +1003,6 @@ class NavigationHistory(BaseModel, db.Model):
 
     @classmethod
     def create_entry(cls, path, user_id):
-
         entry = NavigationHistory(path, user_id)
         entry.save_to_db()
 
