@@ -1,3 +1,4 @@
+import math
 import os
 
 import collections
@@ -43,9 +44,16 @@ def format_model(model):
     json_str = f.read()
     model_object = jsonpickle.decode(json_str)
 
+    # Change nans to a "N/A" string
+    final_metrics = model_object.metrics
+    for metric in final_metrics:
+        for value in final_metrics[metric]:
+            if math.isnan(final_metrics[metric][value]):
+                final_metrics[metric][value] = "N/A"
+
     # Convert metrics to native Python types
     if MODEL_TYPES(model.type) == MODEL_TYPES.CLASSIFICATION:
-        metrics = model_object.metrics
+        metrics = final_metrics
     elif MODEL_TYPES(model.type) == MODEL_TYPES.SURVIVAL:
         metrics = collections.OrderedDict()
         metrics["concordance_index"] = model_object.concordance_index_
