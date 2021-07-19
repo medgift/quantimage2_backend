@@ -840,52 +840,86 @@ class Model(BaseModel, db.Model):
         }
 
 
-# Data Label
-class Label(BaseModel, db.Model):
-    def __init__(self, album_id, patient_id, label_type, label_content, user_id):
+# Data Label Category
+class LabelCategory(BaseModel, db.Model):
+    def __init__(self, album_id, label_type, name, user_id):
         self.album_id = album_id
-        self.patient_id = patient_id
         self.label_type = label_type
-        self.label_content = label_content
+        self.name = name
         self.user_id = user_id
 
     # Album ID
     album_id = db.Column(db.String(255), nullable=False, unique=False)
 
-    # Patient ID
-    patient_id = db.Column(db.String(255), nullable=False, unique=False)
-
     # Label Type (Classification, Survival, ...)
     label_type = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Label Category nam (PLC Status, ...)
+    name = db.Column(db.String(255), nullable=False, unique=False)
+
+    # User who created the label category
+    user_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    # The labels of this category
+    labels = db.relationship("Label")
+
+    @classmethod
+    def find_by_album(cls, album_id, user_id):
+        instances = (
+            cls.query.filter_by(album_id=album_id, user_id=user_id)
+            .options(joinedload(cls.labels))
+            .all()
+        )
+        return instances
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "album_id": self.album_id,
+            "user_id": self.user_id,
+            "label_type": self.label_type,
+            "name": self.name,
+            "labels": list(map(lambda label: label.to_dict(), self.labels)),
+        }
+
+
+# Data Label
+class Label(BaseModel, db.Model):
+    def __init__(self, label_category_id, patient_id, label_content):
+        self.label_category_id = label_category_id
+        self.patient_id = patient_id
+        self.label_content = label_content
+
+    # Label Category
+    label_category_id = db.Column(db.Integer, ForeignKey("label_category.id"))
+    label_category = db.relationship("LabelCategory", back_populates="labels")
+
+    # Patient ID
+    patient_id = db.Column(db.String(255), nullable=False, unique=False)
 
     # Label Content
     label_content = db.Column(db.JSON, nullable=False, unique=False)
 
-    # User who created the label
-    user_id = db.Column(db.String(255), nullable=False, unique=False)
-
     @classmethod
-    def find_by_album(cls, album_id, user_id, label_type):
-        instances = cls.query.filter_by(
-            album_id=album_id, user_id=user_id, label_type=label_type
-        ).all()
+    def find_by_label_category(cls, label_category_id):
+        instances = cls.query.filter_by(label_category_id=label_category_id).all()
+
         return instances
 
     @classmethod
-    def find_by_user(cls, user_id):
-        instances = cls.query.filter_by(user_id=user_id).all()
-        return instances
-
-    @classmethod
-    def save_label(cls, album_id, patient_id, label_type, label_content, user_id):
+    def save_label(cls, label_category_id, patient_id, label_content):
         old_instance, created = Label.get_or_create(
             criteria={
-                "album_id": album_id,
+                "label_category_id": label_category_id,
                 "patient_id": patient_id,
-                "label_type": label_type,
-                "user_id": user_id,
             },
-            defaults={"label_content": label_content},
+            defaults={
+                "label_category_id": label_category_id,
+                "patient_id": patient_id,
+                "label_content": label_content,
+            },
         )
         if not created:
             old_instance.label_content = label_content
@@ -898,11 +932,8 @@ class Label(BaseModel, db.Model):
             "id": self.id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "album_id": self.album_id,
             "patient_id": self.patient_id,
-            "label_type": self.label_type,
             "label_content": self.label_content,
-            "user_id": self.user_id,
         }
 
 
@@ -1025,10 +1056,21 @@ class Album(BaseModel, db.Model):
     album_id = db.Column(db.String(255), nullable=False, unique=True)
     rois = db.Column(db.JSON, nullable=True, unique=False)
 
+    current_outcome_id = db.Column(db.Integer, ForeignKey("label_category.id"))
+    current_outcome = db.relationship("LabelCategory")
+
     @classmethod
     def save_rois(cls, album_id, rois):
         album = cls.find_by_album_id(album_id)
         album.rois = rois
+        album.save_to_db()
+
+        return album
+
+    @classmethod
+    def save_current_outcome(cls, album_id, current_outcome_id):
+        album = cls.find_by_album_id(album_id)
+        album.current_outcome_id = current_outcome_id
         album.save_to_db()
 
         return album
@@ -1048,5 +1090,5 @@ class Album(BaseModel, db.Model):
             "id": self.id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "album_id": self.path,
+            "album_id": self.album_id,
         }

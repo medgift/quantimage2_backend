@@ -30,6 +30,7 @@ from imaginebackend_common.models import (
     FeatureExtractionTask,
     FeatureCollection,
     Label,
+    Album,
 )
 from service.feature_transformation import (
     transform_studies_features_to_df,
@@ -86,6 +87,7 @@ def extraction_features_by_id(extraction_id, collection_id):
     token = g.token
 
     extraction = FeatureExtraction.find_by_id(extraction_id)
+    album = Album.find_by_album_id(extraction.album_id)
     studies = get_studies_from_album(extraction.album_id, token)
 
     if collection_id:
@@ -96,9 +98,14 @@ def extraction_features_by_id(extraction_id, collection_id):
     else:
         header, features_df = transform_studies_features_to_df(extraction, studies)
 
-    labels = Label.find_by_album(
-        extraction.album_id, extraction.user_id, MODEL_TYPES.CLASSIFICATION.value
-    )
+    labels = []
+
+    # Get labels (if current outcome is defined & it's classification)
+    if (
+        album.current_outcome
+        and MODEL_TYPES(album.current_outcome.label_type) == MODEL_TYPES.CLASSIFICATION
+    ):
+        labels = Label.find_by_label_category(album.current_outcome_id)
 
     formatted_lasagna_data = format_lasagna_data(features_df, labels)
 

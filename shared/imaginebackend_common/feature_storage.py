@@ -67,36 +67,14 @@ def store_modalities(modalities):
 
     for modality in modalities:
         instance, created = Modality.get_or_create(
-            criteria={"name": modality,}, defaults={"name": modality}
+            criteria={
+                "name": modality,
+            },
+            defaults={"name": modality},
         )
         modality_instances.append(instance)
 
     return modality_instances
-
-
-def store_rois(rois, feature_extraction_id):
-    roi_instances = []
-
-    for roi in rois:
-        roi_instance, created = ROI.get_or_create(
-            criteria={"name": roi,}, defaults={"name": roi}
-        )
-
-        # Link ROI to feature extraction
-        extraction_definition, created = Fea.get_or_create(
-            criteria={
-                "feature_extraction_id": feature_extraction_id,
-                "roi_id": roi_instance.id,
-            },
-            defaults={
-                "feature_extraction_id": feature_extraction_id,
-                "roi_id": roi_instance.id,
-            },
-        )
-
-        roi_instances.append(instance)
-
-    return roi_instances
 
 
 def store_extraction_associations(model, names, existing):
@@ -107,7 +85,8 @@ def store_extraction_associations(model, names, existing):
     for name in names:
         if name not in existing_map:
             instance, created = model.get_or_create(
-                criteria={"name": name}, defaults={"name": name},
+                criteria={"name": name},
+                defaults={"name": name},
             )
         else:
             instance = existing_map[name]

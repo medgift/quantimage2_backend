@@ -34,17 +34,41 @@ def before_request():
 
 
 @bp.route("/albums/<album_id>", methods=("GET", "PATCH"))
-def album_rois(album_id, rois=None):
+def album_rois(album_id):
     if request.method == "PATCH":
-        return save_rois(album_id, rois)
+        return save_rois(album_id, None)
 
     if request.method == "GET":
         return get_rois(album_id)
 
 
+@bp.route("/albums/<album_id>/current-outcome", defaults={"labelcategory_id": None})
+@bp.route(
+    "/albums/<album_id>/current-outcome/<labelcategory_id>", methods=("GET", "PATCH")
+)
+def album_labelcategory(album_id, labelcategory_id=None):
+
+    if request.method == "PATCH":
+        return save_current_outcome(album_id, labelcategory_id)
+
+    if request.method == "GET":
+        return get_current_outcome(album_id)
+
+
 @bp.route("/albums/<album_id>/force")
 def album_rois_force(album_id):
     return get_rois(album_id, force=True)
+
+
+def get_current_outcome(album_id):
+    album = Album.find_by_album_id(album_id)
+
+    return f"{album.current_outcome_id}"
+
+
+def save_current_outcome(album_id, labelcategory_id):
+    album = Album.save_current_outcome(album_id, labelcategory_id)
+    return jsonify(album.to_dict())
 
 
 def save_rois(album_id, rois):
