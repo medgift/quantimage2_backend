@@ -459,9 +459,7 @@ class FeatureValue(BaseModel, db.Model):
         )
 
         tic()
-        feature_values = FeatureValue.query.filter(
-            FeatureValue.feature_extraction_task_id.in_(feature_extraction_task_ids)
-        ).all()
+        feature_values = cls.fetch_feature_values(feature_extraction_task_ids)
         elapsed = toc()
         print("Getting the feature values from the DB took", elapsed)
 
@@ -484,6 +482,72 @@ class FeatureValue(BaseModel, db.Model):
         print("Formatting features took", elapsed)
 
         return features_formatted, names
+
+    @classmethod
+    def fetch_feature_values(cls, feature_extraction_task_ids):
+        # Full ORM objects
+        # return FeatureValue.query.filter(
+        #     FeatureValue.feature_extraction_task_id.in_(feature_extraction_task_ids)
+        # ).all()
+
+        compiled = (
+            FeatureValue.__table__.select()
+            .with_only_columns(
+                [
+                    FeatureValue.__table__.c.feature_extraction_task_id,
+                    FeatureValue.__table__.c.modality_id,
+                    FeatureValue.__table__.c.roi_id,
+                    FeatureValue.__table__.c.feature_definition_id,
+                    FeatureValue.__table__.c.value,
+                ]
+            )
+            .where(
+                FeatureValue.__table__.c.feature_extraction_task_id.in_(
+                    feature_extraction_task_ids
+                )
+            )
+            .compile(dialect=db.engine.dialect, compile_kwargs={"literal_binds": True})
+        )
+
+        # because if you're going to roll your own, you're probably
+        # going to do this, so see how this pushes you right back into
+        # ORM land anyway :)
+        class SimpleFeatureValue(object):
+            def __init__(
+                self,
+                feature_extraction_task_id,
+                modality_id,
+                roi_id,
+                feature_definition_id,
+                value,
+            ):
+                self.feature_extraction_task_id = feature_extraction_task_id
+                self.modality_id = modality_id
+                self.roi_id = roi_id
+                self.feature_definition_id = feature_definition_id
+                self.value = value
+
+        sql = str(compiled)
+
+        conn = db.engine.raw_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+
+        feature_values = []
+        for row in cursor.fetchall():
+            # ensure that we fully fetch!
+            feature_value = SimpleFeatureValue(
+                feature_extraction_task_id=row[0],
+                modality_id=row[1],
+                roi_id=row[2],
+                feature_definition_id=row[3],
+                value=row[4],
+            )
+            feature_values.append(feature_value)
+
+        conn.close()
+
+        return feature_values
 
     @classmethod
     def find_id_by_collection_criteria_new(

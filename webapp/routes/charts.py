@@ -122,7 +122,7 @@ def format_lasagna_data(features_df, labels):
     # TODO - This will be done in Melampus also in the future
     # Imput mean values for NaNs to avoid problems for feature ranking
     no_nan_concatenated_features_df = concatenated_features_df.fillna(
-        concatenated_features_df.mean()
+        concatenated_features_df.mean(numeric_only=True)
     )
 
     # Feature Ranking

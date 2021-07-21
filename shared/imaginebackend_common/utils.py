@@ -77,12 +77,9 @@ def format_extraction(extraction, payload=False, tasks=False):
     elapsed = toc()
     print("Getting extraction result took", elapsed)
 
-    tic()
     if tasks:
         formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks, payload)}
         extraction_dict.update(formatted_tasks)
-    elapsed = toc()
-    print("Formatting tasks took", elapsed)
 
     return extraction_dict
 
