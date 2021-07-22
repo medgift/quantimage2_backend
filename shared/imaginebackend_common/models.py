@@ -386,6 +386,22 @@ class FeatureValue(BaseModel, db.Model):
         self.modality_id = modality_id
         self.roi_id = roi_id
 
+    # Simplified class for bulk loading of features
+    class SimpleFeatureValue(object):
+        def __init__(
+            self,
+            feature_extraction_task_id,
+            modality_id,
+            roi_id,
+            feature_definition_id,
+            value,
+        ):
+            self.feature_extraction_task_id = feature_extraction_task_id
+            self.modality_id = modality_id
+            self.roi_id = roi_id
+            self.feature_definition_id = feature_definition_id
+            self.value = value
+
     @classmethod
     def save_features_batch(cls, feature_instances):
         db.session.bulk_insert_mappings(cls, feature_instances)
@@ -397,37 +413,34 @@ class FeatureValue(BaseModel, db.Model):
         modalities = Modality.find_all()
         rois = ROI.find_all()
         definitions = FeatureDefinition.find_all()
+        feature_extraction_tasks = FeatureExtractionTask.query.filter_by(
+            feature_extraction_id=collection.feature_extraction_id
+        )
 
         modalities_map = {modality.id: modality.name for modality in modalities}
         rois_map = {roi.id: roi.name for roi in rois}
         definitions_map = {definition.id: definition.name for definition in definitions}
+        feature_tasks_map = {
+            task.id: task.study_uid for task in feature_extraction_tasks
+        }
 
         tic()
-        collection_loaded = (
-            db.session.query(FeatureCollection)
-            .options(
-                joinedload(FeatureCollection.values).options(
-                    joinedload(FeatureValue.feature_extraction_task).options(
-                        load_only("study_uid")
-                    ),
-                )
-            )
-            .filter(FeatureCollection.id == collection.id)
-            .one_or_none()
-        )
+        feature_collection_values = cls.fetch_feature_collection_values(collection.id)
         elapsed = toc()
         print("Getting the feature collection values from the DB took", elapsed)
 
         tic()
         features_formatted = [
             {
-                "study_uid": feature_value.feature_extraction_task.study_uid,
+                "study_uid": feature_tasks_map[
+                    feature_value.feature_extraction_task_id
+                ],
                 "modality": modalities_map[feature_value.modality_id],
                 "roi": rois_map[feature_value.roi_id],
                 "name": definitions_map[feature_value.feature_definition_id],
                 "value": feature_value.value,
             }
-            for feature_value in collection_loaded.values
+            for feature_value in feature_collection_values
         ]
         names = list(dict.fromkeys([f["name"] for f in features_formatted]))
         elapsed = toc()
@@ -463,7 +476,7 @@ class FeatureValue(BaseModel, db.Model):
         elapsed = toc()
         print("Getting the feature values from the DB took", elapsed)
 
-        tic()
+        # tic()
         features_formatted = [
             {
                 "study_uid": feature_tasks_map[
@@ -478,8 +491,8 @@ class FeatureValue(BaseModel, db.Model):
         ]
         names = list(dict.fromkeys([f["name"] for f in features_formatted]))
 
-        elapsed = toc()
-        print("Formatting features took", elapsed)
+        # elapsed = toc()
+        # print("Formatting features took", elapsed)
 
         return features_formatted, names
 
@@ -490,6 +503,7 @@ class FeatureValue(BaseModel, db.Model):
         #     FeatureValue.feature_extraction_task_id.in_(feature_extraction_task_ids)
         # ).all()
 
+        # Low-level DBAPI fetchall()
         compiled = (
             FeatureValue.__table__.select()
             .with_only_columns(
@@ -509,23 +523,84 @@ class FeatureValue(BaseModel, db.Model):
             .compile(dialect=db.engine.dialect, compile_kwargs={"literal_binds": True})
         )
 
-        # because if you're going to roll your own, you're probably
-        # going to do this, so see how this pushes you right back into
-        # ORM land anyway :)
-        class SimpleFeatureValue(object):
-            def __init__(
-                self,
-                feature_extraction_task_id,
-                modality_id,
-                roi_id,
-                feature_definition_id,
-                value,
-            ):
-                self.feature_extraction_task_id = feature_extraction_task_id
-                self.modality_id = modality_id
-                self.roi_id = roi_id
-                self.feature_definition_id = feature_definition_id
-                self.value = value
+        sql = str(compiled)
+
+        conn = db.engine.raw_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+
+        feature_values = []
+        for row in cursor.fetchall():
+            # ensure that we fully fetch!
+            feature_value = cls.SimpleFeatureValue(
+                feature_extraction_task_id=row[0],
+                modality_id=row[1],
+                roi_id=row[2],
+                feature_definition_id=row[3],
+                value=row[4],
+            )
+            feature_values.append(feature_value)
+
+        conn.close()
+
+        return feature_values
+
+    @classmethod
+    def fetch_feature_collection_values(cls, feature_collection_id):
+        # Full ORM objects
+        # collection_loaded = (
+        #     db.session.query(FeatureCollection)
+        #         .options(
+        #         joinedload(FeatureCollection.values).options(
+        #             joinedload(FeatureValue.feature_extraction_task).options(
+        #                 load_only("study_uid")
+        #             ),
+        #         )
+        #     )
+        #         .filter(FeatureCollection.id == feature_collection_id)
+        #         .one_or_none()
+        # )
+        # return collection_loaded.values
+
+        # Low-level DBAPI fetchall()
+        # Get feature value IDs to fetch first
+        compiled = (
+            feature_collection_value.select()
+            .with_only_columns([feature_collection_value.c.feature_value_id])
+            .where(
+                feature_collection_value.c.feature_collection_id
+                == feature_collection_id
+            )
+            .compile(dialect=db.engine.dialect, compile_kwargs={"literal_binds": True})
+        )
+
+        sql = str(compiled)
+
+        conn = db.engine.raw_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+
+        feature_value_ids = []
+        for row in cursor.fetchall():
+            # ensure that we fully fetch!
+            feature_value_ids.append(row[0])
+
+        conn.close()
+
+        compiled = (
+            FeatureValue.__table__.select()
+            .with_only_columns(
+                [
+                    FeatureValue.__table__.c.feature_extraction_task_id,
+                    FeatureValue.__table__.c.modality_id,
+                    FeatureValue.__table__.c.roi_id,
+                    FeatureValue.__table__.c.feature_definition_id,
+                    FeatureValue.__table__.c.value,
+                ]
+            )
+            .where(FeatureValue.__table__.c.id.in_(feature_value_ids))
+            .compile(dialect=db.engine.dialect, compile_kwargs={"literal_binds": True})
+        )
 
         sql = str(compiled)
 
@@ -536,7 +611,7 @@ class FeatureValue(BaseModel, db.Model):
         feature_values = []
         for row in cursor.fetchall():
             # ensure that we fully fetch!
-            feature_value = SimpleFeatureValue(
+            feature_value = cls.SimpleFeatureValue(
                 feature_extraction_task_id=row[0],
                 modality_id=row[1],
                 roi_id=row[2],
@@ -774,18 +849,117 @@ class FeatureCollection(BaseModel, db.Model):
 
     def format_collection(self, with_values=False):
 
+        tic()
         if with_values:
-            modalities = list(set(map(lambda v: v.modality.name, self.values)))
-            rois = list(set(map(lambda v: v.roi.name, self.values)))
-            features = list(set(map(lambda v: v.feature_definition.name, self.values)))
-            return {
+            (modalities, rois, features) = self.get_modalities_rois_features(self.id)
+            result = {
                 "collection": self.to_dict(),
                 "modalities": modalities,
                 "rois": rois,
                 "features": features,
             }
         else:
-            return {"collection": self.to_dict()}
+            result = {"collection": self.to_dict()}
+        elapsed = toc()
+        print("Formatting collection took", elapsed)
+
+        return result
+
+    def get_modalities_rois_features(self, feature_collection_id):
+
+        modality_query = (
+            db.select([Modality.__table__.c.name])
+            .select_from(
+                FeatureValue.__table__.join(
+                    feature_collection_value,
+                    feature_collection_value.c.feature_value_id
+                    == FeatureValue.__table__.c.id,
+                )
+                .join(
+                    FeatureCollection.__table__,
+                    FeatureCollection.__table__.c.id
+                    == feature_collection_value.c.feature_collection_id,
+                )
+                .join(
+                    Modality.__table__,
+                    Modality.__table__.c.id == FeatureValue.__table__.c.modality_id,
+                )
+            )
+            .distinct()
+            .where(FeatureCollection.__table__.c.id == feature_collection_id)
+        )
+
+        modalities = process_query_single_column(modality_query)
+
+        roi_query = (
+            db.select([ROI.__table__.c.name])
+            .select_from(
+                FeatureValue.__table__.join(
+                    feature_collection_value,
+                    feature_collection_value.c.feature_value_id
+                    == FeatureValue.__table__.c.id,
+                )
+                .join(
+                    FeatureCollection.__table__,
+                    FeatureCollection.__table__.c.id
+                    == feature_collection_value.c.feature_collection_id,
+                )
+                .join(
+                    ROI.__table__, ROI.__table__.c.id == FeatureValue.__table__.c.roi_id
+                )
+            )
+            .distinct()
+            .where(FeatureCollection.__table__.c.id == feature_collection_id)
+        )
+
+        rois = process_query_single_column(roi_query)
+
+        feature_query = (
+            db.select([FeatureDefinition.__table__.c.name])
+            .select_from(
+                FeatureValue.__table__.join(
+                    feature_collection_value,
+                    feature_collection_value.c.feature_value_id
+                    == FeatureValue.__table__.c.id,
+                )
+                .join(
+                    FeatureCollection.__table__,
+                    FeatureCollection.__table__.c.id
+                    == feature_collection_value.c.feature_collection_id,
+                )
+                .join(
+                    FeatureDefinition.__table__,
+                    FeatureDefinition.__table__.c.id
+                    == FeatureValue.__table__.c.feature_definition_id,
+                )
+            )
+            .distinct()
+            .where(FeatureCollection.__table__.c.id == feature_collection_id)
+        )
+
+        features = process_query_single_column(feature_query)
+
+        return (modalities, rois, features)
+
+
+def process_query_single_column(query):
+    compiled = query.compile(
+        dialect=db.engine.dialect, compile_kwargs={"literal_binds": True}
+    )
+
+    sql = str(compiled)
+
+    conn = db.engine.raw_connection()
+    cursor = conn.cursor()
+    cursor.execute(sql)
+
+    results = []
+    for row in cursor.fetchall():
+        results.append(row[0])
+
+    conn.close()
+
+    return results
 
 
 # Machine learning model

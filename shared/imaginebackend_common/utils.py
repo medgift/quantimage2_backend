@@ -75,7 +75,7 @@ def format_extraction(extraction, payload=False, tasks=False):
     )
     extraction_dict["status"] = vars(status)
     elapsed = toc()
-    print("Getting extraction result took", elapsed)
+    print("Getting extraction result for formatted extraction took", elapsed)
 
     if tasks:
         formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks, payload)}
@@ -201,9 +201,10 @@ def fetch_extraction_result(celery_app, result_id, tasks=None):
     errors = {}
 
     if result_id is not None:
-        print(f"Getting result for extraction result {result_id}")
-
+        tic()
         result = celery_app.GroupResult.restore(result_id)
+        elapsed = toc()
+        print(f"Getting result for extraction result {result_id} took", elapsed)
 
         # Make an inventory of errors (if tasks are provided)
         if tasks is not None:
@@ -218,24 +219,6 @@ def fetch_extraction_result(celery_app, result_id, tasks=None):
 
                     if not str(child.info) in errors[study_uid]:
                         errors[study_uid].append(str(child.info))
-
-        # one_started_task = next(
-        #     (task for task in result.children if type(task.info) is dict), None
-        # )
-
-        # total_steps = (
-        #     one_started_task.info["total"] * len(result.children)
-        #     if one_started_task is not None
-        #     else 0
-        # )
-        #
-        # completed_steps = sum(
-        #     [
-        #         task.info["completed"]
-        #         for task in result.children
-        #         if type(task.info) is dict
-        #     ]
-        # )
 
         pending_tasks = [
             task for task in result.children if task.status == celerystates.PENDING

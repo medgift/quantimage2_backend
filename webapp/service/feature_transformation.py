@@ -7,7 +7,13 @@ import requests
 from ttictoc import tic, toc
 
 from imaginebackend_common.kheops_utils import dicomFields, endpoints, get_token_header
-from imaginebackend_common.models import FeatureValue
+from imaginebackend_common.models import (
+    FeatureValue,
+    db,
+    FeatureExtractionTask,
+    FeatureCollection,
+    feature_collection_value,
+)
 from imaginebackend_common.utils import read_feature_file
 
 PATIENT_ID_FIELD = "PatientID"
@@ -21,7 +27,7 @@ NAME_COLUMN = "name"
 VALUE_COLUMN = "value"
 
 
-def get_collection_features(feature_extraction, studies, collection):
+def get_collection_features(studies, collection):
     features, names = FeatureValue.get_for_collection(collection)
 
     tabular_features = transform_feature_values_to_tabular(features, studies)
@@ -76,12 +82,8 @@ def transform_feature_values_to_tabular(values, studies):
     return sorted_df
 
 
-def transform_studies_collection_features_to_df(
-    feature_extraction, studies, collection
-):
-    features_df, names = get_collection_features(
-        feature_extraction, studies, collection
-    )
+def transform_studies_collection_features_to_df(studies, collection):
+    features_df, names = get_collection_features(studies, collection)
 
     return names, features_df
 
@@ -150,3 +152,73 @@ def make_album_file_name(album_name):
 
 def make_album_collection_file_name(album_name, collection_name):
     return f"features_album_{album_name.replace(' ', '-')}_{collection_name.replace(' ', '-')}.zip"
+
+
+def get_data_points_collection(studies, collection_id):
+    study_uid_patient_id_map = {
+        study[dicomFields.STUDY_UID][dicomFields.VALUE][0]: study[
+            dicomFields.PATIENT_ID
+        ][dicomFields.VALUE][0]
+        for study in studies
+    }
+
+    # Low-level DBAPI fetchall()
+    compiled = (
+        db.select([FeatureExtractionTask.__table__.c.study_uid])
+        .select_from(
+            FeatureExtractionTask.__table__.join(
+                FeatureValue.__table__,
+                FeatureValue.__table__.c.feature_extraction_task_id
+                == FeatureExtractionTask.__table__.c.id,
+            )
+            .join(
+                feature_collection_value,
+                feature_collection_value.c.feature_value_id
+                == FeatureValue.__table__.c.id,
+            )
+            .join(
+                FeatureCollection.__table__,
+                FeatureCollection.__table__.c.id
+                == feature_collection_value.c.feature_collection_id,
+            )
+        )
+        .distinct()
+        .where(FeatureCollection.__table__.c.id == collection_id)
+        .compile(dialect=db.engine.dialect, compile_kwargs={"literal_binds": True})
+    )
+
+    sql = str(compiled)
+
+    conn = db.engine.raw_connection()
+    cursor = conn.cursor()
+    cursor.execute(sql)
+
+    study_uids = []
+    for row in cursor.fetchall():
+        # ensure that we fully fetch!
+        if row[0] in study_uid_patient_id_map:
+            study_uids.append(row[0])
+
+    patient_ids = [study_uid_patient_id_map[study_uid] for study_uid in study_uids]
+
+    conn.close()
+
+    return patient_ids
+
+
+def get_data_points_extraction(result, studies):
+    # Filter out studies that weren't processed successfully
+    successful_studies = [
+        study
+        for study in studies
+        if study[dicomFields.STUDY_UID][dicomFields.VALUE][0] not in result.errors
+    ]
+
+    # Get Patient IDs from studies
+    patient_ids = []
+    for study in successful_studies:
+        patient_id = study[dicomFields.PATIENT_ID][dicomFields.VALUE][0]
+        if not patient_id in patient_ids:
+            patient_ids.append(patient_id)
+
+    return patient_ids

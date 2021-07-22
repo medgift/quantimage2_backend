@@ -64,7 +64,7 @@ def lasagna_chart(album_id, collection_id):
         collection = FeatureCollection.find_by_id(collection_id)
 
         header, features_df = transform_studies_collection_features_to_df(
-            extraction, studies, collection
+            studies, collection
         )
     else:
         header, features_df = transform_studies_features_to_df(extraction, studies)

@@ -38,6 +38,8 @@ from service.feature_transformation import (
     MODALITY_FIELD,
     ROI_FIELD,
     transform_studies_collection_features_to_df,
+    get_data_points_extraction,
+    get_data_points_collection,
 )
 from .charts import format_lasagna_data
 
@@ -93,7 +95,7 @@ def extraction_features_by_id(extraction_id, collection_id):
     if collection_id:
         collection = FeatureCollection.find_by_id(collection_id)
         header, features_df = transform_studies_collection_features_to_df(
-            extraction, studies, collection
+            studies, collection
         )
     else:
         header, features_df = transform_studies_features_to_df(extraction, studies)
@@ -107,9 +109,12 @@ def extraction_features_by_id(extraction_id, collection_id):
     ):
         labels = Label.find_by_label_category(album.current_outcome_id)
 
+    tic()
     formatted_lasagna_data = format_lasagna_data(features_df, labels)
 
     features_json = json.loads(features_df.to_json(orient="records"))
+    elapsed = toc()
+    print("Formatting & serializing features took", elapsed)
 
     response = jsonify(
         {
@@ -130,21 +135,10 @@ def extraction_collection_data_points(extraction_id, collection_id):
     extraction = FeatureExtraction.find_by_id(extraction_id)
     studies = get_studies_from_album(extraction.album_id, token)
 
-    collection = FeatureCollection.find_by_id(collection_id)
-
-    # Get studies included in the collection's feature values
-
-    study_uids = set(
-        list(map(lambda v: v.feature_extraction_task.study_uid, collection.values))
-    )
-
-    # Get Patient IDs from studies
-    patient_ids = []
-    for study in studies:
-        patient_id = study[dicomFields.PATIENT_ID][dicomFields.VALUE][0]
-        study_uid = study[dicomFields.STUDY_UID][dicomFields.VALUE][0]
-        if not patient_id in patient_ids and study_uid in study_uids:
-            patient_ids.append(patient_id)
+    tic()
+    patient_ids = get_data_points_collection(studies, collection_id)
+    elapsed = toc()
+    print("Getting data points for collection took", elapsed)
 
     return jsonify({"data-points": patient_ids})
 
@@ -156,25 +150,19 @@ def extraction_data_points_by_id(id):
 
     extraction = FeatureExtraction.find_by_id(id)
 
+    tic()
     result = fetch_extraction_result(
-        current_app.my_celery, extraction.result_id, extraction.tasks
+        current_app.my_celery, extraction.result_id, tasks=extraction.tasks
     )
+    elapsed = toc()
+    print("Getting extraction result for data points took", elapsed)
 
     studies = get_studies_from_album(extraction.album_id, token)
 
-    # Filter out studies that weren't processed successfully
-    successful_studies = [
-        study
-        for study in studies
-        if study[dicomFields.STUDY_UID][dicomFields.VALUE][0] not in result.errors
-    ]
-
-    # Get Patient IDs from studies
-    patient_ids = []
-    for study in successful_studies:
-        patient_id = study[dicomFields.PATIENT_ID][dicomFields.VALUE][0]
-        if not patient_id in patient_ids:
-            patient_ids.append(patient_id)
+    tic()
+    patient_ids = get_data_points_extraction(result, studies)
+    elapsed = toc()
+    print("Getting data points for extraction took", elapsed)
 
     # TODO - Allow choosing a mode (patient only or patient + roi)
     return jsonify({"data-points": patient_ids})

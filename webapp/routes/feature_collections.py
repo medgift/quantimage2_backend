@@ -64,13 +64,6 @@ def feature_collections_new():
         return jsonify(collection.format_collection(with_values=True))
 
 
-@bp.route("/feature-collections/<collection_id>")
-def feature_collection_details(collection_id):
-    collection = FeatureCollection.find_by_id(collection_id)
-
-    return jsonify(collection.format_collection(with_values=True))
-
-
 @bp.route("/feature-collections/extraction/<extraction_id>")
 def feature_collections_by_extraction(extraction_id):
     collections = FeatureCollection.find_by_extraction(extraction_id)
@@ -121,7 +114,7 @@ def download_collection_by_id(feature_collection_id):
 
     # Transform the features into a DataFrame
     header, features_df = transform_studies_collection_features_to_df(
-        feature_extraction, album_studies, feature_collection
+        album_studies, feature_collection
     )
 
     # Album : send back a zip file with CSV files separated by
@@ -229,7 +222,9 @@ def save_feature_collection(
 def get_feature_collection(feature_collection_id):
     collection = FeatureCollection.find_by_id(feature_collection_id)
 
-    return jsonify(collection.to_dict())
+    return jsonify(collection.format_collection(with_values=True))
+
+    # return jsonify(collection.to_dict())
 
 
 def update_feature_collection(feature_collection_id):
