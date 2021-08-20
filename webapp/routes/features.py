@@ -31,6 +31,7 @@ from imaginebackend_common.models import (
     FeatureCollection,
     Label,
     Album,
+    LabelCategory,
 )
 from service.feature_transformation import (
     transform_studies_features_to_df,
@@ -100,17 +101,16 @@ def extraction_features_by_id(extraction_id, collection_id):
     else:
         header, features_df = transform_studies_features_to_df(extraction, studies)
 
+    label_category = None
     labels = []
 
-    # Get labels (if current outcome is defined & it's classification)
-    if (
-        album.current_outcome
-        and MODEL_TYPES(album.current_outcome.label_type) == MODEL_TYPES.CLASSIFICATION
-    ):
+    # Get labels (if current outcome is defined)
+    if album.current_outcome:
+        label_category = LabelCategory.find_by_id(album.current_outcome_id)
         labels = Label.find_by_label_category(album.current_outcome_id)
 
     tic()
-    formatted_lasagna_data = format_lasagna_data(features_df, labels)
+    formatted_lasagna_data = format_lasagna_data(features_df, label_category, labels)
 
     features_json = json.loads(features_df.to_json(orient="records"))
     elapsed = toc()

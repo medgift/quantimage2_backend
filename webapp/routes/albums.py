@@ -10,7 +10,7 @@ from flask import Blueprint, jsonify, request, g, current_app, Response
 from ttictoc import tic, toc
 
 from imaginebackend_common.kheops_utils import dicomFields, get_token_header
-from imaginebackend_common.models import Album
+from imaginebackend_common.models import Album, LabelCategory
 
 from multiprocessing.pool import ThreadPool
 
@@ -42,7 +42,11 @@ def album_rois(album_id):
         return get_rois(album_id)
 
 
-@bp.route("/albums/<album_id>/current-outcome", defaults={"labelcategory_id": None})
+@bp.route(
+    "/albums/<album_id>/current-outcome",
+    defaults={"labelcategory_id": None},
+    methods=("GET", "PATCH"),
+)
 @bp.route(
     "/albums/<album_id>/current-outcome/<labelcategory_id>", methods=("GET", "PATCH")
 )
@@ -63,7 +67,11 @@ def album_rois_force(album_id):
 def get_current_outcome(album_id):
     album = Album.find_by_album_id(album_id)
 
-    return f"{album.current_outcome_id}"
+    if album.current_outcome_id:
+        current_outcome = LabelCategory.find_by_id(album.current_outcome_id)
+        return jsonify(current_outcome.to_dict())
+    else:
+        return Response(status=200, mimetype="application/json", response="null")
 
 
 def save_current_outcome(album_id, labelcategory_id):

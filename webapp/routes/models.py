@@ -1,6 +1,8 @@
 import math
 import os
 
+import traceback
+
 import collections
 
 import jsonpickle
@@ -44,15 +46,14 @@ def format_model(model):
     json_str = f.read()
     model_object = jsonpickle.decode(json_str)
 
-    # Change nans to a "N/A" string
-    final_metrics = model_object.metrics
-    for metric in final_metrics:
-        for value in final_metrics[metric]:
-            if math.isnan(final_metrics[metric][value]):
-                final_metrics[metric][value] = "N/A"
-
     # Convert metrics to native Python types
     if MODEL_TYPES(model.type) == MODEL_TYPES.CLASSIFICATION:
+        final_metrics = model_object.metrics
+        for metric in final_metrics:
+            for value in final_metrics[metric]:
+                if math.isnan(final_metrics[metric][value]):
+                    final_metrics[metric][value] = "N/A"
+
         metrics = final_metrics
     elif MODEL_TYPES(model.type) == MODEL_TYPES.SURVIVAL:
         metrics = collections.OrderedDict()
@@ -133,7 +134,12 @@ def models_by_album(album_id):
                     rois,
                 )
             elif MODEL_TYPES(model_type) == MODEL_TYPES.SURVIVAL:
-                model, feature_selection, feature_names = train_survival_model(
+                (
+                    model,
+                    feature_selection,
+                    patient_ids,
+                    feature_names,
+                ) = train_survival_model(
                     feature_extraction_id, collection_id, studies, gt
                 )
 
@@ -175,6 +181,7 @@ def models_by_album(album_id):
 
             return jsonify(format_model(db_model))
         except Exception as e:
+            traceback.print_exc()
             error_message = {"error": str(e)}
             return make_response(jsonify(error_message), 500)
 

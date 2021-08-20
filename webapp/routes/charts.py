@@ -9,7 +9,13 @@ from flask import Blueprint, jsonify, request, g, current_app, Response
 from sklearn.preprocessing import StandardScaler
 
 from imaginebackend_common.const import MODEL_TYPES
-from imaginebackend_common.models import FeatureExtraction, Label, FeatureCollection
+from imaginebackend_common.models import (
+    FeatureExtraction,
+    Label,
+    FeatureCollection,
+    Album,
+    LabelCategory,
+)
 from routes.utils import decorate_if_possible
 from service.feature_analysis import concatenate_modalities_rois
 from service.feature_extraction import get_studies_from_album
@@ -20,6 +26,7 @@ from service.feature_transformation import (
     ROI_FIELD,
     OUTCOME_FIELD_CLASSIFICATION,
     transform_studies_collection_features_to_df,
+    OUTCOME_FIELD_SURVIVAL_EVENT,
 )
 
 from melampus.feature_ranking import MelampusFeatureRank
@@ -69,12 +76,14 @@ def lasagna_chart(album_id, collection_id):
     else:
         header, features_df = transform_studies_features_to_df(extraction, studies)
 
-    # TODO - Determine which labels we want to get???
-    labels = Label.find_by_album(
-        extraction.album_id, extraction.user_id, MODEL_TYPES.CLASSIFICATION.value
-    )
+    album = Album.find_by_album_id(extraction.album_id)
 
-    formatted_lasagna_data = format_lasagna_data(features_df, labels)
+    # Get labels (if current outcome is defined)
+    if album.current_outcome:
+        label_category = LabelCategory.find_by_id(album.current_outcome_id)
+        labels = Label.find_by_label_category(album.current_outcome_id)
+
+    formatted_lasagna_data = format_lasagna_data(features_df, label_category, labels)
 
     return jsonify(formatted_lasagna_data)
 
@@ -82,20 +91,28 @@ def lasagna_chart(album_id, collection_id):
 def format_chart_labels(labels):
     formatted_labels = []
 
+    # Define which field to use for visualization of the data
+    if len(labels) > 0:
+        label_category = LabelCategory.find_by_id(labels[0].label_category_id)
+
+        visualization_field_name = (
+            OUTCOME_FIELD_CLASSIFICATION
+            if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION
+            else OUTCOME_FIELD_SURVIVAL_EVENT
+        )
+
     for label in labels:
         formatted_labels.append(
             {
                 PATIENT_ID_FIELD: label.patient_id,
-                OUTCOME_FIELD_CLASSIFICATION: label.label_content[
-                    OUTCOME_FIELD_CLASSIFICATION
-                ],
+                visualization_field_name: label.label_content[visualization_field_name],
             }
         )
 
     return formatted_labels
 
 
-def format_lasagna_data(features_df, labels):
+def format_lasagna_data(features_df, label_category, labels):
 
     # Flatten features by Modality & ROI to calculate ranks
     concatenated_features_df = concatenate_modalities_rois(features_df)
@@ -103,16 +120,26 @@ def format_lasagna_data(features_df, labels):
     # Reset the index to avoid problems with Melampus
     concatenated_features_df.reset_index(drop=True, inplace=True)
 
+    # Define which field to use for visualization of the data
+    if label_category:
+        visualization_field_name = (
+            OUTCOME_FIELD_CLASSIFICATION
+            if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION
+            else OUTCOME_FIELD_SURVIVAL_EVENT
+        )
+    else:
+        visualization_field_name = OUTCOME_FIELD_CLASSIFICATION
+
     # Get the outcomes in the same order as they appear in the DataFrame
     outcomes = []
     for index, row in concatenated_features_df.iterrows():
         label_to_add = next(
             (
-                label.label_content[OUTCOME_FIELD_CLASSIFICATION]
+                label.label_content[visualization_field_name]
                 for label in labels
                 if (
                     label.patient_id == row[PATIENT_ID_FIELD]
-                    and label.label_content[OUTCOME_FIELD_CLASSIFICATION] != ""
+                    and label.label_content[visualization_field_name] != ""
                 )
             ),
             "UNKNOWN",
@@ -182,7 +209,7 @@ def format_lasagna_data(features_df, labels):
         formatted_labels.append(
             {
                 PATIENT_ID_FIELD: patient_id,
-                OUTCOME_FIELD_CLASSIFICATION: patient_outcome,
+                visualization_field_name: patient_outcome,
             }
         )
 
@@ -201,7 +228,7 @@ def format_lasagna_data(features_df, labels):
                         PATIENT_ID_FIELD: patient_id,
                         MODALITY_FIELD: modality,
                         ROI_FIELD: roi,
-                        OUTCOME_FIELD_CLASSIFICATION: patient_outcome,
+                        visualization_field_name: patient_outcome,
                         "feature_rank": feature_rank_map[feature_id]
                         if feature_value is not None
                         else None,

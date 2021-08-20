@@ -13,11 +13,17 @@ def before_request():
     validate_decorate(request)
 
 
-@bp.route("/labels/<label_category_id>", methods=("GET", "POST"))
+@bp.route("/labels/<label_category_id>", methods=("GET", "POST", "PATCH", "DELETE"))
 def labels(label_category_id):
 
     if request.method == "POST":
         return save_labels(label_category_id, request.json)
+
+    if request.method == "PATCH":
+        return edit_label_category(label_category_id, request.json["name"])
+
+    if request.method == "DELETE":
+        return delete_label_category(label_category_id)
 
 
 @bp.route("/label-categories/<album_id>", methods=("GET", "POST"))
@@ -41,6 +47,23 @@ def save_label_category(album_id, label_type, name, user_id):
     new_category.save_to_db()
 
     return jsonify(new_category.to_dict())
+
+
+def edit_label_category(label_category_id, name):
+    category = LabelCategory.find_by_id(label_category_id)
+
+    category.name = name
+
+    category.save_to_db()
+
+    return jsonify(category.to_dict())
+
+
+def delete_label_category(label_category_id):
+
+    category = LabelCategory.delete_by_id(label_category_id)
+
+    return jsonify(category.to_dict())
 
 
 def save_labels(label_category_id, labels_dict):

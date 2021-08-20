@@ -25,36 +25,40 @@ def train_survival_model(extraction_id, collection_id, studies, gt):
         header, features_df = transform_studies_features_to_df(extraction, studies)
 
     # Transform array to CSV in order to create a DataFrame
-    mem_file = io.StringIO()
-    csv_writer = csv.writer(mem_file)
-    csv_writer.writerow(header)
-    csv_writer.writerows(features)
-    mem_file.seek(0)
-
-    # Create DataFrame from CSV data
-    featuresDf = pandas.read_csv(mem_file, dtype={"PatientID": np.str})
+    # mem_file = io.StringIO()
+    # csv_writer = csv.writer(mem_file)
+    # csv_writer.writerow(header)
+    # csv_writer.writerows(features)
+    # mem_file.seek(0)
+    #
+    # # Create DataFrame from CSV data
+    # featuresDf = pandas.read_csv(mem_file, dtype={"PatientID": np.str})
 
     # Index the dataframe by patient ID
     # Keep only numeric columns in one dataframe & categorical in another
-    featuresDfIndexed = featuresDf.set_index("PatientID", drop=False)
-    featuresDfNumericOnly = featuresDfIndexed.drop(
-        ["PatientID", "Modality", "ROI"], axis=1
-    )
+    # featuresDfIndexed = features_df.set_index("PatientID", drop=False)
+    # featuresDfNumericOnly = featuresDfIndexed.drop(
+    #     ["PatientID", "Modality", "ROI"], axis=1
+    # )
+    #
+    # featuresDfCategoricalOnly = featuresDfIndexed[["PatientID", "Modality", "ROI"]]
 
-    featuresDfCategoricalOnly = featuresDfIndexed[["PatientID", "Modality", "ROI"]]
-
+    # TODO - Deal with this taking into account the new Melampus structure
+    p_value = 0
     # Remove highly correlated features as they hurt the convergence of Cox models
-
-    featureSelector = MelampusFeatureSelector(dataframe=featuresDfNumericOnly)
-
-    filteredFeatures, p_value = featureSelector.variance_threshold()
-
-    filteredFeaturesWithCategorical = pandas.concat(
-        [featuresDfCategoricalOnly, filteredFeatures], axis=1
-    )
+    # featureSelector = MelampusFeatureSelector(dataframe=featuresDfNumericOnly)
+    # filteredFeatures, p_value = featureSelector.variance_threshold()
+    # filteredFeaturesWithCategorical = pandas.concat(
+    #     [featuresDfCategoricalOnly, filteredFeatures], axis=1
+    # )
 
     # TODO - Analyze what is the best thing to do, try concatenation so far
-    featuresDf = concatenate_modalities_rois(filteredFeaturesWithCategorical)
+    # featuresDf = concatenate_modalities_rois(filteredFeaturesWithCategorical)
+    featuresDf = concatenate_modalities_rois(features_df)
+
+    # TODO - This will be done in Melampus also in the future
+    # Impute mean for NaNs
+    featuresDf = featuresDf.fillna(featuresDf.mean())
 
     # Index the features Dataframe (for combining with the labels)
     featuresDf.set_index("PatientID", drop=False, inplace=True)
@@ -70,6 +74,12 @@ def train_survival_model(extraction_id, collection_id, studies, gt):
     combinedDf = pandas.concat(
         [featuresDf, labelsDf.set_index(featuresDf.index)], axis=1
     )
+
+    # TODO - Check how to best deal with this, so far we ignore unlabelled patients
+    labelled_patients = list(combinedDf[combinedDf["Time"] != ""]["PatientID"])
+
+    # Filter out unlabelled patients
+    combinedDf = combinedDf[combinedDf.PatientID.isin(labelled_patients)]
 
     # Create temporary file for CSV content & dump it there
     with tempfile.NamedTemporaryFile(mode="w+") as temp:
@@ -98,6 +108,7 @@ def train_survival_model(extraction_id, collection_id, studies, gt):
 
     return (
         fitted_analyzer,
-        f"variance_threshold (p={p_value})",
-        list(filteredFeatures.columns),
+        "None",  # TODO - Put this back!
+        labelled_patients,
+        header,  # TODO - Put this back!
     )
