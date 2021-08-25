@@ -116,9 +116,15 @@ def format_lasagna_data(features_df, label_category, labels):
             if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION
             else [OUTCOME_FIELD_SURVIVAL_EVENT, OUTCOME_FIELD_SURVIVAL_TIME]
         )
+        ranking_field_name = (
+            OUTCOME_FIELD_CLASSIFICATION
+            if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION
+            else OUTCOME_FIELD_SURVIVAL_EVENT
+        )
 
     else:
         visualization_field_names = [OUTCOME_FIELD_CLASSIFICATION]
+        ranking_field_name = OUTCOME_FIELD_CLASSIFICATION
 
     # Get the outcomes in the same order as they appear in the DataFrame
     outcomes = []
@@ -145,12 +151,7 @@ def format_lasagna_data(features_df, label_category, labels):
 
     # Feature Ranking
     # TODO - Feature Ranking should be done differently for survival!
-    outcomes_list_ranking = [
-        outcome[OUTCOME_FIELD_CLASSIFICATION]
-        if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION
-        else outcome[OUTCOME_FIELD_SURVIVAL_EVENT]
-        for outcome in outcomes
-    ]
+    outcomes_list_ranking = [outcome[ranking_field_name] for outcome in outcomes]
 
     feature_ranking = MelampusFeatureRank(
         None,
