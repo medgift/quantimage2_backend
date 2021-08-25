@@ -15,6 +15,7 @@ from imaginebackend_common.models import (
     FeatureCollection,
     Album,
     LabelCategory,
+    AlbumOutcome,
 )
 from routes.utils import decorate_if_possible
 from service.feature_analysis import concatenate_modalities_rois
@@ -51,6 +52,8 @@ def lasagna_chart(album_id, collection_id):
     if album_id.isnumeric():
         # To simplify the access, use album token (for fixed album so far)
         token = os.environ["KHEOPS_ALBUM_TOKEN"]
+        # User is taken from the environment too
+        user_id = os.environ["KHEOPS_OUTCOME_USER_ID"]
         # Album ID is actually an extraction ID in this setting
         extraction_id = int(album_id)
     else:
@@ -77,12 +80,12 @@ def lasagna_chart(album_id, collection_id):
     else:
         header, features_df = transform_studies_features_to_df(extraction, studies)
 
-    album = Album.find_by_album_id(extraction.album_id)
+    album_outcome = AlbumOutcome.find_by_album_user_id(extraction.album_id, user_id)
 
-    # Get labels (if current outcome is defined)
-    if album.current_outcome:
-        label_category = LabelCategory.find_by_id(album.current_outcome_id)
-        labels = Label.find_by_label_category(album.current_outcome_id)
+    # Get labels (if current outcome is defined for this user)
+    if album_outcome:
+        label_category = LabelCategory.find_by_id(album_outcome.outcome_id)
+        labels = Label.find_by_label_category(label_category.id)
 
     formatted_lasagna_data = format_lasagna_data(features_df, label_category, labels)
 

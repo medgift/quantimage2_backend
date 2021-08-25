@@ -1294,21 +1294,10 @@ class Album(BaseModel, db.Model):
     album_id = db.Column(db.String(255), nullable=False, unique=True)
     rois = db.Column(db.JSON, nullable=True, unique=False)
 
-    current_outcome_id = db.Column(db.Integer, ForeignKey("label_category.id"))
-    current_outcome = db.relationship("LabelCategory")
-
     @classmethod
     def save_rois(cls, album_id, rois):
         album = cls.find_by_album_id(album_id)
         album.rois = rois
-        album.save_to_db()
-
-        return album
-
-    @classmethod
-    def save_current_outcome(cls, album_id, current_outcome_id):
-        album = cls.find_by_album_id(album_id)
-        album.current_outcome_id = current_outcome_id
         album.save_to_db()
 
         return album
@@ -1329,4 +1318,46 @@ class Album(BaseModel, db.Model):
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "album_id": self.album_id,
+        }
+
+
+class AlbumOutcome(BaseModel, db.Model):
+    def __init__(self, album_id, user_id, outcome_id):
+        self.album_id = album_id
+        self.user_id = user_id
+        self.outcome_id = outcome_id
+
+    album_id = db.Column(db.String(255), nullable=False, unique=False)
+    user_id = db.Column(db.String(255), nullable=True, unique=False)
+    outcome_id = db.Column(db.Integer, ForeignKey("label_category.id"))
+    outcome = db.relationship("LabelCategory")
+
+    @classmethod
+    def find_by_album_user_id(cls, album_id, user_id):
+        instance = cls.query.filter_by(user_id=user_id, album_id=album_id).one_or_none()
+        return instance
+
+    @classmethod
+    def save_current_outcome(cls, album_id, user_id, outcome_id):
+        (instance, created) = cls.get_or_create(
+            criteria={"album_id": album_id, "user_id": user_id},
+            defaults={
+                "album_id": album_id,
+                "user_id": user_id,
+                "outcome_id": outcome_id,
+            },
+        )
+        instance.outcome_id = outcome_id
+        instance.save_to_db()
+
+        return instance
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "album_id": self.album_id,
+            "user_id": self.user_id,
+            "outcome_id": self.outcome_id,
         }

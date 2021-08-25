@@ -10,7 +10,7 @@ from flask import Blueprint, jsonify, request, g, current_app, Response
 from ttictoc import tic, toc
 
 from imaginebackend_common.kheops_utils import dicomFields, get_token_header
-from imaginebackend_common.models import Album, LabelCategory
+from imaginebackend_common.models import Album, LabelCategory, AlbumOutcome
 
 from multiprocessing.pool import ThreadPool
 
@@ -53,10 +53,10 @@ def album_rois(album_id):
 def album_labelcategory(album_id, labelcategory_id=None):
 
     if request.method == "PATCH":
-        return save_current_outcome(album_id, labelcategory_id)
+        return save_current_outcome(album_id, g.user, labelcategory_id)
 
     if request.method == "GET":
-        return get_current_outcome(album_id)
+        return get_current_outcome(album_id, g.user)
 
 
 @bp.route("/albums/<album_id>/force")
@@ -64,18 +64,18 @@ def album_rois_force(album_id):
     return get_rois(album_id, force=True)
 
 
-def get_current_outcome(album_id):
-    album = Album.find_by_album_id(album_id)
+def get_current_outcome(album_id, user_id):
+    album_outcome = AlbumOutcome.find_by_album_user_id(album_id, user_id)
 
-    if album.current_outcome_id:
-        current_outcome = LabelCategory.find_by_id(album.current_outcome_id)
+    if album_outcome:
+        current_outcome = LabelCategory.find_by_id(album_outcome.outcome_id)
         return jsonify(current_outcome.to_dict())
     else:
         return Response(status=200, mimetype="application/json", response="null")
 
 
-def save_current_outcome(album_id, labelcategory_id):
-    album = Album.save_current_outcome(album_id, labelcategory_id)
+def save_current_outcome(album_id, user_id, labelcategory_id):
+    album = AlbumOutcome.save_current_outcome(album_id, user_id, labelcategory_id)
     return jsonify(album.to_dict())
 
 
