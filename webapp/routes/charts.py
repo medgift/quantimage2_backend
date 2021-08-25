@@ -83,6 +83,9 @@ def lasagna_chart(album_id, collection_id):
     album_outcome = AlbumOutcome.find_by_album_user_id(extraction.album_id, user_id)
 
     # Get labels (if current outcome is defined for this user)
+    labels = []
+    label_category = None
+
     if album_outcome:
         label_category = LabelCategory.find_by_id(album_outcome.outcome_id)
         labels = Label.find_by_label_category(label_category.id)
