@@ -27,6 +27,7 @@ from service.feature_transformation import (
     OUTCOME_FIELD_CLASSIFICATION,
     transform_studies_collection_features_to_df,
     OUTCOME_FIELD_SURVIVAL_EVENT,
+    OUTCOME_FIELD_SURVIVAL_TIME,
 )
 
 from melampus.feature_ranking import MelampusFeatureRank
@@ -91,22 +92,10 @@ def lasagna_chart(album_id, collection_id):
 def format_chart_labels(labels):
     formatted_labels = []
 
-    # Define which field to use for visualization of the data
-    if len(labels) > 0:
-        label_category = LabelCategory.find_by_id(labels[0].label_category_id)
-
-        visualization_field_name = (
-            OUTCOME_FIELD_CLASSIFICATION
-            if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION
-            else OUTCOME_FIELD_SURVIVAL_EVENT
-        )
-
+    # Spread out the whole label content into the labels
     for label in labels:
         formatted_labels.append(
-            {
-                PATIENT_ID_FIELD: label.patient_id,
-                visualization_field_name: label.label_content[visualization_field_name],
-            }
+            {PATIENT_ID_FIELD: label.patient_id, **label.label_content}
         )
 
     return formatted_labels
@@ -122,27 +111,29 @@ def format_lasagna_data(features_df, label_category, labels):
 
     # Define which field to use for visualization of the data
     if label_category:
-        visualization_field_name = (
-            OUTCOME_FIELD_CLASSIFICATION
+        visualization_field_names = (
+            [OUTCOME_FIELD_CLASSIFICATION]
             if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION
-            else OUTCOME_FIELD_SURVIVAL_EVENT
+            else [OUTCOME_FIELD_SURVIVAL_EVENT, OUTCOME_FIELD_SURVIVAL_TIME]
         )
+
     else:
-        visualization_field_name = OUTCOME_FIELD_CLASSIFICATION
+        visualization_field_names = [OUTCOME_FIELD_CLASSIFICATION]
 
     # Get the outcomes in the same order as they appear in the DataFrame
     outcomes = []
     for index, row in concatenated_features_df.iterrows():
         label_to_add = next(
             (
-                label.label_content[visualization_field_name]
+                label.label_content
                 for label in labels
-                if (
-                    label.patient_id == row[PATIENT_ID_FIELD]
-                    and label.label_content[visualization_field_name] != ""
-                )
+                if label.patient_id == row[PATIENT_ID_FIELD]
+                and list(label.label_content.values())[0] != ""
             ),
-            "UNKNOWN",
+            {
+                visualization_field_name: "UNKNOWN"
+                for (visualization_field_name) in visualization_field_names
+            },
         )
         outcomes.append(label_to_add)
 
@@ -153,11 +144,19 @@ def format_lasagna_data(features_df, label_category, labels):
     )
 
     # Feature Ranking
+    # TODO - Feature Ranking should be done differently for survival!
+    outcomes_list_ranking = [
+        outcome[OUTCOME_FIELD_CLASSIFICATION]
+        if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION
+        else outcome[OUTCOME_FIELD_SURVIVAL_EVENT]
+        for outcome in outcomes
+    ]
+
     feature_ranking = MelampusFeatureRank(
         None,
         no_nan_concatenated_features_df,
         None,
-        outcomes,
+        outcomes_list_ranking,
         id_names_map={"patient_id": PATIENT_ID_FIELD},
     )
 
@@ -209,7 +208,7 @@ def format_lasagna_data(features_df, label_category, labels):
         formatted_labels.append(
             {
                 PATIENT_ID_FIELD: patient_id,
-                visualization_field_name: patient_outcome,
+                **patient_outcome,
             }
         )
 
@@ -228,7 +227,7 @@ def format_lasagna_data(features_df, label_category, labels):
                         PATIENT_ID_FIELD: patient_id,
                         MODALITY_FIELD: modality,
                         ROI_FIELD: roi,
-                        visualization_field_name: patient_outcome,
+                        **patient_outcome,
                         "feature_rank": feature_rank_map[feature_id]
                         if feature_value is not None
                         else None,
