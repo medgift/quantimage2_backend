@@ -19,7 +19,12 @@ from imaginebackend_common.const import MODEL_TYPES
 from flask import Blueprint, jsonify, request, g, current_app, Response, make_response
 
 from config import MODELS_BASE_DIR
-from imaginebackend_common.models import Model, FeatureExtraction, FeatureCollection
+from imaginebackend_common.models import (
+    Model,
+    FeatureExtraction,
+    FeatureCollection,
+    LabelCategory,
+)
 from imaginebackend_common.models import Label
 from pathlib import Path
 
@@ -47,7 +52,7 @@ def format_model(model):
     model_object = jsonpickle.decode(json_str)
 
     # Convert metrics to native Python types
-    if MODEL_TYPES(model.type) == MODEL_TYPES.CLASSIFICATION:
+    if MODEL_TYPES(model.label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
         final_metrics = model_object.metrics
         for metric in final_metrics:
             for value in final_metrics[metric]:
@@ -55,7 +60,7 @@ def format_model(model):
                     final_metrics[metric][value] = "N/A"
 
         metrics = final_metrics
-    elif MODEL_TYPES(model.type) == MODEL_TYPES.SURVIVAL:
+    elif MODEL_TYPES(model.label_category.label_type) == MODEL_TYPES.SURVIVAL:
         metrics = collections.OrderedDict()
         metrics["concordance_index"] = model_object.concordance_index_
         # metrics["events_observed"] = len(model_object.event_observed)
@@ -82,12 +87,13 @@ def models_by_album(album_id):
         # of the features (including patient ID)
         body = request.json
 
+        label_category = LabelCategory.find_by_id(body["label-category-id"])
+
         feature_extraction_id = body["extraction-id"]
         collection_id = body["collection-id"]
         studies = body["studies"]
         album = body["album"]
         gt = body["labels"]
-        model_type = body["model-type"]
         algorithm_type = body["algorithm-type"]
         validation_strategy = None
         data_normalization = body["data-normalization"]
@@ -110,7 +116,7 @@ def models_by_album(album_id):
             )
 
         try:
-            if MODEL_TYPES(model_type) == MODEL_TYPES.CLASSIFICATION:
+            if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
                 (
                     model,
                     validation_strategy,
@@ -128,12 +134,12 @@ def models_by_album(album_id):
                 model_path = get_model_path(
                     g.user,
                     album["album_id"],
-                    model_type,
+                    label_category.label_type,
                     algorithm_type,
                     modalities,
                     rois,
                 )
-            elif MODEL_TYPES(model_type) == MODEL_TYPES.SURVIVAL:
+            elif MODEL_TYPES(label_category.label_type) == MODEL_TYPES.SURVIVAL:
                 (
                     model,
                     feature_selection,
@@ -144,7 +150,12 @@ def models_by_album(album_id):
                 )
 
                 model_path = get_model_path(
-                    g.user, album["album_id"], model_type, None, modalities, rois
+                    g.user,
+                    album["album_id"],
+                    label_category.label_type,
+                    None,
+                    modalities,
+                    rois,
                 )
             else:
                 raise NotImplementedError
@@ -160,7 +171,6 @@ def models_by_album(album_id):
 
             db_model = Model(
                 model_name,
-                model_type,
                 algorithm_type,
                 f"{validation_strategy} ({validation_params['k']} folds, {validation_params['n']} repetitions)"
                 if validation_strategy
@@ -174,6 +184,7 @@ def models_by_album(album_id):
                 model_path,
                 g.user,
                 album["album_id"],
+                label_category.id,
                 feature_extraction_id,
                 collection_id,
             )

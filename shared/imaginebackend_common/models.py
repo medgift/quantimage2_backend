@@ -967,7 +967,6 @@ class Model(BaseModel, db.Model):
     def __init__(
         self,
         name,
-        type,
         algorithm,
         validation_strategy,
         data_normalization,
@@ -979,11 +978,11 @@ class Model(BaseModel, db.Model):
         model_path,
         user_id,
         album_id,
+        label_category_id,
         feature_extraction_id,
         feature_collection_id=None,
     ):
         self.name = name
-        self.type = type
         self.algorithm = algorithm
         self.validation_strategy = validation_strategy
         self.data_normalization = data_normalization
@@ -995,15 +994,13 @@ class Model(BaseModel, db.Model):
         self.model_path = model_path
         self.user_id = user_id
         self.album_id = album_id
+        self.label_category_id = label_category_id
         self.feature_extraction_id = feature_extraction_id
         if feature_collection_id is not None:
             self.feature_collection_id = feature_collection_id
 
     # Name of the model
     name = db.Column(db.String(255), nullable=False, unique=False)
-
-    # Type of the model (classification, survival)
-    type = db.Column(db.String(255), nullable=False, unique=False)
 
     # Algorithm used for the model (linear regression, random forests, SVM, etc.)
     algorithm = db.Column(db.String(255), nullable=False, unique=False)
@@ -1038,11 +1035,15 @@ class Model(BaseModel, db.Model):
     # Album on which the model was created
     album_id = db.Column(db.String(255), nullable=False, unique=False)
 
-    # Relationships
+    # Relationship - Label Category
+    label_category_id = db.Column(db.Integer, ForeignKey("label_category.id"))
+    label_category = db.relationship("LabelCategory")
+
+    # Relationship - Feature Extraction
     feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
     feature_extraction = db.relationship("FeatureExtraction", back_populates="models")
 
-    # Collection
+    # Relationship - Collection
     feature_collection_id = db.Column(db.Integer, ForeignKey("feature_collection.id"))
     feature_collection = db.relationship("FeatureCollection", back_populates="models")
 
@@ -1062,7 +1063,6 @@ class Model(BaseModel, db.Model):
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "name": self.name,
-            "type": self.type,
             "algorithm": self.algorithm,
             "validation_strategy": self.validation_strategy,
             "data_normalization": self.data_normalization,
@@ -1075,6 +1075,8 @@ class Model(BaseModel, db.Model):
             "user_id": self.user_id,
             "album_id": self.album_id,
             "feature_collection_id": self.feature_collection_id,
+            "type": self.label_category.label_type,
+            "label_category": self.label_category.name,
         }
 
 
