@@ -42,10 +42,8 @@ def feature_collections():
         collection = save_feature_collection(
             request.json["featureExtractionID"],
             request.json["name"],
-            request.json["modalities"],
-            request.json["rois"],
-            request.json["patients"],
-            request.json["features"],
+            request.json["featureIDs"],
+            request.json["patientIDs"],
         )
 
         return jsonify(collection.format_collection(with_values=True))
@@ -58,7 +56,7 @@ def feature_collections_new():
             request.json["featureExtractionID"],
             request.json["name"],
             request.json["featureIDs"],
-            request.json["patients"],
+            request.json["patientIDs"],
         )
 
         return jsonify(collection.format_collection(with_values=True))
@@ -114,7 +112,7 @@ def download_collection_by_id(feature_collection_id):
 
     # Transform the features into a DataFrame
     header, features_df = transform_studies_collection_features_to_df(
-        album_studies, feature_collection
+        feature_collection, album_studies
     )
 
     # Album : send back a zip file with CSV files separated by
@@ -143,46 +141,31 @@ def download_collection_by_id(feature_collection_id):
     )
 
 
-def save_feature_collection_new(feature_extraction_id, name, feature_ids, patients):
+def save_feature_collection_new(feature_extraction_id, name, feature_ids, patient_ids):
     token = g.token
 
     # Get all necessary elements from the DB
     extraction = FeatureExtraction.find_by_id(feature_extraction_id)
-    studies = get_studies_from_album(extraction.album_id, token)
-
-    # Find all FeatureValues corresponding to the supplied criteria
-    tic()
-    value_ids = FeatureValue.find_id_by_collection_criteria_new(
-        extraction, studies, feature_ids, patients
-    )
-    elapsed = toc()
-    print("Getting the collection values from the DB took", elapsed)
 
     collection, created = FeatureCollection.get_or_create(
-        criteria={"name": name, "feature_extraction_id": feature_extraction_id},
-        defaults={"name": name, "feature_extraction_id": feature_extraction_id},
+        criteria={
+            "name": name,
+            "feature_extraction_id": feature_extraction_id,
+            "feature_ids": feature_ids,
+            "patient_ids": patient_ids,
+        },
+        defaults={
+            "name": name,
+            "feature_extraction_id": feature_extraction_id,
+            "feature_ids": feature_ids,
+            "patient_ids": patient_ids,
+        },
     )
-
-    # Build instances to save in bulk
-    feature_collection_value_instances = [
-        {"feature_collection_id": collection.id, "feature_value_id": value_id.id}
-        for value_id in value_ids
-    ]
-
-    # Batch create the instances
-    tic()
-    FeatureCollection.save_feature_collection_values_batch(
-        feature_collection_value_instances
-    )
-    elapsed = toc()
-    print("Saving the collection values to the DB took", elapsed)
 
     return collection
 
 
-def save_feature_collection(
-    feature_extraction_id, name, modalities, rois, patients, feature_names
-):
+def save_feature_collection(feature_extraction_id, name, feature_ids, patient_ids):
     token = g.token
 
     # Get all necessary elements from the DB
@@ -190,31 +173,14 @@ def save_feature_collection(
     studies = get_studies_from_album(extraction.album_id, token)
 
     # Find all FeatureValues corresponding to the supplied criteria
-    tic()
-    value_ids = FeatureValue.find_id_by_collection_criteria(
-        extraction, studies, modalities, rois, patients, feature_names
-    )
-    elapsed = toc()
-    print("Getting the collection values from the DB took", elapsed)
-
     collection, created = FeatureCollection.get_or_create(
         criteria={"name": name, "feature_extraction_id": feature_extraction_id},
         defaults={"name": name, "feature_extraction_id": feature_extraction_id},
     )
 
-    # Build instances to save in bulk
-    feature_collection_value_instances = [
-        {"feature_collection_id": collection.id, "feature_value_id": value_id.id}
-        for value_id in value_ids
-    ]
-
-    # Batch create the instances
-    tic()
-    FeatureCollection.save_feature_collection_values_batch(
-        feature_collection_value_instances
-    )
-    elapsed = toc()
-    print("Saving the collection values to the DB took", elapsed)
+    collection.feature_ids = feature_ids
+    collection.patient_ids = patient_ids
+    collection.save_to_db()
 
     return collection
 

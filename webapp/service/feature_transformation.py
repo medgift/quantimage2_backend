@@ -1,20 +1,14 @@
 import csv
 import io
-import collections
 import pandas
-import requests
 
-from ttictoc import tic, toc
-
-from imaginebackend_common.kheops_utils import dicomFields, endpoints, get_token_header
+from imaginebackend_common.kheops_utils import dicomFields
 from imaginebackend_common.models import (
     FeatureValue,
     db,
     FeatureExtractionTask,
     FeatureCollection,
-    feature_collection_value,
 )
-from imaginebackend_common.utils import read_feature_file
 
 PATIENT_ID_FIELD = "PatientID"
 MODALITY_FIELD = "Modality"
@@ -29,8 +23,8 @@ NAME_COLUMN = "name"
 VALUE_COLUMN = "value"
 
 
-def get_collection_features(studies, collection):
-    features, names = FeatureValue.get_for_collection(collection)
+def get_collection_features(collection, studies):
+    features, names = FeatureValue.get_for_collection(collection, studies)
 
     tabular_features = transform_feature_values_to_tabular(features, studies)
 
@@ -84,8 +78,8 @@ def transform_feature_values_to_tabular(values, studies):
     return sorted_df
 
 
-def transform_studies_collection_features_to_df(studies, collection):
-    features_df, names = get_collection_features(studies, collection)
+def transform_studies_collection_features_to_df(collection, studies):
+    features_df, names = get_collection_features(collection, studies)
 
     return names, features_df
 
@@ -156,56 +150,10 @@ def make_album_collection_file_name(album_name, collection_name):
     return f"features_album_{album_name.replace(' ', '-')}_{collection_name.replace(' ', '-')}.zip"
 
 
-def get_data_points_collection(studies, collection_id):
-    study_uid_patient_id_map = {
-        study[dicomFields.STUDY_UID][dicomFields.VALUE][0]: study[
-            dicomFields.PATIENT_ID
-        ][dicomFields.VALUE][0]
-        for study in studies
-    }
+def get_data_points_collection(collection_id):
+    collection = FeatureCollection.find_by_id(collection_id)
 
-    # Low-level DBAPI fetchall()
-    compiled = (
-        db.select([FeatureExtractionTask.__table__.c.study_uid])
-        .select_from(
-            FeatureExtractionTask.__table__.join(
-                FeatureValue.__table__,
-                FeatureValue.__table__.c.feature_extraction_task_id
-                == FeatureExtractionTask.__table__.c.id,
-            )
-            .join(
-                feature_collection_value,
-                feature_collection_value.c.feature_value_id
-                == FeatureValue.__table__.c.id,
-            )
-            .join(
-                FeatureCollection.__table__,
-                FeatureCollection.__table__.c.id
-                == feature_collection_value.c.feature_collection_id,
-            )
-        )
-        .distinct()
-        .where(FeatureCollection.__table__.c.id == collection_id)
-        .compile(dialect=db.engine.dialect, compile_kwargs={"literal_binds": True})
-    )
-
-    sql = str(compiled)
-
-    conn = db.engine.raw_connection()
-    cursor = conn.cursor()
-    cursor.execute(sql)
-
-    study_uids = []
-    for row in cursor.fetchall():
-        # ensure that we fully fetch!
-        if row[0] in study_uid_patient_id_map:
-            study_uids.append(row[0])
-
-    patient_ids = [study_uid_patient_id_map[study_uid] for study_uid in study_uids]
-
-    conn.close()
-
-    return patient_ids
+    return collection.patient_ids
 
 
 def get_data_points_extraction(result, studies):

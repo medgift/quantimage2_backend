@@ -98,7 +98,7 @@ def extraction_features_by_id(extraction_id, collection_id):
     if collection_id:
         collection = FeatureCollection.find_by_id(collection_id)
         header, features_df = transform_studies_collection_features_to_df(
-            studies, collection
+            collection, studies
         )
     else:
         header, features_df = transform_studies_features_to_df(extraction, studies)
@@ -132,13 +132,8 @@ def extraction_features_by_id(extraction_id, collection_id):
 # Get data points (PatientID/ROI) for a given extraction
 @bp.route("/extractions/<extraction_id>/collections/<collection_id>/data-points")
 def extraction_collection_data_points(extraction_id, collection_id):
-    token = g.token
-
-    extraction = FeatureExtraction.find_by_id(extraction_id)
-    studies = get_studies_from_album(extraction.album_id, token)
-
     tic()
-    patient_ids = get_data_points_collection(studies, collection_id)
+    patient_ids = get_data_points_collection(collection_id)
     elapsed = toc()
     print("Getting data points for collection took", elapsed)
 

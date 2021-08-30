@@ -408,24 +408,22 @@ class FeatureValue(BaseModel, db.Model):
         db.session.commit()
 
     @classmethod
-    def get_for_collection(cls, collection):
+    def get_for_collection(cls, collection, studies):
 
-        modalities = Modality.find_all()
-        rois = ROI.find_all()
-        definitions = FeatureDefinition.find_all()
-        feature_extraction_tasks = FeatureExtractionTask.query.filter_by(
-            feature_extraction_id=collection.feature_extraction_id
-        )
+        modalities_map, rois_map, definitions_map = get_modality_roi_feature_maps()
+        feature_tasks_map = get_tasks_map(collection.feature_extraction_id)
 
-        modalities_map = {modality.id: modality.name for modality in modalities}
-        rois_map = {roi.id: roi.name for roi in rois}
-        definitions_map = {definition.id: definition.name for definition in definitions}
-        feature_tasks_map = {
-            task.id: task.study_uid for task in feature_extraction_tasks
+        patient_to_study_map = {
+            study[dicomFields.PATIENT_ID][dicomFields.VALUE][0]: study[
+                dicomFields.STUDY_UID
+            ][dicomFields.VALUE][0]
+            for study in studies
         }
 
         tic()
-        feature_collection_values = cls.fetch_feature_collection_values(collection.id)
+        feature_collection_values = cls.fetch_feature_collection_values(
+            collection.id, patient_to_study_map
+        )
         elapsed = toc()
         print("Getting the feature collection values from the DB took", elapsed)
 
@@ -450,26 +448,11 @@ class FeatureValue(BaseModel, db.Model):
 
     @classmethod
     def get_for_extraction(cls, feature_extraction):
-        modalities = Modality.find_all()
-        rois = ROI.find_all()
-        definitions = FeatureDefinition.find_all()
-        feature_extraction_tasks = FeatureExtractionTask.query.filter_by(
-            feature_extraction_id=feature_extraction.id
-        )
 
-        modalities_map = {modality.id: modality.name for modality in modalities}
-        rois_map = {roi.id: roi.name for roi in rois}
-        definitions_map = {definition.id: definition.name for definition in definitions}
-        feature_tasks_map = {
-            task.id: task.study_uid for task in feature_extraction_tasks
-        }
+        modalities_map, rois_map, definitions_map = get_modality_roi_feature_maps()
+        feature_tasks_map = get_tasks_map(feature_extraction.id)
 
-        feature_extraction_task_ids = list(
-            map(
-                lambda feature_extraction_task: feature_extraction_task.id,
-                feature_extraction_tasks,
-            )
-        )
+        feature_extraction_task_ids = list(feature_tasks_map.keys())
 
         tic()
         feature_values = cls.fetch_feature_values(feature_extraction_task_ids)
@@ -546,7 +529,9 @@ class FeatureValue(BaseModel, db.Model):
         return feature_values
 
     @classmethod
-    def fetch_feature_collection_values(cls, feature_collection_id):
+    def fetch_feature_collection_values(
+        cls, feature_collection_id, patient_to_study_map
+    ):
         # Full ORM objects
         # collection_loaded = (
         #     db.session.query(FeatureCollection)
@@ -562,43 +547,51 @@ class FeatureValue(BaseModel, db.Model):
         # )
         # return collection_loaded.values
 
-        # Low-level DBAPI fetchall()
-        # Get feature value IDs to fetch first
-        compiled = (
-            feature_collection_value.select()
-            .with_only_columns([feature_collection_value.c.feature_value_id])
-            .where(
-                feature_collection_value.c.feature_collection_id
-                == feature_collection_id
+        collection = FeatureCollection.find_by_id(feature_collection_id)
+        modalities_map, rois_map, features_map = get_modality_roi_feature_maps_by_name()
+        tasks_map = get_tasks_map_by_study_uid(collection.feature_extraction_id)
+
+        task_ids = []
+
+        # Filter tasks by selected patients
+        for patient_id in collection.patient_ids:
+            study_uid_for_patient = patient_to_study_map[patient_id]
+            task_id = tasks_map[study_uid_for_patient]
+            task_ids.append(task_id)
+
+        conditions = []
+
+        matcher = re.compile(r"(?P<modality>.*?)-(?P<roi>.*?)-(?P<feature>.*)")
+        for feature_id in collection.feature_ids:
+            modality_name, roi_name, feature_name = matcher.match(feature_id).groups()
+            conditions.append(
+                (
+                    modalities_map[modality_name],
+                    rois_map[roi_name],
+                    features_map[feature_name],
+                )
             )
-            .compile(dialect=db.engine.dialect, compile_kwargs={"literal_binds": True})
-        )
 
-        sql = str(compiled)
-
-        conn = db.engine.raw_connection()
-        cursor = conn.cursor()
-        cursor.execute(sql)
-
-        feature_value_ids = []
-        for row in cursor.fetchall():
-            # ensure that we fully fetch!
-            feature_value_ids.append(row[0])
-
-        conn.close()
-
+        # Low-level DBAPI fetchall()
         compiled = (
-            FeatureValue.__table__.select()
+            cls.__table__.select()
             .with_only_columns(
                 [
-                    FeatureValue.__table__.c.feature_extraction_task_id,
-                    FeatureValue.__table__.c.modality_id,
-                    FeatureValue.__table__.c.roi_id,
-                    FeatureValue.__table__.c.feature_definition_id,
-                    FeatureValue.__table__.c.value,
+                    cls.__table__.c.feature_extraction_task_id,
+                    cls.__table__.c.modality_id,
+                    cls.__table__.c.roi_id,
+                    cls.__table__.c.feature_definition_id,
+                    cls.__table__.c.value,
                 ]
             )
-            .where(FeatureValue.__table__.c.id.in_(feature_value_ids))
+            .where(cls.__table__.c.feature_extraction_task_id.in_(task_ids))
+            .where(
+                db.tuple_(
+                    cls.__table__.c.modality_id,
+                    cls.__table__.c.roi_id,
+                    cls.__table__.c.feature_definition_id,
+                ).in_(conditions)
+            )
             .compile(dialect=db.engine.dialect, compile_kwargs={"literal_binds": True})
         )
 
@@ -628,19 +621,7 @@ class FeatureValue(BaseModel, db.Model):
     def find_id_by_collection_criteria_new(
         cls, feature_extraction, feature_studies, feature_ids, patients
     ):
-        # Get necessary info from the DB
-        db_modalities = Modality.find_all()
-        db_rois = ROI.find_all()
-        db_feature_definitions = FeatureDefinition.find_all()
-
-        # Map names to DB IDs
-        db_modality_map = {
-            db_modality.name: db_modality.id for db_modality in db_modalities
-        }
-        db_roi_map = {db_roi.name: db_roi.id for db_roi in db_rois}
-        db_feature_map = {
-            db_feature.name: db_feature.id for db_feature in db_feature_definitions
-        }
+        db_modality_map, db_roi_map, db_feature_map = get_modality_roi_feature_maps()
 
         # Map Patient IDs to corresponding study IDs
         study_uids = []
@@ -771,11 +752,6 @@ class FeatureValue(BaseModel, db.Model):
     roi_id = db.Column(db.Integer, ForeignKey("roi.id"))
     roi = db.relationship("ROI")
 
-    # Association to FeatureCollectionValues
-    # collections = db.relationship(
-    #     "FeatureCollectionValue", back_populates="feature_value"
-    # )
-
     def to_formatted_dict(self, study_uid=None):
         return {
             "study_uid": study_uid
@@ -788,52 +764,37 @@ class FeatureValue(BaseModel, db.Model):
         }
 
 
-feature_collection_value = Table(
-    "feature_collection_value",
-    db.metadata,
-    Column("feature_collection_id", Integer, ForeignKey("feature_collection.id")),
-    Column("feature_value_id", Integer, ForeignKey("feature_value.id")),
-)
-
-
 # Customized Feature Collection (filtered rows & columns so far)
 class FeatureCollection(BaseModel, db.Model):
-    def __init__(self, name, feature_extraction_id):
+    def __init__(self, name, feature_extraction_id, feature_ids, patient_ids):
         self.name = name
         self.feature_extraction_id = feature_extraction_id
+        self.feature_ids = feature_ids
+        self.patient_ids = patient_ids
 
     @classmethod
-    def find_by_extraction(cls, extraction_id, with_values=False):
+    def find_by_extraction(cls, extraction_id):
 
         query = cls.query.filter(
             cls.feature_extraction_id == extraction_id,
         )
 
-        if with_values:
-            query.options(joinedload(cls.values))
-
         feature_collections = query.all()
 
         return feature_collections
 
-    @classmethod
-    def save_feature_collection_values_batch(cls, feature_collection_value_instances):
-        db.session.connection().execute(
-            feature_collection_value.insert(), feature_collection_value_instances
-        )
-        db.session.commit()
-
     # Name of the collection
     name = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Feature IDs of this collection
+    feature_ids = db.Column(db.JSON, nullable=False, unique=False)
+    patient_ids = db.Column(db.JSON, nullable=False, unique=False)
 
     # Association to a FeatureExtraction
     feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
     feature_extraction = db.relationship(
         "FeatureExtraction", back_populates="collections"
     )
-
-    # Association to FeatureCollectionValues
-    values = db.relationship("FeatureValue", secondary="feature_collection_value")
 
     # Association to Models
     models = db.relationship("Model", cascade="all, delete")
@@ -851,7 +812,7 @@ class FeatureCollection(BaseModel, db.Model):
 
         tic()
         if with_values:
-            (modalities, rois, features) = self.get_modalities_rois_features(self.id)
+            (modalities, rois, features) = self.get_modalities_rois_features()
             result = {
                 "collection": self.to_dict(),
                 "modalities": modalities,
@@ -865,81 +826,26 @@ class FeatureCollection(BaseModel, db.Model):
 
         return result
 
-    def get_modalities_rois_features(self, feature_collection_id):
+    def get_modalities_rois_features(self):
 
-        modality_query = (
-            db.select([Modality.__table__.c.name])
-            .select_from(
-                FeatureValue.__table__.join(
-                    feature_collection_value,
-                    feature_collection_value.c.feature_value_id
-                    == FeatureValue.__table__.c.id,
-                )
-                .join(
-                    FeatureCollection.__table__,
-                    FeatureCollection.__table__.c.id
-                    == feature_collection_value.c.feature_collection_id,
-                )
-                .join(
-                    Modality.__table__,
-                    Modality.__table__.c.id == FeatureValue.__table__.c.modality_id,
-                )
-            )
-            .distinct()
-            .where(FeatureCollection.__table__.c.id == feature_collection_id)
-        )
+        feature_ids = self.feature_ids
 
-        modalities = process_query_single_column(modality_query)
+        # Count present modalities, ROIs & feature names based on
+        # feature IDs
 
-        roi_query = (
-            db.select([ROI.__table__.c.name])
-            .select_from(
-                FeatureValue.__table__.join(
-                    feature_collection_value,
-                    feature_collection_value.c.feature_value_id
-                    == FeatureValue.__table__.c.id,
-                )
-                .join(
-                    FeatureCollection.__table__,
-                    FeatureCollection.__table__.c.id
-                    == feature_collection_value.c.feature_collection_id,
-                )
-                .join(
-                    ROI.__table__, ROI.__table__.c.id == FeatureValue.__table__.c.roi_id
-                )
-            )
-            .distinct()
-            .where(FeatureCollection.__table__.c.id == feature_collection_id)
-        )
+        modalities = set()
+        rois = set()
+        features = set()
 
-        rois = process_query_single_column(roi_query)
+        matcher = re.compile(r"(?P<modality>.*?)-(?P<roi>.*?)-(?P<feature>.*)")
+        for feature_id in feature_ids:
+            modality_name, roi_name, feature_name = matcher.match(feature_id).groups()
 
-        feature_query = (
-            db.select([FeatureDefinition.__table__.c.name])
-            .select_from(
-                FeatureValue.__table__.join(
-                    feature_collection_value,
-                    feature_collection_value.c.feature_value_id
-                    == FeatureValue.__table__.c.id,
-                )
-                .join(
-                    FeatureCollection.__table__,
-                    FeatureCollection.__table__.c.id
-                    == feature_collection_value.c.feature_collection_id,
-                )
-                .join(
-                    FeatureDefinition.__table__,
-                    FeatureDefinition.__table__.c.id
-                    == FeatureValue.__table__.c.feature_definition_id,
-                )
-            )
-            .distinct()
-            .where(FeatureCollection.__table__.c.id == feature_collection_id)
-        )
+            modalities.add(modality_name)
+            rois.add(roi_name)
+            features.add(feature_name)
 
-        features = process_query_single_column(feature_query)
-
-        return (modalities, rois, features)
+        return list(modalities), list(rois), list(features)
 
 
 def process_query_single_column(query):
@@ -1363,3 +1269,61 @@ class AlbumOutcome(BaseModel, db.Model):
             "user_id": self.user_id,
             "outcome_id": self.outcome_id,
         }
+
+
+def get_modality_roi_feature_maps():
+    # Get necessary info from the DB
+    db_modalities = Modality.find_all()
+    db_rois = ROI.find_all()
+    db_feature_definitions = FeatureDefinition.find_all()
+
+    # Map names to DB IDs
+    db_modality_map = {
+        db_modality.id: db_modality.name for db_modality in db_modalities
+    }
+    db_roi_map = {db_roi.id: db_roi.name for db_roi in db_rois}
+    db_feature_map = {
+        db_feature.id: db_feature.name for db_feature in db_feature_definitions
+    }
+
+    return db_modality_map, db_roi_map, db_feature_map
+
+
+def get_modality_roi_feature_maps_by_name():
+    # Get necessary info from the DB
+    db_modalities = Modality.find_all()
+    db_rois = ROI.find_all()
+    db_feature_definitions = FeatureDefinition.find_all()
+
+    # Map names to DB IDs
+    db_modality_map = {
+        db_modality.name: db_modality.id for db_modality in db_modalities
+    }
+    db_roi_map = {db_roi.name: db_roi.id for db_roi in db_rois}
+    db_feature_map = {
+        db_feature.name: db_feature.id for db_feature in db_feature_definitions
+    }
+
+    return db_modality_map, db_roi_map, db_feature_map
+
+
+def get_tasks_map_by_study_uid(extraction_id):
+    # Get Study UIDs for all the feature extraction tasks
+    feature_extraction_tasks = FeatureExtractionTask.query.filter_by(
+        feature_extraction_id=extraction_id
+    )
+
+    feature_tasks_map = {task.study_uid: task.id for task in feature_extraction_tasks}
+
+    return feature_tasks_map
+
+
+def get_tasks_map(extraction_id):
+    # Get Study UIDs for all the feature extraction tasks
+    feature_extraction_tasks = FeatureExtractionTask.query.filter_by(
+        feature_extraction_id=extraction_id
+    )
+
+    feature_tasks_map = {task.id: task.study_uid for task in feature_extraction_tasks}
+
+    return feature_tasks_map
