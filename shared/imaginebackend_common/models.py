@@ -532,21 +532,6 @@ class FeatureValue(BaseModel, db.Model):
     def fetch_feature_collection_values(
         cls, feature_collection_id, patient_to_study_map
     ):
-        # Full ORM objects
-        # collection_loaded = (
-        #     db.session.query(FeatureCollection)
-        #         .options(
-        #         joinedload(FeatureCollection.values).options(
-        #             joinedload(FeatureValue.feature_extraction_task).options(
-        #                 load_only("study_uid")
-        #             ),
-        #         )
-        #     )
-        #         .filter(FeatureCollection.id == feature_collection_id)
-        #         .one_or_none()
-        # )
-        # return collection_loaded.values
-
         collection = FeatureCollection.find_by_id(feature_collection_id)
         modalities_map, rois_map, features_map = get_modality_roi_feature_maps_by_name()
         tasks_map = get_tasks_map_by_study_uid(collection.feature_extraction_id)

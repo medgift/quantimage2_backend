@@ -78,7 +78,7 @@ def hello():
 def extraction_by_id(id):
     feature_extraction = FeatureExtraction.find_by_id(id)
 
-    return jsonify(format_extraction(feature_extraction, payload=True, tasks=True))
+    return jsonify(format_extraction(feature_extraction, tasks=True))
 
 
 # Get feature details for a given extraction

@@ -66,7 +66,7 @@ class MessageType(Enum):
 
 
 # Format feature extraction
-def format_extraction(extraction, payload=False, tasks=False):
+def format_extraction(extraction, tasks=False):
     extraction_dict = extraction.to_dict()
 
     tic()
@@ -78,30 +78,29 @@ def format_extraction(extraction, payload=False, tasks=False):
     print("Getting extraction result for formatted extraction took", elapsed)
 
     if tasks:
-        formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks, payload)}
+        formatted_tasks = {"tasks": format_feature_tasks(extraction.tasks)}
         extraction_dict.update(formatted_tasks)
 
     return extraction_dict
 
 
 # Format feature tasks
-def format_feature_tasks(feature_tasks, payload=False):
+def format_feature_tasks(feature_tasks):
     # Gather the feature tasks
     feature_task_list = []
 
     if feature_tasks:
         for feature_task in feature_tasks:
-            formatted_feature_task = format_feature_task(feature_task, payload)
+            formatted_feature_task = format_feature_task(feature_task)
             feature_task_list.append(formatted_feature_task)
 
     return feature_task_list
 
 
 # Formate feature task
-def format_feature_task(feature_task, payload=True):
+def format_feature_task(feature_task):
     status = celerystates.PENDING
     status_message = StatusMessage.WAITING_TO_START.value
-    sanitized_object = {}
 
     # Get the feature status & update the status if necessary!
     if feature_task.task_id:
@@ -122,13 +121,6 @@ def format_feature_task(feature_task, payload=True):
             else:
                 status_message = result
 
-        # Read the features file (if available)
-        if payload:
-            sanitized_object = read_feature_file(feature_task.features_path)
-
-    # Read the config file (if available)
-    # config = read_config_file(feature.config_path)
-
     response_dict = {
         "id": feature_task.id,
         "updated_at": feature_task.updated_at.strftime(DATE_FORMAT),
@@ -136,10 +128,6 @@ def format_feature_task(feature_task, payload=True):
         "status_message": status_message,
         "study_uid": feature_task.study_uid,
     }
-
-    # If the payload should be included, add it to the response dictionary
-    if payload:
-        response_dict["payload"] = sanitized_object
 
     return response_dict
 
