@@ -199,7 +199,13 @@ def models_by_album(album_id):
 
 @bp.route("/models/<id>", methods=["DELETE"])
 def model(id):
-    the_model = Model.delete_by_id(id, options=joinedload(Model.feature_extraction))
+    the_model = Model.delete_by_id(
+        id,
+        options=(
+            joinedload(Model.feature_extraction),
+            joinedload(Model.label_category),
+        ),
+    )
     formatted_model = format_model(the_model)
     model_path = the_model.model_path
     try:
