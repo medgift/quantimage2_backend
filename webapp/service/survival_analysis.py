@@ -8,9 +8,12 @@ from melampus.classifier import MelampusClassifier
 from melampus.survival_analysis import MelampusSurvivalAnalyzer
 from melampus.feature_selector import MelampusFeatureSelector
 
-from imaginebackend_common.models import FeatureExtraction
+from imaginebackend_common.models import FeatureExtraction, FeatureCollection
 from service.feature_analysis import concatenate_modalities_rois
-from service.feature_transformation import transform_studies_features_to_df
+from service.feature_transformation import (
+    transform_studies_features_to_df,
+    transform_studies_collection_features_to_df,
+)
 
 
 def train_survival_model(extraction_id, collection_id, studies, gt):
@@ -19,7 +22,8 @@ def train_survival_model(extraction_id, collection_id, studies, gt):
     if collection_id:
         collection = FeatureCollection.find_by_id(collection_id)
         header, features_df = transform_studies_collection_features_to_df(
-            extraction, studies, collection
+            collection,
+            studies,
         )
     else:
         header, features_df = transform_studies_features_to_df(extraction, studies)
