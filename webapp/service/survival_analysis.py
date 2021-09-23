@@ -69,7 +69,13 @@ def train_survival_model(extraction_id, collection_id, studies, gt):
 
     # Get Labels DataFrame
     # TODO - Allow choosing a mode (Patient only or Patient + ROI)
-    labelsDf = pandas.DataFrame(gt, columns=["PatientID", "Time", "Event"])
+
+    # Filter ground truth to keep only labels for patients present in the features DF
+    filtered_gt = [
+        gt_item for gt_item in gt if gt_item[0] in list(featuresDf.PatientID)
+    ]
+
+    labelsDf = pandas.DataFrame(filtered_gt, columns=["PatientID", "Time", "Event"])
 
     # Index the labels Dataframe (for combining with the features)
     labelsDf.set_index("PatientID", drop=True, inplace=True)
