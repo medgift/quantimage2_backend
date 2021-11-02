@@ -8,7 +8,7 @@ eventlet
 requests-toolbelt
 
 # Debug
-pydevd-pycharm==211.7442.45
+pydevd-pycharm==212.5457.59
 ptvsd
 
 # Flask
@@ -46,7 +46,7 @@ simplejson
 jsonpickle
 
 # Numpy
-numpy==1.18.5
+numpy==1.19.5
 
 # PyYAML
 pyyaml
