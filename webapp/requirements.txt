@@ -46,7 +46,7 @@ simplejson
 jsonpickle
 
 # Numpy
-numpy==1.19.5
+numpy
 
 # PyYAML
 pyyaml

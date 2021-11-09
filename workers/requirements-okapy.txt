@@ -1,6 +1,6 @@
 SimpleITK
 click
-numpy==1.19.5
+numpy
 pandas
 pydicom
 pydicom-seg

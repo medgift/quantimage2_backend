@@ -22,7 +22,7 @@ services:
       - PYTHONUNBUFFERED=TRUE
     volumes:
       - backend-data:/imagine-data
-      - ./shared/imaginebackend_common/:/usr/local/lib/python3.7/imaginebackend_common
+      - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
 
   celery:
     build:
@@ -49,7 +49,7 @@ services:
       - PYTHON_ENV=production
     volumes:
       - backend-data:/imagine-data
-      - ./shared/imaginebackend_common/:/usr/local/lib/python3.7/imaginebackend_common
+      - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
 
   flower:
     build: ./flower

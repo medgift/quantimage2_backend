@@ -1,5 +1,5 @@
 # Install MCR
-FROM python:3.7 AS build-env
+FROM python:3.8 AS build-env
 
 # Add installer options
 ADD ./external_deps/installer_input.txt /installer_input.txt
@@ -10,7 +10,7 @@ ADD ./external_deps/installer_input.txt /installer_input.txt
 RUN /mcr_setup/MATLAB_Runtime_R2019b_Update_1_glnxa64/install -inputFile /installer_input.txt
 
 # Build the Python app
-FROM python:3.7
+FROM python:3.8
 MAINTAINER Roger Schaer
 
 ARG GIT_ACCESS_TOKEN
@@ -26,6 +26,9 @@ RUN apt-get update && apt-get install ncdu && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files
 COPY ./workers/requirements*.txt ./
+
+# Install numpy first (for PyRadiomics)
+RUN pip install --no-cache-dir numpy
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt

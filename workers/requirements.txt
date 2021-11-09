@@ -37,6 +37,9 @@ simplejson
 # Serialization
 jsonpickle
 
+# Numpy (should disappear)
+numpy
+
 # Computation modules (should disappear)
 pyradiomics
 
