@@ -173,8 +173,8 @@ def models_by_album(album_id):
                 model_name,
                 algorithm_type,
                 f"{validation_strategy} ({validation_params['k']} folds, {validation_params['n']} repetitions)"
-                if validation_strategy
-                else None,
+                if validation_strategy and validation_params
+                else "5-fold cross-validation",  # TODO - Get this from the survival analysis method
                 data_normalization,
                 feature_selection,
                 feature_names,
