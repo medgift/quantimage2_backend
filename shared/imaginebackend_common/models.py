@@ -1,16 +1,13 @@
 import decimal, datetime
-import re
-
-import pandas
 
 from flask_sqlalchemy import SQLAlchemy
-from more_itertools import first_true
 from sqlalchemy import ForeignKey, Table, Column, Integer
-from sqlalchemy.orm import joinedload, load_only
+from sqlalchemy.orm import joinedload
 from ttictoc import tic, toc
 
 from sqlalchemy.dialects.mysql import LONGTEXT
 
+from imaginebackend_common.const import featureIDMatcher
 from imaginebackend_common.kheops_utils import dicomFields
 
 db = SQLAlchemy()
@@ -546,9 +543,10 @@ class FeatureValue(BaseModel, db.Model):
 
         conditions = []
 
-        matcher = re.compile(r"(?P<modality>.*?)-(?P<roi>.*?)-(?P<feature>.*)")
         for feature_id in collection.feature_ids:
-            modality_name, roi_name, feature_name = matcher.match(feature_id).groups()
+            modality_name, roi_name, feature_name = featureIDMatcher.match(
+                feature_id
+            ).groups()
             conditions.append(
                 (
                     modalities_map[modality_name],
@@ -626,9 +624,10 @@ class FeatureValue(BaseModel, db.Model):
 
         # Transform feature IDs to triplets of Modality ID, ROI ID & Feature Definition ID
         conditions = []
-        matcher = re.compile(r"(?P<modality>.*?)-(?P<roi>.*?)-(?P<feature>.*)")
         for feature_id in feature_ids:
-            modality_name, roi_name, feature_name = matcher.match(feature_id).groups()
+            modality_name, roi_name, feature_name = featureIDMatcher.match(
+                feature_id
+            ).groups()
             conditions.append(
                 (
                     db_modality_map[modality_name],
@@ -822,9 +821,10 @@ class FeatureCollection(BaseModel, db.Model):
         rois = set()
         features = set()
 
-        matcher = re.compile(r"(?P<modality>.*?)-(?P<roi>.*?)-(?P<feature>.*)")
         for feature_id in feature_ids:
-            modality_name, roi_name, feature_name = matcher.match(feature_id).groups()
+            modality_name, roi_name, feature_name = featureIDMatcher.match(
+                feature_id
+            ).groups()
 
             modalities.add(modality_name)
             rois.add(roi_name)

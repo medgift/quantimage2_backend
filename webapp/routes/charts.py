@@ -8,7 +8,7 @@ from flask import Blueprint, jsonify, request, g, current_app, Response
 # Define blueprint
 from sklearn.preprocessing import StandardScaler
 
-from imaginebackend_common.const import MODEL_TYPES
+from imaginebackend_common.const import MODEL_TYPES, featureIDMatcher
 from imaginebackend_common.models import (
     FeatureExtraction,
     Label,
@@ -200,9 +200,6 @@ def format_lasagna_data(features_df, label_category, labels):
 
     formatted_features = []
 
-    # Compile regex for getting modality, ROI & feature name from feature IDs
-    feature_regex = re.compile("^(?P<modality>.*?)-(?P<roi>.*?)-(?P<feature>.*?)$")
-
     formatted_labels = []
     patientIdx = 0
     for patient_record in features_list:
@@ -223,7 +220,7 @@ def format_lasagna_data(features_df, label_category, labels):
             # Don't add the Patient ID as another feature
             if feature_id != PATIENT_ID_FIELD:
                 # Get modality, ROI & feature based on the feature name
-                matches = feature_regex.match(feature_id)
+                matches = featureIDMatcher.match(feature_id)
 
                 modality = matches.group("modality")
                 roi = matches.group("roi")
