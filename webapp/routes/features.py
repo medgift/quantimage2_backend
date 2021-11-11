@@ -113,56 +113,20 @@ def extraction_features_by_id(extraction_id, collection_id):
 
     tic()
     formatted_lasagna_data = format_lasagna_data(features_df, label_category, labels)
-
-    features_json = json.loads(features_df.to_json(orient="records"))
+    features_tabular = json.loads(features_df.to_json(orient="records"))
     elapsed = toc()
     print("Formatting & serializing features took", elapsed)
 
     response = jsonify(
         {
             "header": header,
-            "features": features_json,
-            "visualization": formatted_lasagna_data,
+            "features_tabular": features_tabular,
+            "features_chart": formatted_lasagna_data["features"],
+            "outcomes": formatted_lasagna_data["outcomes"],
         }
     )
 
     return response
-
-
-# Get data points (PatientID/ROI) for a given extraction
-@bp.route("/extractions/<extraction_id>/collections/<collection_id>/data-points")
-def extraction_collection_data_points(extraction_id, collection_id):
-    tic()
-    patient_ids = get_data_points_collection(collection_id)
-    elapsed = toc()
-    print("Getting data points for collection took", elapsed)
-
-    return jsonify({"data-points": patient_ids})
-
-
-# Get data points (PatientID/ROI) for a given extraction
-@bp.route("/extractions/<id>/data-points")
-def extraction_data_points_by_id(id):
-    token = g.token
-
-    extraction = FeatureExtraction.find_by_id(id)
-
-    tic()
-    result = fetch_extraction_result(
-        current_app.my_celery, extraction.result_id, tasks=extraction.tasks
-    )
-    elapsed = toc()
-    print("Getting extraction result for data points took", elapsed)
-
-    studies = get_studies_from_album(extraction.album_id, token)
-
-    tic()
-    patient_ids = get_data_points_extraction(result, studies)
-    elapsed = toc()
-    print("Getting data points for extraction took", elapsed)
-
-    # TODO - Allow choosing a mode (patient only or patient + roi)
-    return jsonify({"data-points": patient_ids})
 
 
 # Download features in CSV format
