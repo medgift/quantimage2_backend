@@ -69,8 +69,6 @@ def delete_label_category(label_category_id):
 def save_labels(label_category_id, labels_dict):
     user = g.user
 
-    labels = []
-
     # TODO - Allow choosing a mode (Patient only or patient + roi)
     # for patient_id, roi_dict in outcomes_dict.items():
     #     for roi, outcome in roi_dict.items():
@@ -79,10 +77,10 @@ def save_labels(label_category_id, labels_dict):
     #         )
     #         outcomes.append(created_updated_label.to_dict())
 
+    labels_to_save = []
     for patient_id, label_content in labels_dict.items():
-        created_updated_label = Label.save_label(
-            label_category_id, patient_id, label_content
-        )
-        labels.append(created_updated_label.to_dict())
+        labels_to_save.append(Label(label_category_id, patient_id, label_content))
 
-    return jsonify(labels)
+    labels = Label.save_labels(label_category_id, labels_to_save)
+
+    return jsonify([l.to_dict() for l in labels])

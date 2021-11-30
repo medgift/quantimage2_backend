@@ -34,6 +34,15 @@ def create_app():
     #    "COMPRESS_REGISTER"
     # ] = False  # disable default compression of all eligible requests
 
+    app.config["COMPRESS_MIMETYPES"] = [
+        "text/html",
+        "text/css",
+        "text/xml",
+        "application/json",
+        "application/javascript",
+        "multipart/form-data",
+    ]
+
     # Create feature presets folder (if necessary)
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 

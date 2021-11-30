@@ -12,7 +12,7 @@ from ttictoc import tic, toc
 from celery import chord
 from flask import current_app
 
-from config import EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR, FEATURES_SUBDIR
+from config import EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR
 
 from imaginebackend_common.kheops_utils import endpoints, get_token_header, dicomFields
 from imaginebackend_common.utils import (

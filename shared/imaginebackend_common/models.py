@@ -456,7 +456,7 @@ class FeatureValue(BaseModel, db.Model):
         elapsed = toc()
         print("Getting the feature values from the DB took", elapsed)
 
-        # tic()
+        tic()
         features_formatted = [
             {
                 "study_uid": feature_tasks_map[
@@ -471,8 +471,8 @@ class FeatureValue(BaseModel, db.Model):
         ]
         names = list(dict.fromkeys([f["name"] for f in features_formatted]))
 
-        # elapsed = toc()
-        # print("Formatting features took", elapsed)
+        elapsed = toc()
+        print("Formatting the DB features took", elapsed)
 
         return features_formatted, names
 
@@ -1038,6 +1038,27 @@ class Label(BaseModel, db.Model):
         instances = cls.query.filter_by(label_category_id=label_category_id).all()
 
         return instances
+
+    @classmethod
+    def save_labels(cls, label_category_id, labels_to_save):
+        tic()
+
+        # Delete any existing labels
+        deleted_existing_labels = cls.query.filter_by(
+            label_category_id=label_category_id
+        ).delete()
+
+        # Save labels in bulk
+        db.session.bulk_save_objects(labels_to_save)
+        db.session.commit()
+        elapsed = toc()
+
+        # Fetch newly saved labels
+        labels = cls.find_by_label_category(label_category_id)
+
+        print("Saving labels took", elapsed)
+
+        return labels
 
     @classmethod
     def save_label(cls, label_category_id, patient_id, label_content):

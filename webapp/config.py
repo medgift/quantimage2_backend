@@ -16,8 +16,10 @@ oidc_client = realm.open_id_connect(
 
 # Extractions
 EXTRACTIONS_BASE_DIR = "/imagine-data/extractions"
-FEATURES_SUBDIR = "features"
 CONFIGS_SUBDIR = "configs"
+
+# Feature Cache
+FEATURES_CACHE_BASE_DIR = "/imagine-data/features-cache"
 
 # Models
 MODELS_BASE_DIR = "/imagine-data/models"

@@ -1,6 +1,7 @@
 import csv
 import io
 import pandas
+from ttictoc import tic, toc
 
 from imaginebackend_common.kheops_utils import dicomFields
 from imaginebackend_common.models import (
@@ -40,8 +41,14 @@ def get_extraction_features(feature_extraction, studies):
 
 
 def transform_feature_values_to_tabular(values, studies):
-    df = pandas.DataFrame(values)
+    tic()
+    df = pandas.DataFrame(
+        values, columns=["study_uid", "modality", "roi", "name", "value"]
+    )
+    elapsed = toc()
+    print("Loading all the values into a Pandas Dataframe took", elapsed)
 
+    tic()
     # Make a map of Study UID -> Patient ID to replace in the dataframe
     study_to_patient_map = {
         study[dicomFields.STUDY_UID][dicomFields.VALUE][0]: study[
@@ -74,6 +81,9 @@ def transform_feature_values_to_tabular(values, studies):
 
     # Sort DataFrame
     sorted_df = renamed_df.sort_values(by=[PATIENT_ID_FIELD, MODALITY_FIELD, ROI_FIELD])
+
+    elapsed = toc()
+    print("Transforming features to tabular format took", elapsed)
 
     return sorted_df
 

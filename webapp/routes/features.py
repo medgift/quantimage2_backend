@@ -1,6 +1,9 @@
 import json
+from pathlib import Path
 
 from flask import Blueprint, jsonify, request, g, current_app, Response
+
+from requests_toolbelt import MultipartEncoder
 
 import yaml
 
@@ -11,7 +14,7 @@ from random import randint
 from keycloak.realm import KeycloakRealm
 from ttictoc import tic, toc
 
-from config import oidc_client
+from config import oidc_client, FEATURES_CACHE_BASE_DIR
 from imaginebackend_common.const import MODEL_TYPES
 from imaginebackend_common.kheops_utils import dicomFields
 from imaginebackend_common.utils import (
@@ -43,7 +46,7 @@ from service.feature_transformation import (
     get_data_points_extraction,
     get_data_points_collection,
 )
-from .charts import format_lasagna_data
+from .charts import format_chart_data
 
 from .utils import validate_decorate
 
@@ -82,7 +85,7 @@ def extraction_by_id(id):
 
 
 # Get feature details for a given extraction
-# INCLUDING the data for the lasagna chart (to improve performance)
+# INCLUDING the data for the chart (to improve performance)
 @bp.route(
     "/extractions/<extraction_id>/feature-details", defaults={"collection_id": None}
 )
@@ -95,13 +98,7 @@ def extraction_features_by_id(extraction_id, collection_id):
     album_outcome = AlbumOutcome.find_by_album_user_id(extraction.album_id, g.user)
     studies = get_studies_from_album(extraction.album_id, token)
 
-    if collection_id:
-        collection = FeatureCollection.find_by_id(collection_id)
-        header, features_df = transform_studies_collection_features_to_df(
-            collection, studies
-        )
-    else:
-        header, features_df = transform_studies_features_to_df(extraction, studies)
+    header, features_df = get_features_cache_or_db(extraction, collection_id, studies)
 
     label_category = None
     labels = []
@@ -112,21 +109,71 @@ def extraction_features_by_id(extraction_id, collection_id):
         labels = Label.find_by_label_category(label_category.id)
 
     tic()
-    formatted_lasagna_data = format_lasagna_data(features_df, label_category, labels)
-    features_tabular = json.loads(features_df.to_json(orient="records"))
+    chart_df = format_chart_data(features_df, label_category, labels)
     elapsed = toc()
     print("Formatting & serializing features took", elapsed)
 
-    response = jsonify(
-        {
-            "header": header,
-            "features_tabular": features_tabular,
-            "features_chart": formatted_lasagna_data["features"],
-            "outcomes": formatted_lasagna_data["outcomes"],
+    rounded_df = features_df.round(3)
+    rounded_chart_df = chart_df.round(3)
+
+    m = MultipartEncoder(
+        fields={
+            "features_tabular": rounded_df.to_csv(index=False),
+            "features_chart": rounded_chart_df.to_csv(index_label="FeatureID"),
         }
     )
+    return Response(m.to_string(), mimetype=m.content_type)
+    #
+    # response = jsonify(
+    #     {
+    #         "features_tabular": features_tabular,
+    #         "features_chart": formatted_lasagna_data,
+    #     }
+    # )
 
     return response
+
+
+def get_features_cache_or_db(extraction, collection_id, studies):
+    features_cache_folder = (
+        f"collection-{collection_id}"
+        if collection_id
+        else f"extraction-{extraction.id}"
+    )
+    features_cache_path = f"{FEATURES_CACHE_BASE_DIR}/{features_cache_folder}"
+    features_file_name = "features.h5"
+    features_key = "features"
+    features_cache_file_path = f"{features_cache_path}/{features_file_name}"
+
+    # Does the features file exist?
+    if Path(features_cache_file_path).exists():
+        tic()
+        features_df = pandas.read_hdf(features_cache_file_path, features_key)
+        header = features_df.columns
+        elapsed = toc()
+        print("Parsing features from cached HDF5 file took", elapsed)
+    else:
+        if collection_id:
+            collection = FeatureCollection.find_by_id(collection_id)
+            header, features_df = transform_studies_collection_features_to_df(
+                collection, studies
+            )
+        else:
+            header, features_df = transform_studies_features_to_df(extraction, studies)
+
+        # Persist features DataFrame for caching
+        tic()
+        os.makedirs(features_cache_path, exist_ok=True)
+        features_df.to_hdf(
+            features_cache_file_path,
+            features_key,
+            "w",
+            format="fixed",
+        )
+        elapsed = toc()
+        print("Serializing features to HDF5 took", elapsed)
+
+    return header, features_df
 
 
 # Download features in CSV format

@@ -58,21 +58,21 @@ def train_survival_model(extraction_id, collection_id, studies, gt):
 
     # TODO - Analyze what is the best thing to do, try concatenation so far
     # featuresDf = concatenate_modalities_rois(filteredFeaturesWithCategorical)
-    featuresDf = concatenate_modalities_rois(features_df)
+    features_df = concatenate_modalities_rois(features_df)
 
     # TODO - This will be done in Melampus also in the future
     # Impute mean for NaNs
-    featuresDf = featuresDf.fillna(featuresDf.mean())
+    features_df = features_df.fillna(features_df.mean())
 
     # Index the features Dataframe (for combining with the labels)
-    featuresDf.set_index("PatientID", drop=False, inplace=True)
+    features_df.set_index("PatientID", drop=False, inplace=True)
 
     # Get Labels DataFrame
     # TODO - Allow choosing a mode (Patient only or Patient + ROI)
 
     # Filter ground truth to keep only labels for patients present in the features DF
     filtered_gt = [
-        gt_item for gt_item in gt if gt_item[0] in list(featuresDf.PatientID)
+        gt_item for gt_item in gt if gt_item[0] in list(features_df.PatientID)
     ]
 
     labelsDf = pandas.DataFrame(filtered_gt, columns=["PatientID", "Time", "Event"])
@@ -82,7 +82,7 @@ def train_survival_model(extraction_id, collection_id, studies, gt):
 
     # Combine labels with features
     combinedDf = pandas.concat(
-        [featuresDf, labelsDf.set_index(featuresDf.index)], axis=1
+        [features_df, labelsDf.set_index(features_df.index)], axis=1
     )
 
     # TODO - Check how to best deal with this, so far we ignore unlabelled patients

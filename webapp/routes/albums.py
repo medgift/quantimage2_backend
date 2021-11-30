@@ -42,6 +42,11 @@ def album_rois(album_id):
         return get_rois(album_id)
 
 
+@bp.route("/albums/<album_id>/force")
+def album_rois_force(album_id):
+    return get_rois(album_id, force=True)
+
+
 @bp.route(
     "/albums/<album_id>/current-outcome",
     defaults={"labelcategory_id": None},
@@ -57,11 +62,6 @@ def album_labelcategory(album_id, labelcategory_id=None):
 
     if request.method == "GET":
         return get_current_outcome(album_id, g.user)
-
-
-@bp.route("/albums/<album_id>/force")
-def album_rois_force(album_id):
-    return get_rois(album_id, force=True)
 
 
 def get_current_outcome(album_id, user_id):

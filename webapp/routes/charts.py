@@ -5,7 +5,6 @@ import re
 import pandas
 from flask import Blueprint, jsonify, request, g, current_app, Response
 
-# Define blueprint
 from sklearn.preprocessing import StandardScaler
 
 from imaginebackend_common.const import MODEL_TYPES, featureIDMatcher
@@ -33,6 +32,7 @@ from service.feature_transformation import (
 
 from melampus.feature_ranking import MelampusFeatureRank
 
+# Define blueprint
 bp = Blueprint(__name__, "charts")
 
 
@@ -90,64 +90,68 @@ def lasagna_chart(album_id, collection_id):
         label_category = LabelCategory.find_by_id(album_outcome.outcome_id)
         labels = Label.find_by_label_category(label_category.id)
 
-    formatted_lasagna_data = format_lasagna_data(features_df, label_category, labels)
+    formatted_chart_data = format_chart_data(features_df, label_category, labels)
 
-    return jsonify(formatted_lasagna_data)
+    return jsonify(formatted_chart_data)
 
 
 def format_chart_labels(labels):
-    formatted_labels = []
-
-    # Spread out the whole label content into the labels
-    for label in labels:
-        formatted_labels.append(
-            {PATIENT_ID_FIELD: label.patient_id, **label.label_content}
-        )
-
-    return formatted_labels
+    return [
+        {PATIENT_ID_FIELD: label.patient_id, **label.label_content} for label in labels
+    ]
 
 
-def format_lasagna_data(features_df, label_category, labels):
+def format_chart_data(features_df, label_category, labels):
 
     # Flatten features by Modality & ROI to calculate ranks
     concatenated_features_df = concatenate_modalities_rois(features_df)
 
-    # Reset the index to avoid problems with Melampus
-    concatenated_features_df.reset_index(drop=True, inplace=True)
+    # No ranking by default
+    feature_ranks_df = None
 
-    # Define which field to use for visualization of the data
-    if label_category:
-        visualization_field_names = (
-            [OUTCOME_FIELD_CLASSIFICATION]
-            if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION
-            else [OUTCOME_FIELD_SURVIVAL_EVENT, OUTCOME_FIELD_SURVIVAL_TIME]
-        )
-        ranking_field_name = (
-            OUTCOME_FIELD_CLASSIFICATION
-            if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION
-            else OUTCOME_FIELD_SURVIVAL_EVENT
+    # If there are any active labels, we can do feature ranking
+    if label_category and len(labels) > 0:
+        feature_ranks_df = calculate_feature_rankings(
+            label_category, labels, concatenated_features_df
         )
 
-    else:
-        visualization_field_names = [OUTCOME_FIELD_CLASSIFICATION]
-        ranking_field_name = OUTCOME_FIELD_CLASSIFICATION
+    # Drop PatientID column (it is not needed in the output)
+    concatenated_features_df.drop("PatientID", axis=1, inplace=True)
 
-    # Get the outcomes in the same order as they appear in the DataFrame
-    outcomes = []
-    for index, row in concatenated_features_df.iterrows():
-        label_to_add = next(
-            (
-                label.label_content
-                for label in labels
-                if label.patient_id == row[PATIENT_ID_FIELD]
-                and list(label.label_content.values())[0] != ""
-            ),
-            {
-                visualization_field_name: "UNKNOWN"
-                for (visualization_field_name) in visualization_field_names
-            },
+    standardized_features_df = pandas.DataFrame(
+        StandardScaler().fit_transform(concatenated_features_df),
+        index=concatenated_features_df.index,
+        columns=concatenated_features_df.columns,
+    )
+
+    transposed_features_df = standardized_features_df.transpose()
+
+    # Add ranking to the DF (if available)
+    if feature_ranks_df is not None:
+        transposed_features_df = transposed_features_df.merge(
+            feature_ranks_df, left_index=True, right_index=True
         )
-        outcomes.append(label_to_add)
+
+    return transposed_features_df
+
+
+def calculate_feature_rankings(label_category, labels, concatenated_features_df):
+    ranking_field_name = (
+        OUTCOME_FIELD_CLASSIFICATION
+        if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION
+        else OUTCOME_FIELD_SURVIVAL_EVENT
+    )
+
+    formatted_labels = [
+        {PATIENT_ID_FIELD: l.patient_id, **l.label_content} for l in labels
+    ]
+    # Get the outcomes as a DataFrame & index it by Patient ID
+    outcomes_df = pandas.DataFrame(formatted_labels).set_index("PatientID")
+
+    # TODO - This will be done in Melampus also in the future
+    # Get the outcomes df with only the column for ranking
+    outcomes_df_ranking = pandas.DataFrame(outcomes_df[ranking_field_name])
+    outcomes_df_ranking.columns = ["Outcome"]
 
     # TODO - This will be done in Melampus also in the future
     # Imput mean values for NaNs to avoid problems for feature ranking
@@ -155,15 +159,26 @@ def format_lasagna_data(features_df, label_category, labels):
         concatenated_features_df.mean(numeric_only=True)
     )
 
+    no_nan_concatenated_features_with_outcomes_df = pandas.concat(
+        [no_nan_concatenated_features_df, outcomes_df_ranking], axis=1
+    )
+
+    no_nan_concatenated_features_with_outcomes_no_nan_df = (
+        no_nan_concatenated_features_with_outcomes_df.dropna(subset=["Outcome"])
+    )
+
+    # Reset the index to avoid problems with Melampus
+    # concatenated_features_df.reset_index(drop=True, inplace=True)
+
     # Feature Ranking
     # TODO - Feature Ranking should be done differently for survival!
-    outcomes_list_ranking = [outcome[ranking_field_name] for outcome in outcomes]
+    # outcomes_list_ranking = [outcome[ranking_field_name] for outcome in outcomes]
 
     feature_ranking = MelampusFeatureRank(
         None,
-        no_nan_concatenated_features_df,
-        None,
-        outcomes_list_ranking,
+        no_nan_concatenated_features_with_outcomes_no_nan_df,
+        "Outcome",
+        outcomes=[],
         id_names_map={"patient_id": PATIENT_ID_FIELD},
     )
 
@@ -173,82 +188,7 @@ def format_lasagna_data(features_df, label_category, labels):
 
     feature_rank_map = {k: v for v, k in enumerate(list(ranked_features))}
 
-    # Standardize features (by CONCATENATED columns!)
-    concatenated_features_df_standardized = pandas.DataFrame(
-        StandardScaler().fit_transform(
-            concatenated_features_df.loc[
-                :, ~concatenated_features_df.columns.isin(["PatientID"])
-            ]
-        )
-    )
+    feature_ranks_df = pandas.DataFrame.from_dict(feature_rank_map, orient="index")
+    feature_ranks_df.columns = ["Ranking"]
 
-    full_df = pandas.concat(
-        [
-            concatenated_features_df.loc[
-                :, concatenated_features_df.columns.isin(["PatientID"])
-            ],
-            concatenated_features_df_standardized,
-        ],
-        axis=1,
-    )
-
-    # Put back columns names from concatenated dataframe
-    full_df.columns = concatenated_features_df.columns
-
-    # Features
-    features_list = json.loads(full_df.to_json(orient="records"))
-
-    formatted_features = []
-
-    formatted_labels = []
-    patientIdx = 0
-    for patient_record in features_list:
-        patient_id = patient_record[PATIENT_ID_FIELD]
-
-        # Add outcome on the backend already to avoid doing this in React
-        patient_outcome = outcomes[patientIdx]
-
-        # Add formatted label to list
-        formatted_labels.append(
-            {
-                PATIENT_ID_FIELD: patient_id,
-                **patient_outcome,
-            }
-        )
-
-        for feature_id, feature_value in patient_record.items():
-            # Don't add the Patient ID as another feature
-            if feature_id != PATIENT_ID_FIELD:
-                # Get modality, ROI & feature based on the feature name
-                matches = featureIDMatcher.match(feature_id)
-
-                modality = matches.group("modality")
-                roi = matches.group("roi")
-                feature_name = matches.group("feature")
-
-                formatted_features.append(
-                    {
-                        PATIENT_ID_FIELD: patient_id,
-                        MODALITY_FIELD: modality,
-                        ROI_FIELD: roi,
-                        **patient_outcome,
-                        "feature_rank": feature_rank_map[feature_id]
-                        if feature_value is not None
-                        else None,
-                        "feature_id": feature_id,
-                        "feature_name": feature_name,
-                        "feature_value": feature_value,
-                    }
-                )
-
-        patientIdx += 1
-
-    # Labels
-    # formatted_labels = format_chart_labels(labels)
-
-    return {"features": formatted_features, "outcomes": formatted_labels}
-
-
-@bp.route("/charts/<extraction_id>/pca")
-def pca_chart(extraction_id):
-    return None
+    return feature_ranks_df

@@ -55,7 +55,7 @@ def train_classification_model(
         patient_label = labels_df[labels_df["PatientID"] == row.PatientID].Label.values[
             0
         ]
-        labelsList.append(int(patient_label))
+        labelsList.append(patient_label)
 
     # Create temporary file for CSV content & dump it there
     with tempfile.NamedTemporaryFile(mode="w+") as temp:
