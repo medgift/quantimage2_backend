@@ -100,11 +100,12 @@ def save_feature_config(file):
 def format_preset(preset):
     formatted_dict = preset.to_dict()
 
-    feature_config_yaml = yaml.load(
-        Path(preset.config_path).read_text(), Loader=yaml.FullLoader
-    )
+    config_yaml = Path(preset.config_path).read_text()
+
+    feature_config_yaml = yaml.load(config_yaml, Loader=yaml.FullLoader)
 
     formatted_dict["config"] = feature_config_yaml
+    formatted_dict["config-raw"] = config_yaml
 
     return formatted_dict
 

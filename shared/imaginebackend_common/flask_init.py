@@ -43,6 +43,9 @@ def create_app():
         "multipart/form-data",
     ]
 
+    # Disable key sorting
+    app.config["JSON_SORT_KEYS"] = False
+
     # Create feature presets folder (if necessary)
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
