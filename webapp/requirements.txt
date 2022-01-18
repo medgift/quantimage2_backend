@@ -8,7 +8,7 @@ eventlet
 requests-toolbelt
 
 # Debug
-pydevd-pycharm==212.5457.59
+pydevd-pycharm==213.6461.77
 ptvsd
 
 # Flask
