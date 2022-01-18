@@ -42,7 +42,7 @@ def train_classification_model(
     # Filter out unlabelled patients
     features_df = features_df[features_df.PatientID.isin(labelled_patients)]
 
-    # TODO - Analyze what is the best thing to do, try concatenation so far
+    # Concatenate features by modality & ROI
     features_df = concatenate_modalities_rois(features_df)
 
     # TODO - This will be done in Melampus also in the future

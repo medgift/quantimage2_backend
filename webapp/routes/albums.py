@@ -6,6 +6,9 @@ import requests
 
 import glob
 
+from itertools import chain
+from collections import Counter
+
 from flask import Blueprint, jsonify, request, g, current_app, Response
 from ttictoc import tic, toc
 
@@ -110,72 +113,73 @@ def get_rois_from_kheops(album_id):
 
     tic()
     # Get list of ROI series to examine
-    roi_instances = ThreadPool(8).map(get_roi_metadata, studies_dicts)
+    roi_sets = ThreadPool(8).map(get_study_rois, studies_dicts)
 
     # Filter out None values from studies without ROIs
-    roi_instances = [r for r in roi_instances if r]
-
     elapsed = toc()
     print("Getting all the ROIs metadata took", elapsed)
 
-    # Create map of ROI -> Number of studies from ROI files
-    rois_map = parse_roi_instances(roi_instances)
+    # Create map of ROI -> Number of studies from study ROI sets
+    rois_map = dict(
+        Counter(chain(*[roi_set for roi_set in roi_sets if roi_set is not None]))
+    )
 
     return rois_map
 
 
-def get_roi_metadata(study_dict):
+def get_study_rois(study_dict):
     study = study_dict["study"]
     album_id = study_dict["album_id"]
     token = study_dict["token"]
 
     # TODO - This might be more dynamic, not hard-coded to RTSTRUCT & SEG
-    series = get_series_from_study(
+    roi_series = get_series_from_study(
         study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
         ["RTSTRUCT", "SEG"],
         album_id,
         token,
     )
 
-    if len(series) == 0:
+    if len(roi_series) == 0:
         return None
 
-    # Get list of instances
-    instances = get_instances_from_series(
-        study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
-        series[0][dicomFields.SERIES_UID][dicomFields.VALUE][0],
-        token,
-    )
+    study_rois = set()
 
-    # Get instance metadata
-    instance_metadata = get_instance_metadata_from_instance(
-        study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
-        series[0][dicomFields.SERIES_UID][dicomFields.VALUE][0],
-        instances[0][dicomFields.INSTANCE_UID][dicomFields.VALUE][0],
-        token,
-    )
+    for roi_serie in roi_series:
 
-    return instance_metadata[0]
+        # Get list of instances
+        instance = get_instances_from_series(
+            study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
+            roi_serie[dicomFields.SERIES_UID][dicomFields.VALUE][0],
+            token,
+        )
+
+        # Get instance metadata
+        instance_metadata = get_instance_metadata_from_instance(
+            study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
+            roi_serie[dicomFields.SERIES_UID][dicomFields.VALUE][0],
+            instance[0][dicomFields.INSTANCE_UID][dicomFields.VALUE][0],
+            token,
+        )
+
+        # Add the ROI name to the study ROIs set
+        study_rois = study_rois.union(get_roi_names(instance_metadata[0]))
+
+    return study_rois
 
 
-def parse_roi_instances(instances):
-    all_rois = []
+def get_roi_names(instance):
 
-    for instance in instances:
-        modality = instance[dicomFields.MODALITY][dicomFields.VALUE][0]
-        if modality == "RTSTRUCT":
-            for roi in instance[dicomFields.STRUCTURE_SET_ROI_SEQUENCE][
-                dicomFields.VALUE
-            ]:
-                all_rois.append(roi[dicomFields.ROI_NAME][dicomFields.VALUE][0])
-        elif modality == "SEG":
-            for roi in instance[dicomFields.SEGMENT_SEQUENCE][dicomFields.VALUE]:
-                all_rois.append(
-                    roi[dicomFields.SEGMENT_DESCRIPTION][dicomFields.VALUE][0]
-                )
-        else:
-            raise ValueError("Unsupported ROI modality")
+    roi_names = set()
 
-    rois_map = {r: all_rois.count(r) for r in all_rois}
+    modality = instance[dicomFields.MODALITY][dicomFields.VALUE][0]
+    if modality == "RTSTRUCT":
+        for roi in instance[dicomFields.STRUCTURE_SET_ROI_SEQUENCE][dicomFields.VALUE]:
+            roi_names.add(roi[dicomFields.ROI_NAME][dicomFields.VALUE][0])
+    elif modality == "SEG":
+        for roi in instance[dicomFields.SEGMENT_SEQUENCE][dicomFields.VALUE]:
+            roi_names.add(roi[dicomFields.SEGMENT_DESCRIPTION][dicomFields.VALUE][0])
+    else:
+        raise ValueError("Unsupported ROI modality")
 
-    return rois_map
+    return roi_names
