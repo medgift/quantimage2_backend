@@ -53,7 +53,7 @@ def format_model(model):
 
     # Convert metrics to native Python types
     if MODEL_TYPES(model.label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
-        final_metrics = model_object.metrics
+        final_metrics = model.metrics
         for metric in final_metrics:
             for value in final_metrics[metric]:
                 if math.isnan(final_metrics[metric][value]):
@@ -95,8 +95,10 @@ def models_by_album(album_id):
         album = body["album"]
         gt = body["labels"]
         algorithm_type = body["algorithm-type"]
-        validation_strategy = None
+        validation_type = body["validation-type"]
+        train_test_split = body["train-test-split"]
         data_normalization = body["data-normalization"]
+        training_validation = None
         feature_selection = None
 
         if collection_id:
@@ -119,15 +121,19 @@ def models_by_album(album_id):
             if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
                 (
                     model,
-                    validation_strategy,
+                    training_validation,
                     validation_params,
-                    patient_ids,
+                    training_patient_ids,
+                    test_patient_ids,
+                    metrics,
                 ) = train_classification_model(
                     feature_extraction_id,
                     collection_id,
                     studies,
                     algorithm_type,
                     data_normalization,
+                    validation_type,
+                    train_test_split,
                     gt,
                 )
 
@@ -146,7 +152,7 @@ def models_by_album(album_id):
                     patient_ids,
                     feature_names,
                 ) = train_survival_model(
-                    feature_extraction_id, collection_id, studies, gt
+                    feature_extraction_id, collection_id, studies, validation_type, gt
                 )
 
                 model_path = get_model_path(
@@ -172,16 +178,19 @@ def models_by_album(album_id):
             db_model = Model(
                 model_name,
                 algorithm_type,
-                f"{validation_strategy} ({validation_params['k']} folds, {validation_params['n']} repetitions)"
-                if validation_strategy and validation_params
+                validation_type,
+                f"{training_validation} ({validation_params['k']} folds, {validation_params['n']} repetitions)"
+                if training_validation and validation_params
                 else "5-fold cross-validation",  # TODO - Get this from the survival analysis method
                 data_normalization,
                 feature_selection,
                 feature_names,
                 modalities,
                 rois,
-                patient_ids,
+                training_patient_ids,
+                test_patient_ids,
                 model_path,
+                metrics,
                 g.user,
                 album["album_id"],
                 label_category.id,

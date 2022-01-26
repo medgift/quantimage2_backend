@@ -7,6 +7,11 @@ class MODEL_TYPES(Enum):
     SURVIVAL = "Survival"
 
 
+class VALIDATION_TYPES(Enum):
+    CROSSVALIDATION = "crossvalidation"
+    TRAINTESTSPLIT = "traintest"
+
+
 RIESZ_FEATURE_PREFIXES = ["tex"]
 PYRADIOMICS_FEATURE_PREFIXES = [
     "original",

@@ -859,14 +859,17 @@ class Model(BaseModel, db.Model):
         self,
         name,
         algorithm,
-        validation_strategy,
+        validation_type,
+        training_validation,
         data_normalization,
         feature_selection,
         feature_names,
         modalities,
         rois,
-        patient_ids,
+        training_patient_ids,
+        test_patient_ids,
         model_path,
+        metrics,
         user_id,
         album_id,
         label_category_id,
@@ -875,14 +878,17 @@ class Model(BaseModel, db.Model):
     ):
         self.name = name
         self.algorithm = algorithm
-        self.validation_strategy = validation_strategy
+        self.validation_type = validation_type
+        self.training_validation = training_validation
         self.data_normalization = data_normalization
         self.feature_selection = feature_selection
         self.feature_names = feature_names
         self.modalities = modalities
         self.rois = rois
-        self.patient_ids = patient_ids
+        self.training_patient_ids = training_patient_ids
+        self.test_patient_ids = test_patient_ids
         self.model_path = model_path
+        self.metrics = metrics
         self.user_id = user_id
         self.album_id = album_id
         self.label_category_id = label_category_id
@@ -896,8 +902,11 @@ class Model(BaseModel, db.Model):
     # Algorithm used for the model (linear regression, random forests, SVM, etc.)
     algorithm = db.Column(db.String(255), nullable=False, unique=False)
 
-    # Validation strategy used for the model (Stratified K-Fold, Train/Test split, etc.)
-    validation_strategy = db.Column(db.String(255), nullable=True, unique=False)
+    # Type of model validation (Full-Dataset CV, Train/Test split, etc.)
+    validation_type = db.Column(db.String(255), nullable=True, unique=False)
+
+    # Validation strategy used for training the model (Stratified K-Fold, etc.)
+    training_validation = db.Column(db.String(255), nullable=True, unique=False)
 
     # Data normalization used for the model (L2 norm, standardization, etc.)
     data_normalization = db.Column(db.String(255), nullable=True, unique=False)
@@ -915,10 +924,16 @@ class Model(BaseModel, db.Model):
     rois = db.Column(db.JSON, nullable=False, unique=False)
 
     # Patients used for training the model
-    patient_ids = db.Column(db.JSON, nullable=True, unique=False)
+    training_patient_ids = db.Column(db.JSON, nullable=True, unique=False)
+
+    # Patients used for testing the model (OPTIONAL)
+    test_patient_ids = db.Column(db.JSON, nullable=True, unique=False)
 
     # Path to pickled version of the model
     model_path = db.Column(db.String(255), nullable=False, unique=True)
+
+    # Model metrics (JSON)
+    metrics = db.Column(db.JSON, nullable=True, unique=False)
 
     # User who created the model
     user_id = db.Column(db.String(255), nullable=False, unique=False)
@@ -955,14 +970,17 @@ class Model(BaseModel, db.Model):
             "updated_at": self.updated_at,
             "name": self.name,
             "algorithm": self.algorithm,
-            "validation_strategy": self.validation_strategy,
+            "validation_type": self.validation_type,
+            "training_validation": self.training_validation,
             "data_normalization": self.data_normalization,
             "feature_selection": self.feature_selection,
             "feature_names": self.feature_names,
             "modalities": self.modalities,
             "rois": self.rois,
-            "patient_ids": self.patient_ids,
+            "training_patient_ids": self.training_patient_ids,
+            "test_patient_ids": self.test_patient_ids,
             "model_path": self.model_path,
+            "metrics": self.metrics,
             "user_id": self.user_id,
             "album_id": self.album_id,
             "feature_collection_id": self.feature_collection_id,
