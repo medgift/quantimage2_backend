@@ -1,18 +1,15 @@
 import math
 import os
+import joblib
 
 import traceback
 
 import collections
 
-import jsonpickle
-import jsonpickle.ext.pandas as jsonpickle_pd
-
 from time import time
 
+import numpy as np
 from sqlalchemy.orm import joinedload
-
-jsonpickle_pd.register_handlers()
 
 from imaginebackend_common.const import MODEL_TYPES
 
@@ -46,18 +43,22 @@ def format_model(model):
 
     model_dict = model.to_dict()
 
-    # De-serialize model (for metrics etc.)
-    f = open(model.model_path)
-    json_str = f.read()
-    model_object = jsonpickle.decode(json_str)
+    # De-serialize model # TODO - May not be required anymore if the concordance index is saved in the DB directly
+    model_object = joblib.load(model.model_path)
 
     # Convert metrics to native Python types
     if MODEL_TYPES(model.label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
         final_metrics = model.metrics
         for metric in final_metrics:
-            for value in final_metrics[metric]:
-                if math.isnan(final_metrics[metric][value]):
-                    final_metrics[metric][value] = "N/A"
+
+            # Do we have a range or just a single value for the metric?
+            if np.isscalar(final_metrics[metric]):
+                if math.isnan(final_metrics[metric]):
+                    final_metrics[metric] = "N/A"
+            else:
+                for value in final_metrics[metric]:
+                    if math.isnan(final_metrics[metric][value]):
+                        final_metrics[metric][value] = "N/A"
 
         metrics = final_metrics
     elif MODEL_TYPES(model.label_category.label_type) == MODEL_TYPES.SURVIVAL:
@@ -167,9 +168,8 @@ def models_by_album(album_id):
                 raise NotImplementedError
 
             # Persist model in DB and on disk (pickle it)
-            json_model = jsonpickle.encode(model)
             os.makedirs(os.path.dirname(model_path), exist_ok=True)
-            Path(model_path).write_text(json_model)
+            model_file = joblib.dump(model, model_path)
 
             # Generate model name (for now)
             (file, ext) = os.path.splitext(os.path.basename(model_path))
@@ -240,7 +240,7 @@ def get_model_path(user_id, album_id, model_type, algorithm_type, modalities, ro
         models_filename = f"model_{model_type}_{'-'.join(modalities)}_{'-'.join(rois)}"
 
     models_filename += f"_{str(int(time()))}"
-    models_filename += ".json"
+    models_filename += ".joblib"
     models_path = os.path.join(models_dir, models_filename)
 
     return models_path

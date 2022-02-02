@@ -42,9 +42,6 @@ passlib
 # JSON
 simplejson
 
-# Serialization
-jsonpickle
-
 # Numpy
 numpy
 

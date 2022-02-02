@@ -5,25 +5,18 @@ import os
 import logging
 import shutil
 import tempfile
-import json
 import traceback
-import jsonpickle
 
 import pydevd_pycharm
 import requests
 import warnings
 
-import yaml
-
-from typing import List, Dict, Any
+from typing import Dict, Any
 from flask_socketio import SocketIO
 from keycloak.realm import KeycloakRealm
-from requests_toolbelt import NonMultipartContentTypeException
 from celery import Celery
 from celery import states as celerystates
 from celery.signals import celeryd_after_setup
-from requests_toolbelt.multipart import decoder
-from pathlib import Path
 from zipfile import ZipFile
 
 from imaginebackend_common.feature_storage import store_features

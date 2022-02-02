@@ -20,7 +20,6 @@ from imaginebackend_common.kheops_utils import dicomFields
 from imaginebackend_common.utils import (
     fetch_extraction_result,
     format_extraction,
-    read_feature_file,
 )
 from service.feature_extraction import (
     run_feature_extraction,

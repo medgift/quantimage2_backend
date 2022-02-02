@@ -10,7 +10,6 @@ from pathlib import Path
 from ttictoc import tic, toc
 
 import celery.states as celerystates
-import jsonpickle
 import requests
 from celery import Celery
 from flask import jsonify
@@ -139,48 +138,6 @@ def read_config_file(config_path):
         return config
     except FileNotFoundError:
         print(f"{config_path} does not exist!")
-
-
-# Read Feature File
-def read_feature_file(feature_path):
-
-    features_dict = {}
-    if feature_path:
-        try:
-            tic()
-            features_dict = jsonpickle.decode(open(feature_path).read())
-            elapsed = toc()
-            # TODO - Remove this once the serialization has been improved!
-            # print(f"Unpickling took {elapsed}s")
-
-            for modality, labels in features_dict.items():
-                for label, features in labels.items():
-                    features_dict[modality][label] = sanitize_features_object(
-                        features_dict[modality][label]
-                    )
-        except FileNotFoundError:
-            print(f"{feature_path} does not exist!")
-
-    sanitized_features_dict = features_dict
-
-    return sanitized_features_dict
-
-
-# Sanitize features object
-def sanitize_features_object(feature_object):
-    sanitized_object = OrderedDict()
-
-    for feature_name in feature_object:
-        if is_jsonable(feature_object[feature_name]):
-            sanitized_object[feature_name] = feature_object[feature_name]
-        else:
-            # Numpy NDArrays
-            if type(feature_object[feature_name] is ndarray):
-                sanitized_object[feature_name] = feature_object[feature_name].tolist()
-            else:
-                print(feature_name + " is unsupported", file=sys.stderr)
-
-    return sanitized_object
 
 
 # Get Extraction Status

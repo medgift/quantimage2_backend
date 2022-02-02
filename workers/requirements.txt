@@ -34,9 +34,6 @@ redis
 # JSON
 simplejson
 
-# Serialization
-jsonpickle
-
 # Numpy (should disappear)
 numpy
 
