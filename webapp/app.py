@@ -7,6 +7,7 @@ eventlet.monkey_patch()
 # System packages
 import os
 import logging
+import socket
 
 # Debugging
 import pydevd_pycharm
@@ -86,6 +87,8 @@ def start_app():
             )
         except ConnectionRefusedError:
             logging.warning("No debug server running")
+        except socket.timeout:
+            logging.warning("Could not connect to the debugger")
 
     # Create the Flask app
     flask_app = create_app()

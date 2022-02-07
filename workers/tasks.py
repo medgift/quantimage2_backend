@@ -4,6 +4,7 @@ Celery tasks for running and finalizing feature extractions
 import os
 import logging
 import shutil
+import socket
 import tempfile
 import traceback
 
@@ -49,6 +50,10 @@ if "DEBUGGER_IP" in os.environ and os.environ["DEBUGGER_IP"] != "":
         )
     except ConnectionRefusedError:
         logging.warning("No debug server running")
+    except socket.timeout:
+        logging.warning("Could not connect to the debugger")
+
+
 
 celery = Celery(
     "tasks",
