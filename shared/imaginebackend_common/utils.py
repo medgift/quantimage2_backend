@@ -191,7 +191,7 @@ def fetch_extraction_result(celery_app, result_id, tasks=None):
 def fetch_task_result(task_id):
     print(f"Getting result for task {task_id}")
 
-    response = requests.get("http://flower:5555/api/task/result/" + task_id)
+    response = requests.get("http://flower:3333/api/task/result/" + task_id)
 
     task = CustomResult()
 

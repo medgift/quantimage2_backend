@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir redis https://github.com/roger-schaer/flower/zipb
 ENV PYTHONUNBUFFERED=1 PYTHONHASHSEED=random PYTHONDONTWRITEBYTECODE=1
 
 # Default port
-EXPOSE 5555
+EXPOSE 3333
 
 # Run as a non-root user by default, run as user with least privileges.
 USER nobody

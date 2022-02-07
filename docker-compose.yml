@@ -53,7 +53,7 @@ services:
 
   flower:
     build: ./flower
-    command: ["flower", "--broker=${CELERY_REDIS_URL}", "--result-backend=${CELERY_REDIS_URL}"]
+    command: ["flower", "--broker=${CELERY_REDIS_URL}", "--result-backend=${CELERY_REDIS_URL}", "--port=3333"]
 
   db:
     image: mysql:5.7

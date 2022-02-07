@@ -18,11 +18,11 @@ services:
       - KHEOPS_ANNOTATOR_USER_ID=${KHEOPS_ANNOTATOR_USER_ID}
       - KHEOPS_OUTCOME_USER_ID=${KHEOPS_OUTCOME_USER_ID}
     extra_hosts:
-      - "roger:153.109.130.143"
+      - "roger:192.168.1.35"
 
   celery:
     extra_hosts:
-      - "roger:153.109.130.143"
+      - "roger:192.168.1.35"
     volumes:
       - ./workers:/usr/src/app
       - ./venv/src/okapy:/usr/local/lib/python3.8/site-packages/okapy
@@ -39,7 +39,7 @@ services:
 
   flower:
     ports:
-      - 5555:5555
+      - 3333:3333
 
   db:
     ports:
