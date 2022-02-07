@@ -1,22 +1,12 @@
-import json
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request, g, current_app, Response
 
 from requests_toolbelt import MultipartEncoder
 
-import yaml
-
-import numpy
-
-from random import randint
-
-from keycloak.realm import KeycloakRealm
 from ttictoc import tic, toc
 
 from config import oidc_client, FEATURES_CACHE_BASE_DIR
-from imaginebackend_common.const import MODEL_TYPES
-from imaginebackend_common.kheops_utils import dicomFields
 from imaginebackend_common.utils import (
     fetch_extraction_result,
     format_extraction,
