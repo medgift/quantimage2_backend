@@ -1,9 +1,7 @@
 import os
+import requests
 
-
-def get_token_header(token):
-    return {"Authorization": "Bearer " + token}
-
+from datetime import datetime, timedelta
 
 # Backend client
 kheopsBaseURL = os.environ["KHEOPS_BASE_URL"]
@@ -16,6 +14,7 @@ class KheopsEndpoints(object):
 
 
 endpoints = KheopsEndpoints()
+endpoints.capabilities = "/capabilities"
 endpoints.studies = kheopsBaseEndpoint + "/studies"
 endpoints.albums = kheopsBaseEndpoint + "/albums"
 endpoints.album_parameter = "album"
@@ -52,3 +51,38 @@ dicomFields.ROI_NAME = "30060026"
 # SEG
 dicomFields.SEGMENT_SEQUENCE = "00620002"
 dicomFields.SEGMENT_DESCRIPTION = "00620006"
+
+
+def get_token_header(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+def get_album_token(album_id, token):
+    capability_title = "kheops-uploader"
+    capability_scope = "album"
+    capability_read = "true"
+    capability_write = "true"
+
+    now = datetime.utcnow()
+    tomorrow = now + timedelta(days=1)
+
+    tomorrow_str = f"{tomorrow.replace(microsecond=0).isoformat()}Z"
+
+    data = {
+        "title": capability_title,
+        "scope_type": capability_scope,
+        "album": album_id,
+        "read_permission": capability_read,
+        "write_permission": capability_write,
+        "expiration_time": tomorrow_str,
+    }
+
+    response = requests.post(
+        f"{kheopsBaseEndpoint}{endpoints.capabilities}",
+        headers=get_token_header(token),
+        data=data,
+    )
+
+    response_json = response.json()
+
+    return response_json["id"], response_json["secret"]

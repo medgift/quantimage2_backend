@@ -29,7 +29,7 @@ from imaginebackend_common.models import (
 
 
 def run_feature_extraction(
-    user_id, album_id, album_name, feature_extraction_config, rois, token=None
+    user_id, album_id, album_name, feature_extraction_config, rois, album_token=None
 ):
 
     tic()
@@ -47,7 +47,7 @@ def run_feature_extraction(
     tic()
 
     # Assemble study UIDs
-    album_studies = get_studies_from_album(album_id, token)
+    album_studies = get_studies_from_album(album_id, album_token)
     study_uids = list(
         map(
             lambda study: study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
@@ -82,6 +82,7 @@ def run_feature_extraction(
                 study_uid,
                 album_id,
                 album_name,
+                album_token,
                 config_path,
                 rois,
             ],

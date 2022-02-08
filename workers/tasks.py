@@ -54,7 +54,6 @@ if "DEBUGGER_IP" in os.environ and os.environ["DEBUGGER_IP"] != "":
         logging.warning("Could not connect to the debugger")
 
 
-
 celery = Celery(
     "tasks",
     backend=os.environ["CELERY_RESULT_BACKEND"],
@@ -95,9 +94,9 @@ def run_extraction(
     user_id,
     feature_extraction_task_id,
     study_uid,
-    # features_path,
     album_id,
     album_name,
+    album_token,
     config_path,
     rois,
 ):
@@ -134,15 +133,8 @@ def run_extraction(
             status_message,
         )
 
-        # Get a token for the given user (possible thanks to token exchange in Keycloak)
-        token = oidc_client.token_exchange(
-            requested_token_type="urn:ietf:params:oauth:token-type:access_token",
-            audience=os.environ["KEYCLOAK_IMAGINE_CLIENT_ID"],
-            requested_subject=user_id,
-        )["access_token"]
-
         # Download study and write files to directory
-        dicom_dir = download_study(token, study_uid, album_id)
+        dicom_dir = download_study(album_token, study_uid, album_id)
 
         # Extract all the features
         features = extract_all_features(

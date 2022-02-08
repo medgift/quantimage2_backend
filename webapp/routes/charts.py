@@ -38,8 +38,7 @@ bp = Blueprint(__name__, "charts")
 
 @bp.before_request
 def before_request():
-    if not request.path.endswith("download"):
-        decorate_if_possible(request)
+    decorate_if_possible(request)
 
 
 @bp.route("/charts/<album_id>/lasagna", defaults={"collection_id": None})
