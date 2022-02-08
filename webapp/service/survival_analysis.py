@@ -1,12 +1,7 @@
-import csv
-import io
 import tempfile
 
 import pandas
-import numpy as np
-from melampus.classifier import MelampusClassifier
 from melampus.survival_analysis import MelampusSurvivalAnalyzer
-from melampus.feature_selector import MelampusFeatureSelector
 
 from imaginebackend_common.models import FeatureExtraction, FeatureCollection
 from service.feature_analysis import concatenate_modalities_rois

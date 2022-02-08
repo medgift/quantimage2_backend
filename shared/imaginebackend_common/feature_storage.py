@@ -5,7 +5,6 @@ from imaginebackend_common.models import (
     FeatureValue,
     FeatureExtraction,
 )
-from more_itertools import first_true
 
 OKAPY_PATIENT_ID_FIELD = "patient"
 OKAPY_MODALITY_FIELD = "modality"

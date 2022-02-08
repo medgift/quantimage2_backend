@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, g, current_app, Response
+from flask import Blueprint, jsonify, request, g
 
 from imaginebackend_common.models import NavigationHistory
 

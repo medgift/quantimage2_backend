@@ -1,11 +1,6 @@
-import json
 import os
 
 import requests
-
-from pathlib import Path
-
-from urllib.parse import urlencode
 
 import yaml
 from ttictoc import tic, toc
@@ -22,7 +17,6 @@ from imaginebackend_common.utils import (
 )
 from imaginebackend_common.models import (
     FeatureExtraction,
-    FeaturePreset,
     FeatureExtractionTask,
     db,
 )

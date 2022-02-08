@@ -13,7 +13,7 @@ from sqlalchemy.orm import joinedload
 
 from imaginebackend_common.const import MODEL_TYPES
 
-from flask import Blueprint, jsonify, request, g, current_app, Response, make_response
+from flask import Blueprint, jsonify, request, g, make_response
 
 from config import MODELS_BASE_DIR
 from imaginebackend_common.models import (
@@ -22,8 +22,6 @@ from imaginebackend_common.models import (
     FeatureCollection,
     LabelCategory,
 )
-from imaginebackend_common.models import Label
-from pathlib import Path
 
 # Define blueprint
 from imaginebackend_common.utils import format_extraction

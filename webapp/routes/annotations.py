@@ -1,22 +1,9 @@
 import os
 
-import pandas
-from flask import Blueprint, jsonify, request, g, current_app, Response
+from flask import Blueprint, jsonify, request, g
 
-# Define blueprint
-from sklearn.preprocessing import StandardScaler
-
-from imaginebackend_common.const import MODEL_TYPES
-from imaginebackend_common.models import FeatureExtraction, Label, Annotation
+from imaginebackend_common.models import Annotation
 from routes.utils import decorate_if_possible
-from service.feature_extraction import get_studies_from_album
-from service.feature_transformation import (
-    transform_studies_features_to_df,
-    PATIENT_ID_FIELD,
-    MODALITY_FIELD,
-    ROI_FIELD,
-    OUTCOME_FIELD_CLASSIFICATION,
-)
 
 bp = Blueprint(__name__, "annotations")
 

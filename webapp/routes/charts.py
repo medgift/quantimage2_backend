@@ -1,18 +1,15 @@
-import json
 import os
-import re
 
 import pandas
-from flask import Blueprint, jsonify, request, g, current_app, Response
+from flask import Blueprint, jsonify, request, g
 
 from sklearn.preprocessing import StandardScaler
 
-from imaginebackend_common.const import MODEL_TYPES, featureIDMatcher
+from imaginebackend_common.const import MODEL_TYPES
 from imaginebackend_common.models import (
     FeatureExtraction,
     Label,
     FeatureCollection,
-    Album,
     LabelCategory,
     AlbumOutcome,
 )
@@ -22,12 +19,9 @@ from service.feature_extraction import get_studies_from_album
 from service.feature_transformation import (
     transform_studies_features_to_df,
     PATIENT_ID_FIELD,
-    MODALITY_FIELD,
-    ROI_FIELD,
     OUTCOME_FIELD_CLASSIFICATION,
     transform_studies_collection_features_to_df,
     OUTCOME_FIELD_SURVIVAL_EVENT,
-    OUTCOME_FIELD_SURVIVAL_TIME,
 )
 
 from melampus.feature_ranking import MelampusFeatureRank

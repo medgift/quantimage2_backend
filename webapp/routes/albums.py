@@ -1,23 +1,13 @@
-import io
-import os.path
-from zipfile import ZipFile
-
-import requests
-
-import glob
-
 from itertools import chain
 from collections import Counter
 
-from flask import Blueprint, jsonify, request, g, current_app, Response
+from flask import Blueprint, jsonify, request, g, Response
 from ttictoc import tic, toc
 
-from imaginebackend_common.kheops_utils import dicomFields, get_token_header
+from imaginebackend_common.kheops_utils import dicomFields
 from imaginebackend_common.models import Album, LabelCategory, AlbumOutcome
 
 from multiprocessing.pool import ThreadPool
-
-from tempfile import TemporaryDirectory
 
 # Define blueprint
 from routes.utils import validate_decorate

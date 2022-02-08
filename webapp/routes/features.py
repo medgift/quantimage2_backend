@@ -6,7 +6,7 @@ from requests_toolbelt import MultipartEncoder
 
 from ttictoc import tic, toc
 
-from config import oidc_client, FEATURES_CACHE_BASE_DIR
+from config import FEATURES_CACHE_BASE_DIR
 from imaginebackend_common.kheops_utils import get_album_token
 from imaginebackend_common.utils import (
     fetch_extraction_result,
