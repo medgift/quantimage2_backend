@@ -112,15 +112,6 @@ def extraction_features_by_id(extraction_id, collection_id):
         }
     )
     return Response(m.to_string(), mimetype=m.content_type)
-    #
-    # response = jsonify(
-    #     {
-    #         "features_tabular": features_tabular,
-    #         "features_chart": formatted_lasagna_data,
-    #     }
-    # )
-
-    return response
 
 
 def get_features_cache_or_db(extraction, collection_id, studies):

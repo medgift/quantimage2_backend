@@ -140,7 +140,7 @@ def classification_train_test(
     X_train, X_test, y_train, y_test = train_test_split(
         features_clean,
         labels_encoded,
-        train_size=training_size,
+        train_size=round(len(features_clean) * training_size),
         random_state=extraction_id,
     )
 
