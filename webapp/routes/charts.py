@@ -102,10 +102,14 @@ def format_chart_data(features_df, label_category, labels):
     # No ranking by default
     feature_ranks_df = None
 
+    # Filter out labels that aren't part of the current DataFrame
+    patients_in_df = list(features_df.PatientID.unique())
+    filtered_labels = [l for l in labels if l.patient_id in patients_in_df]
+
     # If there are any active labels, we can do feature ranking
     if label_category and len(labels) > 0:
         feature_ranks_df = calculate_feature_rankings(
-            label_category, labels, concatenated_features_df
+            label_category, filtered_labels, concatenated_features_df
         )
 
     # Drop PatientID column (it is not needed in the output)
