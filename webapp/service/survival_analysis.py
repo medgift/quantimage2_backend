@@ -11,7 +11,9 @@ from service.feature_transformation import (
 )
 
 
-def train_survival_model(extraction_id, collection_id, studies, validation_type, gt):
+def train_survival_model(
+    extraction_id, collection_id, studies, data_splitting_type, gt
+):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
     if collection_id:

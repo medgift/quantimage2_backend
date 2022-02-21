@@ -18,7 +18,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler, Normalizer, LabelEncoder
 from sklearn.svm import SVC
 
-from imaginebackend_common.const import VALIDATION_TYPES
+from imaginebackend_common.const import DATA_SPLITTING_TYPES
 from imaginebackend_common.models import FeatureExtraction, FeatureCollection
 from service.feature_transformation import (
     transform_studies_features_to_df,
@@ -34,8 +34,9 @@ def train_classification_model(
     studies,
     algorithm_type,
     data_normalization,
-    validation_type,
-    training_size,
+    data_splitting_type,
+    training_patients,
+    testing_patients,
     gt,
 ):
     extraction = FeatureExtraction.find_by_id(extraction_id)
@@ -71,8 +72,11 @@ def train_classification_model(
     # Impute mean for NaNs
     features_df = features_df.fillna(features_df.mean())
 
+    training_patient_ids = training_patients
+    testing_patient_ids = testing_patients
+
     # Run classification pipeline depending on the type of validation (full CV, train/test)
-    if VALIDATION_TYPES(validation_type) == VALIDATION_TYPES.CROSSVALIDATION:
+    if DATA_SPLITTING_TYPES(data_splitting_type) == DATA_SPLITTING_TYPES.FULLDATASET:
         # Get labels for each patient (to make sure they are in the same order)
         labels_list = []
         for index, row in features_df.iterrows():
@@ -93,7 +97,7 @@ def train_classification_model(
                 cv_params,
                 metrics,
                 training_patient_ids,
-                test_patient_ids,
+                testing_patient_ids,
             ) = classification_full_dataset(
                 temp.name,
                 labels_list,
@@ -102,17 +106,11 @@ def train_classification_model(
                 extraction_id,
             )
     else:
-        (
-            model,
-            cv_strategy,
-            cv_params,
-            metrics,
-            training_patient_ids,
-            test_patient_ids,
-        ) = classification_train_test(
+        (model, cv_strategy, cv_params, metrics,) = classification_train_test(
             features_df,
             labels_df_indexed,
-            training_size / 100,  # Transform to percentage
+            training_patients,
+            testing_patients,
             data_normalization,
             algorithm_type,
             extraction_id,
@@ -123,27 +121,39 @@ def train_classification_model(
         cv_strategy,
         cv_params,
         training_patient_ids,
-        test_patient_ids,
+        testing_patient_ids,
         metrics,
     )
 
 
 def classification_train_test(
-    features, labels, training_size, normalization, algorithm, extraction_id
+    features,
+    labels,
+    training_patients,
+    testing_patients,
+    normalization,
+    algorithm,
+    extraction_id,
 ):
     features_clean = features.drop("PatientID", axis=1)
 
+    X = features_clean
+    X.sort_index(inplace=True)
+
+    X_train = X.loc[training_patients]
+    X_test = X.loc[testing_patients]
+
+    y = labels.loc[training_patients + testing_patients]
+    y.sort_index(inplace=True)
+
+    y_train_orig = y.loc[training_patients]
+    y_test_orig = y.loc[testing_patients]
+
     encoder = get_labelencoder()
 
-    labels_encoded = encoder.fit_transform(labels)
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        features_clean,
-        labels_encoded,
-        train_size=round(len(features_clean) * training_size),
-        random_state=extraction_id,
-        stratify=labels_encoded,
-    )
+    encoder.fit(y_train_orig)
+    y_train = encoder.transform(y_train_orig)
+    y_test = encoder.transform(y_test_orig)
 
     normalizer = select_normalizer(normalization)
     classifier = select_classifier(algorithm)
@@ -169,9 +179,11 @@ def classification_train_test(
         f"repeatedstratifiedkfold",
         {"k": cv.get_n_splits(), "n": cv.n_repeats},
         test_metrics,
-        list(X_train.index.values),
-        list(X_test.index.values),
     )  # TODO - Implement train/test cross-evaluation & metrics
+
+
+def split_data_train_test():
+    print("aha")
 
 
 def calculate_test_metrics(y_true, y_pred):

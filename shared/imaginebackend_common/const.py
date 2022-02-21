@@ -7,8 +7,8 @@ class MODEL_TYPES(Enum):
     SURVIVAL = "Survival"
 
 
-class VALIDATION_TYPES(Enum):
-    CROSSVALIDATION = "crossvalidation"
+class DATA_SPLITTING_TYPES(Enum):
+    FULLDATASET = "fulldataset"
     TRAINTESTSPLIT = "traintest"
 
 

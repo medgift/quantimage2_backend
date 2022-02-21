@@ -94,8 +94,9 @@ def models_by_album(album_id):
         album = body["album"]
         gt = body["labels"]
         algorithm_type = body["algorithm-type"]
-        validation_type = body["validation-type"]
-        train_test_split = body["train-test-split"]
+        data_splitting_type = body["data-splitting-type"]
+        training_patients = body["training-patients"]
+        testing_patients = body["testing-patients"]
         data_normalization = body["data-normalization"]
         training_validation = None
         feature_selection = None
@@ -131,8 +132,9 @@ def models_by_album(album_id):
                     studies,
                     algorithm_type,
                     data_normalization,
-                    validation_type,
-                    train_test_split,
+                    data_splitting_type,
+                    training_patients,
+                    testing_patients,
                     gt,
                 )
 
@@ -151,7 +153,11 @@ def models_by_album(album_id):
                     patient_ids,
                     feature_names,
                 ) = train_survival_model(
-                    feature_extraction_id, collection_id, studies, validation_type, gt
+                    feature_extraction_id,
+                    collection_id,
+                    studies,
+                    data_splitting_type,
+                    gt,
                 )
 
                 model_path = get_model_path(
@@ -176,7 +182,7 @@ def models_by_album(album_id):
             db_model = Model(
                 model_name,
                 algorithm_type,
-                validation_type,
+                data_splitting_type,
                 f"{training_validation} ({validation_params['k']} folds, {validation_params['n']} repetitions)"
                 if training_validation and validation_params
                 else "5-fold cross-validation",  # TODO - Get this from the survival analysis method
