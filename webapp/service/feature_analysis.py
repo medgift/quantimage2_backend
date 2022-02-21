@@ -142,6 +142,7 @@ def classification_train_test(
         labels_encoded,
         train_size=round(len(features_clean) * training_size),
         random_state=extraction_id,
+        stratify=labels_encoded,
     )
 
     normalizer = select_normalizer(normalization)

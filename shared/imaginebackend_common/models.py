@@ -1,5 +1,6 @@
 import decimal, datetime
 
+import sqlalchemy
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import ForeignKey, Table, Column, Integer
 from sqlalchemy.orm import joinedload
@@ -82,7 +83,10 @@ class BaseModel(object):
             # Check that object has this property, and disregard creation & updated dates
             try:
                 if hasattr(self, key) and key not in ["created_at", "updated_at"]:
-                    setattr(self, key, value)
+                    if value is not None:
+                        setattr(self, key, value)
+                    else:
+                        setattr(self, key, sqlalchemy.null())
             except TypeError:
                 # Swallow unsuccesful attributions (like associations)
                 print("impossible to set attribute " + key)
@@ -166,6 +170,10 @@ class FeatureExtraction(BaseModel, db.Model):
     # Extraction configuration file
     config_file = db.Column(db.String(255))
 
+    # Train/test patients
+    training_patients = db.Column(db.JSON, nullable=True)
+    testing_patients = db.Column(db.JSON, nullable=True)
+
     # Association to FeatureDefinition
     feature_definitions = db.relationship(
         "FeatureDefinition", secondary="feature_extraction_definition"
@@ -206,6 +214,8 @@ class FeatureExtraction(BaseModel, db.Model):
                     self.feature_definitions,
                 )
             ),
+            "training_patients": self.training_patients,
+            "testing_patients": self.testing_patients,
             "modalities": list(map(lambda modality: modality.name, self.modalities)),
             "rois": list(map(lambda roi: roi.name, self.rois)),
             "tasks": list(
@@ -774,6 +784,10 @@ class FeatureCollection(BaseModel, db.Model):
     feature_ids = db.Column(db.JSON, nullable=False, unique=False)
     patient_ids = db.Column(db.JSON, nullable=False, unique=False)
 
+    # Train/test patients
+    training_patients = db.Column(db.JSON, nullable=True)
+    testing_patients = db.Column(db.JSON, nullable=True)
+
     # Association to a FeatureExtraction
     feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
     feature_extraction = db.relationship(
@@ -790,6 +804,8 @@ class FeatureCollection(BaseModel, db.Model):
             "updated_at": self.updated_at,
             "name": self.name,
             "feature_extraction_id": self.feature_extraction_id,
+            "training_patients": self.training_patients,
+            "testing_patients": self.testing_patients,
         }
 
     def format_collection(self, with_values=False):

@@ -227,6 +227,15 @@ def extraction_status(extraction_id):
     return jsonify(response)
 
 
+# Update a feature extraction
+@bp.route("/extractions/<extraction_id>", methods=["PATCH"])
+def update_extraction(extraction_id):
+    extraction = FeatureExtraction.find_by_id(extraction_id)
+    extraction.update(**request.json)
+
+    return jsonify(extraction.to_dict())
+
+
 # Feature extraction for an album
 @bp.route("/extract/album/<album_id>", methods=["POST"])
 def extract_album(album_id):
