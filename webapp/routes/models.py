@@ -96,7 +96,7 @@ def models_by_album(album_id):
         algorithm_type = body["algorithm-type"]
         data_splitting_type = body["data-splitting-type"]
         training_patients = body["training-patients"]
-        testing_patients = body["testing-patients"]
+        test_patients = body["test-patients"]
         data_normalization = body["data-normalization"]
         training_validation = None
         feature_selection = None
@@ -134,7 +134,7 @@ def models_by_album(album_id):
                     data_normalization,
                     data_splitting_type,
                     training_patients,
-                    testing_patients,
+                    test_patients,
                     gt,
                 )
 

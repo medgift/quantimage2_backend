@@ -172,7 +172,7 @@ class FeatureExtraction(BaseModel, db.Model):
 
     # Train/test patients
     training_patients = db.Column(db.JSON, nullable=True)
-    testing_patients = db.Column(db.JSON, nullable=True)
+    test_patients = db.Column(db.JSON, nullable=True)
 
     # Association to FeatureDefinition
     feature_definitions = db.relationship(
@@ -215,7 +215,7 @@ class FeatureExtraction(BaseModel, db.Model):
                 )
             ),
             "training_patients": self.training_patients,
-            "testing_patients": self.testing_patients,
+            "test_patients": self.test_patients,
             "modalities": list(map(lambda modality: modality.name, self.modalities)),
             "rois": list(map(lambda roi: roi.name, self.rois)),
             "tasks": list(
@@ -786,7 +786,7 @@ class FeatureCollection(BaseModel, db.Model):
 
     # Train/test patients
     training_patients = db.Column(db.JSON, nullable=True)
-    testing_patients = db.Column(db.JSON, nullable=True)
+    test_patients = db.Column(db.JSON, nullable=True)
 
     # Association to a FeatureExtraction
     feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
@@ -805,7 +805,7 @@ class FeatureCollection(BaseModel, db.Model):
             "name": self.name,
             "feature_extraction_id": self.feature_extraction_id,
             "training_patients": self.training_patients,
-            "testing_patients": self.testing_patients,
+            "test_patients": self.test_patients,
         }
 
     def format_collection(self, with_values=False):

@@ -10,9 +10,10 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.model_selection import (
-    train_test_split,
     GridSearchCV,
     RepeatedStratifiedKFold,
+    StratifiedShuffleSplit,
+    cross_validate,
 )
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler, Normalizer, LabelEncoder
@@ -25,7 +26,7 @@ from service.feature_transformation import (
     transform_studies_collection_features_to_df,
 )
 
-from melampus.classifier import MelampusClassifier
+from melampus.classifier import MelampusClassifier, mean_confidence_interval
 
 
 def train_classification_model(
@@ -36,7 +37,7 @@ def train_classification_model(
     data_normalization,
     data_splitting_type,
     training_patients,
-    testing_patients,
+    test_patients,
     gt,
 ):
     extraction = FeatureExtraction.find_by_id(extraction_id)
@@ -73,7 +74,7 @@ def train_classification_model(
     features_df = features_df.fillna(features_df.mean())
 
     training_patient_ids = training_patients
-    testing_patient_ids = testing_patients
+    test_patient_ids = test_patients
 
     # Run classification pipeline depending on the type of validation (full CV, train/test)
     if DATA_SPLITTING_TYPES(data_splitting_type) == DATA_SPLITTING_TYPES.FULLDATASET:
@@ -97,7 +98,7 @@ def train_classification_model(
                 cv_params,
                 metrics,
                 training_patient_ids,
-                testing_patient_ids,
+                test_patient_ids,
             ) = classification_full_dataset(
                 temp.name,
                 labels_list,
@@ -110,7 +111,7 @@ def train_classification_model(
             features_df,
             labels_df_indexed,
             training_patients,
-            testing_patients,
+            test_patients,
             data_normalization,
             algorithm_type,
             extraction_id,
@@ -121,7 +122,7 @@ def train_classification_model(
         cv_strategy,
         cv_params,
         training_patient_ids,
-        testing_patient_ids,
+        test_patient_ids,
         metrics,
     )
 
@@ -130,36 +131,29 @@ def classification_train_test(
     features,
     labels,
     training_patients,
-    testing_patients,
+    test_patients,
     normalization,
     algorithm,
     extraction_id,
 ):
-    features_clean = features.drop("PatientID", axis=1)
+    # Split training & test set based on provided Patient IDs
+    X_train, X_test, y_train, y_test = split_dataset(
+        features, labels, training_patients, test_patients
+    )
 
-    X = features_clean
-    X.sort_index(inplace=True)
-
-    X_train = X.loc[training_patients]
-    X_test = X.loc[testing_patients]
-
-    y = labels.loc[training_patients + testing_patients]
-    y.sort_index(inplace=True)
-
-    y_train_orig = y.loc[training_patients]
-    y_test_orig = y.loc[testing_patients]
-
+    # Encode labels
     encoder = get_labelencoder()
+    encoder.fit(y_train)
+    y_train = encoder.transform(y_train)
+    y_test = encoder.transform(y_test)
 
-    encoder.fit(y_train_orig)
-    y_train = encoder.transform(y_train_orig)
-    y_test = encoder.transform(y_test_orig)
-
+    # Define pipeline with normalizer & classifier
     normalizer = select_normalizer(normalization)
     classifier = select_classifier(algorithm)
-    cv = get_cv(extraction_id)
-
     pipeline = make_pipeline(normalizer, classifier)
+
+    # Define cross-validation (for training)
+    cv = get_cv(extraction_id)
     grid = GridSearchCV(
         pipeline,
         {},
@@ -169,10 +163,23 @@ def classification_train_test(
         return_train_score=True,
     )
 
+    # Fit the model on the training set
     fitted_model = grid.fit(X_train, y_train)
-    y_pred = grid.predict(X_test)
 
-    test_metrics = calculate_test_metrics(y_test, y_pred)
+    # Perform ShuffleSplit CV on the test set
+    sss = StratifiedShuffleSplit(len(y_test), test_size=0.2, random_state=extraction_id)
+
+    # Calculate test scores & metrics (mean & CI)
+    test_scores = cross_validate(
+        grid,
+        X_test,
+        y_test,
+        scoring=get_scoring(),
+        cv=sss,
+        return_train_score=True,
+        return_estimator=True,
+    )
+    test_metrics = calculate_test_metrics(test_scores)
 
     return (
         fitted_model,
@@ -182,11 +189,38 @@ def classification_train_test(
     )  # TODO - Implement train/test cross-evaluation & metrics
 
 
-def split_data_train_test():
-    print("aha")
+def split_dataset(features, labels, training_patients, test_patients):
+    features.drop("PatientID", axis=1)
+
+    X = features.drop("PatientID", axis=1)
+    X.sort_index(inplace=True)
+
+    X_train = X.loc[training_patients]
+    X_test = X.loc[test_patients]
+
+    y = labels.loc[training_patients + test_patients]
+    y.sort_index(inplace=True)
+
+    y_train = y.loc[training_patients]
+    y_test = y.loc[test_patients]
+
+    return X_train, X_test, y_train, y_test
 
 
-def calculate_test_metrics(y_true, y_pred):
+def calculate_test_metrics(scores):
+    metrics = {}
+    metrics["accuracy"] = mean_confidence_interval(scores["test_accuracy"])
+    metrics["positive_predictive_value"] = mean_confidence_interval(
+        scores["test_precision"]
+    )
+    metrics["sensitivity"] = mean_confidence_interval(scores["test_recall"])
+    metrics["specificity"] = mean_confidence_interval(scores["test_specificity"])
+    metrics["auc"] = mean_confidence_interval(scores["test_roc_auc"])
+
+    return metrics
+
+
+def calculate_test_scores(y_true, y_pred):
     metrics = {}
     metrics["accuracy"] = accuracy_score(y_true, y_pred)
     metrics["positive_predictive_value"] = precision_score(y_true, y_pred)
