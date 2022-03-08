@@ -76,6 +76,9 @@ def train_classification_model(
     training_patient_ids = training_patients
     test_patient_ids = test_patients
 
+    test_validation = None
+    test_validation_params = None
+
     # Run classification pipeline depending on the type of validation (full CV, train/test)
     if DATA_SPLITTING_TYPES(data_splitting_type) == DATA_SPLITTING_TYPES.FULLDATASET:
         # Get labels for each patient (to make sure they are in the same order)
@@ -94,8 +97,8 @@ def train_classification_model(
 
             (
                 model,
-                cv_strategy,
-                cv_params,
+                traning_validation,
+                training_validation_params,
                 metrics,
                 training_patient_ids,
                 test_patient_ids,
@@ -107,7 +110,14 @@ def train_classification_model(
                 extraction_id,
             )
     else:
-        (model, cv_strategy, cv_params, metrics,) = classification_train_test(
+        (
+            model,
+            traning_validation,
+            training_validation_params,
+            test_validation,
+            test_validation_params,
+            metrics,
+        ) = classification_train_test(
             features_df,
             labels_df_indexed,
             training_patients,
@@ -119,8 +129,10 @@ def train_classification_model(
 
     return (
         model,
-        cv_strategy,
-        cv_params,
+        traning_validation,
+        training_validation_params,
+        test_validation,
+        test_validation_params,
         training_patient_ids,
         test_patient_ids,
         metrics,
@@ -183,8 +195,14 @@ def classification_train_test(
 
     return (
         fitted_model,
-        f"repeatedstratifiedkfold",
+        f"Repeated Stratified K-Fold Cross-Validation",
         {"k": cv.get_n_splits(), "n": cv.n_repeats},
+        f"Stratified Shuffle Split",
+        {
+            "n": sss.n_splits,
+            "training": (1 - sss.test_size) * 100,
+            "test": sss.test_size * 100,
+        },
         test_metrics,
     )  # TODO - Implement train/test cross-evaluation & metrics
 
@@ -315,10 +333,6 @@ def classification_full_dataset(
         ),  # TODO - Support other types of IDs, not only Patient ID
         None,
     )
-
-
-def test_classification_model(model, test_features_df):
-    print("Aha, let's look at this!")
 
 
 def concatenate_modalities_rois(featuresDf, keep_identifiers=False):

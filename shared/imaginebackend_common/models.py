@@ -877,6 +877,7 @@ class Model(BaseModel, db.Model):
         algorithm,
         validation_type,
         training_validation,
+        test_validation,
         data_normalization,
         feature_selection,
         feature_names,
@@ -896,6 +897,7 @@ class Model(BaseModel, db.Model):
         self.algorithm = algorithm
         self.validation_type = validation_type
         self.training_validation = training_validation
+        self.test_validation = test_validation
         self.data_normalization = data_normalization
         self.feature_selection = feature_selection
         self.feature_names = feature_names
@@ -923,6 +925,9 @@ class Model(BaseModel, db.Model):
 
     # Validation strategy used for training the model (Stratified K-Fold, etc.)
     training_validation = db.Column(db.String(255), nullable=True, unique=False)
+
+    # Validation strategy (data splitting) used on the test set (Bootstrap, etc.)
+    test_validation = db.Column(db.String(255), nullable=True, unique=False)
 
     # Data normalization used for the model (L2 norm, standardization, etc.)
     data_normalization = db.Column(db.String(255), nullable=True, unique=False)
@@ -988,6 +993,7 @@ class Model(BaseModel, db.Model):
             "algorithm": self.algorithm,
             "validation_type": self.validation_type,
             "training_validation": self.training_validation,
+            "test_validation": self.test_validation,
             "data_normalization": self.data_normalization,
             "feature_selection": self.feature_selection,
             "feature_names": self.feature_names,

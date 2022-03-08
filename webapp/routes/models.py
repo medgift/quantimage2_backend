@@ -99,6 +99,7 @@ def models_by_album(album_id):
         test_patients = body["test-patients"]
         data_normalization = body["data-normalization"]
         training_validation = None
+        test_validation = None
         feature_selection = None
 
         if collection_id:
@@ -122,7 +123,9 @@ def models_by_album(album_id):
                 (
                     model,
                     training_validation,
-                    validation_params,
+                    training_validation_params,
+                    test_validation,
+                    test_validation_params,
                     training_patient_ids,
                     test_patient_ids,
                     metrics,
@@ -183,9 +186,12 @@ def models_by_album(album_id):
                 model_name,
                 algorithm_type,
                 data_splitting_type,
-                f"{training_validation} ({validation_params['k']} folds, {validation_params['n']} repetitions)"
-                if training_validation and validation_params
+                f"{training_validation} ({training_validation_params['k']} folds, {training_validation_params['n']} repetitions)"
+                if training_validation and training_validation_params
                 else "5-fold cross-validation",  # TODO - Get this from the survival analysis method
+                f"{test_validation} ({test_validation_params['n']} splits with {int(test_validation_params['training'])}% training & {int(test_validation_params['test'])}% test)"
+                if test_validation
+                else None,
                 data_normalization,
                 feature_selection,
                 feature_names,
