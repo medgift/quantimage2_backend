@@ -18,6 +18,9 @@ Flask-CORS
 Flask-SocketIO<5
 Flask-Compress
 
+# itsdangerous (for flask compatibility)
+itsdangerous==2.0.1
+
 # Celery
 Celery
 
