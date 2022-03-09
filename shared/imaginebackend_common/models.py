@@ -170,6 +170,9 @@ class FeatureExtraction(BaseModel, db.Model):
     # Extraction configuration file
     config_file = db.Column(db.String(255))
 
+    # Data splitting type
+    data_splitting_type = db.Column(db.String(255))
+
     # Train/test patients
     training_patients = db.Column(db.JSON, nullable=True)
     test_patients = db.Column(db.JSON, nullable=True)
@@ -214,6 +217,7 @@ class FeatureExtraction(BaseModel, db.Model):
                     self.feature_definitions,
                 )
             ),
+            "data_splitting_type": self.data_splitting_type,
             "training_patients": self.training_patients,
             "test_patients": self.test_patients,
             "modalities": list(map(lambda modality: modality.name, self.modalities)),
@@ -784,6 +788,9 @@ class FeatureCollection(BaseModel, db.Model):
     feature_ids = db.Column(db.JSON, nullable=False, unique=False)
     patient_ids = db.Column(db.JSON, nullable=False, unique=False)
 
+    # Data splitting type
+    data_splitting_type = db.Column(db.String(255))
+
     # Train/test patients
     training_patients = db.Column(db.JSON, nullable=True)
     test_patients = db.Column(db.JSON, nullable=True)
@@ -804,6 +811,7 @@ class FeatureCollection(BaseModel, db.Model):
             "updated_at": self.updated_at,
             "name": self.name,
             "feature_extraction_id": self.feature_extraction_id,
+            "data_splitting_type": self.data_splitting_type,
             "training_patients": self.training_patients,
             "test_patients": self.test_patients,
         }

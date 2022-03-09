@@ -66,11 +66,18 @@ def hello():
 
 
 # Get feature payload for a given feature extraction
-@bp.route("/extractions/<id>")
+@bp.route("/extractions/<id>", methods=["GET", "PATCH"])
 def extraction_by_id(id):
-    feature_extraction = FeatureExtraction.find_by_id(id)
 
-    return jsonify(format_extraction(feature_extraction, tasks=True))
+    if request.method == "GET":
+        feature_extraction = FeatureExtraction.find_by_id(id)
+
+        return jsonify(format_extraction(feature_extraction, tasks=True))
+    elif request.method == "PATCH":
+        feature_extraction = FeatureExtraction.find_by_id(id)
+        feature_extraction.update(**request.json)
+
+        return jsonify(format_extraction(feature_extraction, tasks=True))
 
 
 # Get feature details for a given extraction
