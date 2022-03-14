@@ -11,7 +11,7 @@ from time import time
 import numpy as np
 from sqlalchemy.orm import joinedload
 
-from imaginebackend_common.const import MODEL_TYPES
+from imaginebackend_common.const import MODEL_TYPES, DATA_SPLITTING_TYPES
 
 from flask import Blueprint, jsonify, request, g, make_response
 
@@ -93,11 +93,9 @@ def models_by_album(album_id):
         studies = body["studies"]
         album = body["album"]
         gt = body["labels"]
-        algorithm_type = body["algorithm-type"]
         data_splitting_type = body["data-splitting-type"]
         training_patients = body["training-patients"]
         test_patients = body["test-patients"]
-        data_normalization = body["data-normalization"]
         training_validation = None
         test_validation = None
         feature_selection = None
@@ -121,20 +119,16 @@ def models_by_album(album_id):
         try:
             if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
                 (
-                    model,
+                    trained_model,
                     training_validation,
                     training_validation_params,
                     test_validation,
                     test_validation_params,
-                    training_patient_ids,
-                    test_patient_ids,
                     metrics,
                 ) = train_classification_model(
                     feature_extraction_id,
                     collection_id,
                     studies,
-                    algorithm_type,
-                    data_normalization,
                     data_splitting_type,
                     training_patients,
                     test_patients,
@@ -145,13 +139,12 @@ def models_by_album(album_id):
                     g.user,
                     album["album_id"],
                     label_category.label_type,
-                    algorithm_type,
                     modalities,
                     rois,
                 )
             elif MODEL_TYPES(label_category.label_type) == MODEL_TYPES.SURVIVAL:
                 (
-                    model,
+                    trained_model,
                     feature_selection,
                     patient_ids,
                     feature_names,
@@ -167,7 +160,6 @@ def models_by_album(album_id):
                     g.user,
                     album["album_id"],
                     label_category.label_type,
-                    None,
                     modalities,
                     rois,
                 )
@@ -184,21 +176,21 @@ def models_by_album(album_id):
 
             db_model = Model(
                 model_name,
-                algorithm_type,
+                "MULTIPLE",  # TODO - How to deal with trying multiple configurations?
                 data_splitting_type,
                 f"{training_validation} ({training_validation_params['k']} folds, {training_validation_params['n']} repetitions)"
                 if training_validation and training_validation_params
                 else "5-fold cross-validation",  # TODO - Get this from the survival analysis method
-                f"{test_validation} ({test_validation_params['n']} splits with {int(test_validation_params['training'])}% training & {int(test_validation_params['test'])}% test)"
+                f"{test_validation} ({test_validation_params['n']} repetitions)"
                 if test_validation
                 else None,
-                data_normalization,
+                "MULTIPLE",  # TODO - How to deal with trying multiple configurations?
                 feature_selection,
                 feature_names,
                 modalities,
                 rois,
-                training_patient_ids,
-                test_patient_ids,
+                training_patients,
+                test_patients,
                 model_path,
                 metrics,
                 g.user,
@@ -240,14 +232,11 @@ def models_by_user():
     return jsonify(albums)
 
 
-def get_model_path(user_id, album_id, model_type, algorithm_type, modalities, rois):
+def get_model_path(user_id, album_id, model_type, modalities, rois):
     # Define features path for storing the results
     models_dir = os.path.join(MODELS_BASE_DIR, user_id, album_id)
 
-    if algorithm_type:
-        models_filename = f"model_{model_type}_{algorithm_type}_{'-'.join(modalities)}_{'-'.join(rois)}"
-    else:
-        models_filename = f"model_{model_type}_{'-'.join(modalities)}_{'-'.join(rois)}"
+    models_filename = f"model_{model_type}_{'-'.join(modalities)}_{'-'.join(rois)}"
 
     models_filename += f"_{str(int(time()))}"
     models_filename += ".joblib"

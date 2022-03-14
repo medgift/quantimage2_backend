@@ -8,7 +8,7 @@ from ttictoc import tic, toc
 
 from sqlalchemy.dialects.mysql import LONGTEXT
 
-from imaginebackend_common.const import featureIDMatcher
+from imaginebackend_common.const import featureIDMatcher, DATA_SPLITTING_TYPES
 from imaginebackend_common.kheops_utils import dicomFields
 
 db = SQLAlchemy()
@@ -171,7 +171,9 @@ class FeatureExtraction(BaseModel, db.Model):
     config_file = db.Column(db.String(255))
 
     # Data splitting type
-    data_splitting_type = db.Column(db.String(255))
+    data_splitting_type = db.Column(
+        db.String(255), default=DATA_SPLITTING_TYPES.TRAINTESTSPLIT.value
+    )
 
     # Train/test patients
     training_patients = db.Column(db.JSON, nullable=True)
@@ -789,7 +791,9 @@ class FeatureCollection(BaseModel, db.Model):
     patient_ids = db.Column(db.JSON, nullable=False, unique=False)
 
     # Data splitting type
-    data_splitting_type = db.Column(db.String(255))
+    data_splitting_type = db.Column(
+        db.String(255), default=DATA_SPLITTING_TYPES.TRAINTESTSPLIT.value
+    )
 
     # Train/test patients
     training_patients = db.Column(db.JSON, nullable=True)
@@ -883,7 +887,7 @@ class Model(BaseModel, db.Model):
         self,
         name,
         algorithm,
-        validation_type,
+        data_splitting_type,
         training_validation,
         test_validation,
         data_normalization,
@@ -903,7 +907,7 @@ class Model(BaseModel, db.Model):
     ):
         self.name = name
         self.algorithm = algorithm
-        self.validation_type = validation_type
+        self.data_splitting_type = data_splitting_type
         self.training_validation = training_validation
         self.test_validation = test_validation
         self.data_normalization = data_normalization
@@ -929,7 +933,11 @@ class Model(BaseModel, db.Model):
     algorithm = db.Column(db.String(255), nullable=False, unique=False)
 
     # Type of model validation (Full-Dataset CV, Train/Test split, etc.)
-    validation_type = db.Column(db.String(255), nullable=True, unique=False)
+    data_splitting_type = db.Column(
+        db.String(255),
+        nullable=True,
+        unique=False,
+    )
 
     # Validation strategy used for training the model (Stratified K-Fold, etc.)
     training_validation = db.Column(db.String(255), nullable=True, unique=False)
@@ -999,7 +1007,7 @@ class Model(BaseModel, db.Model):
             "updated_at": self.updated_at,
             "name": self.name,
             "algorithm": self.algorithm,
-            "validation_type": self.validation_type,
+            "data_splitting_type": self.data_splitting_type,
             "training_validation": self.training_validation,
             "test_validation": self.test_validation,
             "data_normalization": self.data_normalization,

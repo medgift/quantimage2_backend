@@ -1,40 +1,17 @@
 import pandas
-import tempfile
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (
-    make_scorer,
-    recall_score,
-    accuracy_score,
-    precision_score,
-    roc_auc_score,
-)
-from sklearn.model_selection import (
-    GridSearchCV,
-    RepeatedStratifiedKFold,
-    StratifiedShuffleSplit,
-    cross_validate,
-)
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler, Normalizer, LabelEncoder
-from sklearn.svm import SVC
 
-from imaginebackend_common.const import DATA_SPLITTING_TYPES
 from imaginebackend_common.models import FeatureExtraction, FeatureCollection
+from modeling.classification import Classification
 from service.feature_transformation import (
     transform_studies_features_to_df,
     transform_studies_collection_features_to_df,
 )
-
-from melampus.classifier import MelampusClassifier, mean_confidence_interval
 
 
 def train_classification_model(
     extraction_id,
     collection_id,
     studies,
-    algorithm_type,
-    data_normalization,
     data_splitting_type,
     training_patients,
     test_patients,
@@ -73,291 +50,72 @@ def train_classification_model(
     # Impute mean for NaNs
     features_df = features_df.fillna(features_df.mean())
 
-    training_patient_ids = training_patients
-    test_patient_ids = test_patients
-
+    training_validation = None
     test_validation = None
     test_validation_params = None
 
-    # Run classification pipeline depending on the type of validation (full CV, train/test)
-    if DATA_SPLITTING_TYPES(data_splitting_type) == DATA_SPLITTING_TYPES.FULLDATASET:
-        # Get labels for each patient (to make sure they are in the same order)
-        labels_list = []
-        for index, row in features_df.iterrows():
-            patient_label = labels_df[
-                labels_df["PatientID"] == row.PatientID
-            ].Label.values[0]
-            labels_list.append(patient_label)
+    random_seed = get_random_seed(
+        extraction_id=extraction_id, collection_id=collection_id
+    )
 
-        # Create temporary file for CSV content & dump it there
-        with tempfile.NamedTemporaryFile(mode="w+") as temp:
+    classifier = Classification(
+        features_df,
+        labels_df_indexed,
+        data_splitting_type,
+        training_patients,
+        test_patients,
+        random_seed,
+    )
 
-            # Save filtered DataFrame to CSV file (to feed it to Melampus)
-            features_df.to_csv(temp.name, index=False)
-
-            (
-                model,
-                traning_validation,
-                training_validation_params,
-                metrics,
-                training_patient_ids,
-                test_patient_ids,
-            ) = classification_full_dataset(
-                temp.name,
-                labels_list,
-                data_normalization,
-                algorithm_type,
-                extraction_id,
-            )
-    else:
-        (
-            model,
-            traning_validation,
-            training_validation_params,
-            test_validation,
-            test_validation_params,
-            metrics,
-        ) = classification_train_test(
-            features_df,
-            labels_df_indexed,
-            training_patients,
-            test_patients,
-            data_normalization,
-            algorithm_type,
-            extraction_id,
-        )
-
-    return (
+    # Run modeling pipeline depending on the type of validation (full CV, train/test)
+    (
         model,
-        traning_validation,
+        training_validation,
         training_validation_params,
         test_validation,
         test_validation_params,
-        training_patient_ids,
-        test_patient_ids,
         metrics,
-    )
-
-
-def classification_train_test(
-    features,
-    labels,
-    training_patients,
-    test_patients,
-    normalization,
-    algorithm,
-    extraction_id,
-):
-    # Split training & test set based on provided Patient IDs
-    X_train, X_test, y_train, y_test = split_dataset(
-        features, labels, training_patients, test_patients
-    )
-
-    # Encode labels
-    encoder = get_labelencoder()
-    encoder.fit(y_train)
-    y_train = encoder.transform(y_train)
-    y_test = encoder.transform(y_test)
-
-    # Define pipeline with normalizer & classifier
-    normalizer = select_normalizer(normalization)
-    classifier = select_classifier(algorithm)
-    pipeline = make_pipeline(normalizer, classifier)
-
-    # Define cross-validation (for training)
-    cv = get_cv(extraction_id)
-    grid = GridSearchCV(
-        pipeline,
-        {},
-        scoring=get_scoring(),
-        refit="roc_auc",
-        cv=cv,
-        return_train_score=True,
-    )
-
-    # Fit the model on the training set
-    fitted_model = grid.fit(X_train, y_train)
-
-    # Perform ShuffleSplit CV on the test set
-    sss = StratifiedShuffleSplit(len(y_test), test_size=0.2, random_state=extraction_id)
-
-    # Calculate test scores & metrics (mean & CI)
-    test_scores = cross_validate(
-        grid,
-        X_test,
-        y_test,
-        scoring=get_scoring(),
-        cv=sss,
-        return_train_score=True,
-        return_estimator=True,
-    )
-    test_metrics = calculate_test_metrics(test_scores)
-
-    return (
-        fitted_model,
-        f"Repeated Stratified K-Fold Cross-Validation",
-        {"k": cv.get_n_splits(), "n": cv.n_repeats},
-        f"Stratified Shuffle Split",
-        {
-            "n": sss.n_splits,
-            "training": (1 - sss.test_size) * 100,
-            "test": sss.test_size * 100,
-        },
-        test_metrics,
-    )  # TODO - Implement train/test cross-evaluation & metrics
-
-
-def split_dataset(features, labels, training_patients, test_patients):
-    features.drop("PatientID", axis=1)
-
-    X = features.drop("PatientID", axis=1)
-    X.sort_index(inplace=True)
-
-    X_train = X.loc[training_patients]
-    X_test = X.loc[test_patients]
-
-    y = labels.loc[training_patients + test_patients]
-    y.sort_index(inplace=True)
-
-    y_train = y.loc[training_patients]
-    y_test = y.loc[test_patients]
-
-    return X_train, X_test, y_train, y_test
-
-
-def calculate_test_metrics(scores):
-    metrics = {}
-    metrics["accuracy"] = mean_confidence_interval(scores["test_accuracy"])
-    metrics["positive_predictive_value"] = mean_confidence_interval(
-        scores["test_precision"]
-    )
-    metrics["sensitivity"] = mean_confidence_interval(scores["test_recall"])
-    metrics["specificity"] = mean_confidence_interval(scores["test_specificity"])
-    metrics["auc"] = mean_confidence_interval(scores["test_roc_auc"])
-
-    return metrics
-
-
-def calculate_test_scores(y_true, y_pred):
-    metrics = {}
-    metrics["accuracy"] = accuracy_score(y_true, y_pred)
-    metrics["positive_predictive_value"] = precision_score(y_true, y_pred)
-    metrics["sensitivity"] = recall_score(y_true, y_pred)
-    metrics["specificity"] = recall_score(y_true, y_pred, pos_label=0)
-    metrics["auc"] = roc_auc_score(y_true, y_pred)
-
-    return metrics
-
-
-def get_cv(extraction_id):
-    return RepeatedStratifiedKFold(random_state=extraction_id, n_splits=5, n_repeats=1)
-
-
-def get_labelencoder():
-    return LabelEncoder()
-
-
-def get_scoring():
-    return {
-        "accuracy": "accuracy",
-        "precision": "precision",
-        "recall": "recall",
-        "specificity": make_scorer(recall_score, pos_label=0),
-        "roc_auc": "roc_auc",
-    }
-
-
-def select_normalizer(normalization_name):
-    scaler = None
-
-    if normalization_name == "standardization":
-        scaler = StandardScaler()
-    elif normalization_name == "l2norm":
-        scaler = Normalizer()
-
-    return scaler
-
-
-def select_classifier(classifier_name):
-    if classifier_name == "logistic_regression":
-        classifier = LogisticRegression(max_iter=10000)
-    elif classifier_name == "lasso_regression":
-        classifier = LogisticRegression(max_iter=10000, penalty="l1", solver="saga")
-    elif classifier_name == "elastic_net":
-        classifier = LogisticRegression(
-            max_iter=10000, penalty="elasticnet", solver="saga", l1_ratio=0.5
-        )
-    elif classifier_name == "random_forest":
-        classifier = RandomForestClassifier()
-    elif classifier_name == "svm":
-        classifier = SVC(probability=True)
-
-    return classifier
-
-
-def classification_full_dataset(
-    filename, labels_list, data_normalization, algorithm_type, extraction_id
-):
-    # Call Melampus classifier with the right parameters
-    standardization = True if data_normalization == "standardization" else False
-    l2norm = True if data_normalization == "l2norm" else False
-    my_classifier = MelampusClassifier(
-        filename,
-        None,
-        None,
-        labels_list,
-        algorithm_name=algorithm_type,
-        scaling=standardization,
-        normalize=l2norm,
-    )
-
-    model, cv_strategy, cv_params = my_classifier.train_and_evaluate(
-        random_state=extraction_id
-    )
-
-    # TODO - Removed the confusion matrix for now
-    # myClassifier.metrics["specificity"] = myClassifier.metrics["true_neg"] / (
-    #     myClassifier.metrics["true_neg"] + myClassifier.metrics["false_pos"]
-    # )
-
-    # Metrics of the model
-    metrics = my_classifier.metrics
+    ) = classifier.classify()
 
     return (
         model,
-        cv_strategy,
-        cv_params,
+        training_validation,
+        training_validation_params,
+        test_validation,
+        test_validation_params,
         metrics,
-        list(
-            my_classifier.ids.PatientID
-        ),  # TODO - Support other types of IDs, not only Patient ID
-        None,
     )
 
 
-def concatenate_modalities_rois(featuresDf, keep_identifiers=False):
+def concatenate_modalities_rois(features_df, keep_identifiers=False):
     # Concatenate features from the various modalities & ROIs (if necessary)
 
     # Keep PatientID
-    pidDf = featuresDf["PatientID"].to_frame()
-    uniquePidDf = pidDf.drop_duplicates(subset="PatientID")
-    uniquePidDf = uniquePidDf.set_index("PatientID", drop=False)
+    patient_id_df = features_df["PatientID"].to_frame()
+    unique_pid_df = patient_id_df.drop_duplicates(subset="PatientID")
+    unique_pid_df = unique_pid_df.set_index("PatientID", drop=False)
 
-    to_concat = [uniquePidDf]
+    to_concat = [unique_pid_df]
     # Groupe dataframes by Modality & ROI
-    for group, groupDf in featuresDf.groupby(["Modality", "ROI"]):
+    for group, groupDf in features_df.groupby(["Modality", "ROI"]):
         # Only keep selected modalities & ROIs
-        withoutModalityAndROIDf = groupDf.drop(["Modality", "ROI"], axis=1)
-        withoutModalityAndROIDf = withoutModalityAndROIDf.set_index(
+        without_modality_and_roi_df = groupDf.drop(["Modality", "ROI"], axis=1)
+        without_modality_and_roi_df = without_modality_and_roi_df.set_index(
             "PatientID", drop=True
         )
         prefix = "-".join(group)
-        withoutModalityAndROIDf = withoutModalityAndROIDf.add_prefix(prefix + "-")
+        without_modality_and_roi_df = without_modality_and_roi_df.add_prefix(
+            prefix + "-"
+        )
         # Drop columns with NaNs (should not exist anyway)
-        withoutModalityAndROIDf.dropna(axis=1, inplace=True)
-        to_concat.append(withoutModalityAndROIDf)
+        without_modality_and_roi_df.dropna(axis=1, inplace=True)
+        to_concat.append(without_modality_and_roi_df)
 
     # Add back the Patient ID at the end
-    concatenatedDf = pandas.concat(to_concat, axis=1)
+    concatenated_df = pandas.concat(to_concat, axis=1)
 
-    return concatenatedDf
+    return concatenated_df
+
+
+def get_random_seed(extraction_id=None, collection_id=None):
+    return 100000 + collection_id if collection_id else extraction_id
