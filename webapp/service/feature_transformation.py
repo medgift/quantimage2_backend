@@ -23,7 +23,7 @@ VALUE_COLUMN = "value"
 
 
 def get_collection_features(collection, studies):
-    features, names = FeatureValue.get_for_collection(collection, studies)
+    features, names = FeatureValue.get_for_collection(collection)
 
     tabular_features = transform_feature_values_to_tabular(features, studies)
 

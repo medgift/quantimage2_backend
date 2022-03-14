@@ -421,22 +421,13 @@ class FeatureValue(BaseModel, db.Model):
         db.session.commit()
 
     @classmethod
-    def get_for_collection(cls, collection, studies):
+    def get_for_collection(cls, collection):
 
         modalities_map, rois_map, definitions_map = get_modality_roi_feature_maps()
         feature_tasks_map = get_tasks_map(collection.feature_extraction_id)
 
-        patient_to_study_map = {
-            study[dicomFields.PATIENT_ID][dicomFields.VALUE][0]: study[
-                dicomFields.STUDY_UID
-            ][dicomFields.VALUE][0]
-            for study in studies
-        }
-
         tic()
-        feature_collection_values = cls.fetch_feature_collection_values(
-            collection.id, patient_to_study_map
-        )
+        feature_collection_values = cls.fetch_feature_collection_values(collection.id)
         elapsed = toc()
         print("Getting the feature collection values from the DB took", elapsed)
 
@@ -542,20 +533,12 @@ class FeatureValue(BaseModel, db.Model):
         return feature_values
 
     @classmethod
-    def fetch_feature_collection_values(
-        cls, feature_collection_id, patient_to_study_map
-    ):
+    def fetch_feature_collection_values(cls, feature_collection_id):
         collection = FeatureCollection.find_by_id(feature_collection_id)
         modalities_map, rois_map, features_map = get_modality_roi_feature_maps_by_name()
-        tasks_map = get_tasks_map_by_study_uid(collection.feature_extraction_id)
+        tasks_map = get_tasks_map(collection.feature_extraction_id)
 
-        task_ids = []
-
-        # Filter tasks by selected patients
-        for patient_id in collection.patient_ids:
-            study_uid_for_patient = patient_to_study_map[patient_id]
-            task_id = tasks_map[study_uid_for_patient]
-            task_ids.append(task_id)
+        task_ids = list(tasks_map.keys())
 
         conditions = []
 
@@ -766,11 +749,10 @@ class FeatureValue(BaseModel, db.Model):
 
 # Customized Feature Collection (filtered rows & columns so far)
 class FeatureCollection(BaseModel, db.Model):
-    def __init__(self, name, feature_extraction_id, feature_ids, patient_ids):
+    def __init__(self, name, feature_extraction_id, feature_ids):
         self.name = name
         self.feature_extraction_id = feature_extraction_id
         self.feature_ids = feature_ids
-        self.patient_ids = patient_ids
 
     @classmethod
     def find_by_extraction(cls, extraction_id):
@@ -788,7 +770,6 @@ class FeatureCollection(BaseModel, db.Model):
 
     # Feature IDs of this collection
     feature_ids = db.Column(db.JSON, nullable=False, unique=False)
-    patient_ids = db.Column(db.JSON, nullable=False, unique=False)
 
     # Data splitting type
     data_splitting_type = db.Column(
@@ -816,6 +797,7 @@ class FeatureCollection(BaseModel, db.Model):
             "name": self.name,
             "feature_extraction_id": self.feature_extraction_id,
             "data_splitting_type": self.data_splitting_type,
+            "feature_ids": self.feature_ids,
             "training_patients": self.training_patients,
             "test_patients": self.test_patients,
         }
@@ -1367,17 +1349,6 @@ def get_modality_roi_feature_maps_by_name():
     }
 
     return db_modality_map, db_roi_map, db_feature_map
-
-
-def get_tasks_map_by_study_uid(extraction_id):
-    # Get Study UIDs for all the feature extraction tasks
-    feature_extraction_tasks = FeatureExtractionTask.query.filter_by(
-        feature_extraction_id=extraction_id
-    )
-
-    feature_tasks_map = {task.study_uid: task.id for task in feature_extraction_tasks}
-
-    return feature_tasks_map
 
 
 def get_tasks_map(extraction_id):

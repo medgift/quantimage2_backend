@@ -32,7 +32,6 @@ def feature_collections():
             request.json["featureExtractionID"],
             request.json["name"],
             request.json["featureIDs"],
-            request.json["patientIDs"],
         )
 
         return jsonify(collection.format_collection(with_values=True))
@@ -45,7 +44,6 @@ def feature_collections_new():
             request.json["featureExtractionID"],
             request.json["name"],
             request.json["featureIDs"],
-            request.json["patientIDs"],
         )
 
         return jsonify(collection.format_collection(with_values=True))
@@ -122,7 +120,7 @@ def download_collection_by_id(feature_collection_id):
     )
 
 
-def save_feature_collection_new(feature_extraction_id, name, feature_ids, patient_ids):
+def save_feature_collection_new(feature_extraction_id, name, feature_ids):
     token = g.token
 
     # Get all necessary elements from the DB
@@ -133,20 +131,18 @@ def save_feature_collection_new(feature_extraction_id, name, feature_ids, patien
             "name": name,
             "feature_extraction_id": feature_extraction_id,
             "feature_ids": feature_ids,
-            "patient_ids": patient_ids,
         },
         defaults={
             "name": name,
             "feature_extraction_id": feature_extraction_id,
             "feature_ids": feature_ids,
-            "patient_ids": patient_ids,
         },
     )
 
     return collection
 
 
-def save_feature_collection(feature_extraction_id, name, feature_ids, patient_ids):
+def save_feature_collection(feature_extraction_id, name, feature_ids):
     token = g.token
 
     # Get all necessary elements from the DB
@@ -160,7 +156,6 @@ def save_feature_collection(feature_extraction_id, name, feature_ids, patient_id
     )
 
     collection.feature_ids = feature_ids
-    collection.patient_ids = patient_ids
     collection.save_to_db()
 
     return collection
