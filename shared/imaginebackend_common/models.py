@@ -8,7 +8,11 @@ from ttictoc import tic, toc
 
 from sqlalchemy.dialects.mysql import LONGTEXT
 
-from imaginebackend_common.const import featureIDMatcher, DATA_SPLITTING_TYPES
+from imaginebackend_common.const import (
+    featureIDMatcher,
+    DATA_SPLITTING_TYPES,
+    TRAIN_TEST_SPLIT_TYPES,
+)
 from imaginebackend_common.kheops_utils import dicomFields
 
 db = SQLAlchemy()
@@ -175,6 +179,11 @@ class FeatureExtraction(BaseModel, db.Model):
         db.String(255), default=DATA_SPLITTING_TYPES.TRAINTESTSPLIT.value
     )
 
+    # Train/test split type (auto/manual)
+    train_test_split_type = db.Column(
+        db.String(255), default=TRAIN_TEST_SPLIT_TYPES.AUTO.value
+    )
+
     # Train/test patients
     training_patients = db.Column(db.JSON, nullable=True)
     test_patients = db.Column(db.JSON, nullable=True)
@@ -220,6 +229,7 @@ class FeatureExtraction(BaseModel, db.Model):
                 )
             ),
             "data_splitting_type": self.data_splitting_type,
+            "train_test_split_type": self.train_test_split_type,
             "training_patients": self.training_patients,
             "test_patients": self.test_patients,
             "modalities": list(map(lambda modality: modality.name, self.modalities)),
@@ -776,6 +786,11 @@ class FeatureCollection(BaseModel, db.Model):
         db.String(255), default=DATA_SPLITTING_TYPES.TRAINTESTSPLIT.value
     )
 
+    # Train/test split type (auto/manual)
+    train_test_split_type = db.Column(
+        db.String(255), default=TRAIN_TEST_SPLIT_TYPES.AUTO.value
+    )
+
     # Train/test patients
     training_patients = db.Column(db.JSON, nullable=True)
     test_patients = db.Column(db.JSON, nullable=True)
@@ -797,6 +812,7 @@ class FeatureCollection(BaseModel, db.Model):
             "name": self.name,
             "feature_extraction_id": self.feature_extraction_id,
             "data_splitting_type": self.data_splitting_type,
+            "train_test_split_type": self.train_test_split_type,
             "feature_ids": self.feature_ids,
             "training_patients": self.training_patients,
             "test_patients": self.test_patients,
@@ -870,6 +886,7 @@ class Model(BaseModel, db.Model):
         name,
         algorithm,
         data_splitting_type,
+        train_test_split_type,
         training_validation,
         test_validation,
         data_normalization,
@@ -890,6 +907,7 @@ class Model(BaseModel, db.Model):
         self.name = name
         self.algorithm = algorithm
         self.data_splitting_type = data_splitting_type
+        self.train_test_split_type = train_test_split_type
         self.training_validation = training_validation
         self.test_validation = test_validation
         self.data_normalization = data_normalization
@@ -919,6 +937,11 @@ class Model(BaseModel, db.Model):
         db.String(255),
         nullable=True,
         unique=False,
+    )
+
+    # Train/test split type (auto/manual)
+    train_test_split_type = db.Column(
+        db.String(255), default=TRAIN_TEST_SPLIT_TYPES.AUTO.value
     )
 
     # Validation strategy used for training the model (Stratified K-Fold, etc.)
@@ -990,6 +1013,7 @@ class Model(BaseModel, db.Model):
             "name": self.name,
             "algorithm": self.algorithm,
             "data_splitting_type": self.data_splitting_type,
+            "train_test_split_type": self.train_test_split_type,
             "training_validation": self.training_validation,
             "test_validation": self.test_validation,
             "data_normalization": self.data_normalization,

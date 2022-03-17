@@ -94,6 +94,7 @@ def models_by_album(album_id):
         album = body["album"]
         gt = body["labels"]
         data_splitting_type = body["data-splitting-type"]
+        train_test_split_type = body["train-test-split-type"]
         training_patients = body["training-patients"]
         test_patients = body["test-patients"]
         training_validation = None
@@ -178,6 +179,7 @@ def models_by_album(album_id):
                 model_name,
                 "MULTIPLE",  # TODO - How to deal with trying multiple configurations?
                 data_splitting_type,
+                train_test_split_type,
                 f"{training_validation} ({training_validation_params['k']} folds, {training_validation_params['n']} repetitions)"
                 if training_validation and training_validation_params
                 else "5-fold cross-validation",  # TODO - Get this from the survival analysis method

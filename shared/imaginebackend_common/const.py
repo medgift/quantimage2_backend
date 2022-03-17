@@ -12,6 +12,11 @@ class DATA_SPLITTING_TYPES(Enum):
     TRAINTESTSPLIT = "traintest"
 
 
+class TRAIN_TEST_SPLIT_TYPES(Enum):
+    AUTO = "automatic"
+    MANUAL = "manual"
+
+
 RIESZ_FEATURE_PREFIXES = ["tex"]
 PYRADIOMICS_FEATURE_PREFIXES = [
     "original",
