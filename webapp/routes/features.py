@@ -7,7 +7,7 @@ from requests_toolbelt import MultipartEncoder
 from ttictoc import tic, toc
 
 from config import FEATURES_CACHE_BASE_DIR
-from imaginebackend_common.kheops_utils import get_album_token
+from imaginebackend_common.kheops_utils import get_user_token
 from imaginebackend_common.utils import (
     fetch_extraction_result,
     format_extraction,
@@ -257,8 +257,8 @@ def extract_album(album_id):
     # Get album metadata for hard-coded labels mapping
     album_metadata = get_album_details(album_id, token)
 
-    # Get a read/write token for the album (will be deleted at the end of the process)
-    album_token_id, album_token = get_album_token(album_id, token)
+    # Get a read/write token for the user (valid only for 24 hours)
+    user_token_id, user_token = get_user_token(album_id, token)
 
     # Run the feature extraction
     feature_extraction = run_feature_extraction(
@@ -267,7 +267,7 @@ def extract_album(album_id):
         album_metadata["name"],
         feature_extraction_config_dict,
         rois,
-        album_token,
+        user_token,
     )
 
     return jsonify(format_extraction(feature_extraction))

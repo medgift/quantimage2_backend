@@ -57,9 +57,9 @@ def get_token_header(token):
     return {"Authorization": f"Bearer {token}"}
 
 
-def get_album_token(album_id, token):
+def get_user_token(album_id, token):
     capability_title = "quantimage-extraction"
-    capability_scope = "album"
+    capability_scope = "user"
     capability_read = "true"
     capability_write = "true"
 
@@ -71,7 +71,6 @@ def get_album_token(album_id, token):
     data = {
         "title": capability_title,
         "scope_type": capability_scope,
-        "album": album_id,
         "read_permission": capability_read,
         "write_permission": capability_write,
         "expiration_time": tomorrow_str,
