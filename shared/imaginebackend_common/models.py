@@ -884,20 +884,19 @@ class Model(BaseModel, db.Model):
     def __init__(
         self,
         name,
-        algorithm,
+        best_algorithm,
         data_splitting_type,
         train_test_split_type,
         training_validation,
         test_validation,
-        data_normalization,
+        best_data_normalization,
         feature_selection,
         feature_names,
-        modalities,
-        rois,
         training_patient_ids,
         test_patient_ids,
         model_path,
-        metrics,
+        training_metrics,
+        test_metrics,
         user_id,
         album_id,
         label_category_id,
@@ -905,20 +904,19 @@ class Model(BaseModel, db.Model):
         feature_collection_id=None,
     ):
         self.name = name
-        self.algorithm = algorithm
+        self.best_algorithm = best_algorithm
         self.data_splitting_type = data_splitting_type
         self.train_test_split_type = train_test_split_type
         self.training_validation = training_validation
         self.test_validation = test_validation
-        self.data_normalization = data_normalization
+        self.best_data_normalization = best_data_normalization
         self.feature_selection = feature_selection
         self.feature_names = feature_names
-        self.modalities = modalities
-        self.rois = rois
         self.training_patient_ids = training_patient_ids
         self.test_patient_ids = test_patient_ids
         self.model_path = model_path
-        self.metrics = metrics
+        self.training_metrics = training_metrics
+        self.test_metrics = test_metrics
         self.user_id = user_id
         self.album_id = album_id
         self.label_category_id = label_category_id
@@ -930,7 +928,7 @@ class Model(BaseModel, db.Model):
     name = db.Column(db.String(255), nullable=False, unique=False)
 
     # Algorithm used for the model (linear regression, random forests, SVM, etc.)
-    algorithm = db.Column(db.String(255), nullable=False, unique=False)
+    best_algorithm = db.Column(db.String(255), nullable=False, unique=False)
 
     # Type of model validation (Full-Dataset CV, Train/Test split, etc.)
     data_splitting_type = db.Column(
@@ -951,19 +949,13 @@ class Model(BaseModel, db.Model):
     test_validation = db.Column(db.String(255), nullable=True, unique=False)
 
     # Data normalization used for the model (L2 norm, standardization, etc.)
-    data_normalization = db.Column(db.String(255), nullable=True, unique=False)
+    best_data_normalization = db.Column(db.String(255), nullable=True, unique=False)
 
     # Feature selection used for the model (variance thresholding, correlation, etc.)
     feature_selection = db.Column(db.String(255), nullable=True, unique=False)
 
     # Feature names that were finally used for the model (after selection)
     feature_names = db.Column(db.JSON, nullable=True, unique=False)
-
-    # Modalities used for training the model
-    modalities = db.Column(db.JSON, nullable=False, unique=False)
-
-    # ROIs used for training the model
-    rois = db.Column(db.JSON, nullable=False, unique=False)
 
     # Patients used for training the model
     training_patient_ids = db.Column(db.JSON, nullable=True, unique=False)
@@ -974,8 +966,11 @@ class Model(BaseModel, db.Model):
     # Path to pickled version of the model
     model_path = db.Column(db.String(255), nullable=False, unique=True)
 
-    # Model metrics (JSON)
-    metrics = db.Column(db.JSON, nullable=True, unique=False)
+    # Model metrics (JSON) - Training
+    training_metrics = db.Column(db.JSON, nullable=True, unique=False)
+
+    # Model metrics (JSON) - Test
+    test_metrics = db.Column(db.JSON, nullable=True, unique=False)
 
     # User who created the model
     user_id = db.Column(db.String(255), nullable=False, unique=False)
@@ -1011,20 +1006,19 @@ class Model(BaseModel, db.Model):
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "name": self.name,
-            "algorithm": self.algorithm,
+            "best_algorithm": self.best_algorithm,
             "data_splitting_type": self.data_splitting_type,
             "train_test_split_type": self.train_test_split_type,
             "training_validation": self.training_validation,
             "test_validation": self.test_validation,
-            "data_normalization": self.data_normalization,
+            "best_data_normalization": self.best_data_normalization,
             "feature_selection": self.feature_selection,
             "feature_names": self.feature_names,
-            "modalities": self.modalities,
-            "rois": self.rois,
             "training_patient_ids": self.training_patient_ids,
             "test_patient_ids": self.test_patient_ids,
             "model_path": self.model_path,
-            "metrics": self.metrics,
+            "training_metrics": self.training_metrics,
+            "test_metrics": self.test_metrics,
             "user_id": self.user_id,
             "album_id": self.album_id,
             "feature_collection_id": self.feature_collection_id,

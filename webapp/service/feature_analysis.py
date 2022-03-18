@@ -68,23 +68,7 @@ def train_classification_model(
     )
 
     # Run modeling pipeline depending on the type of validation (full CV, train/test)
-    (
-        model,
-        training_validation,
-        training_validation_params,
-        test_validation,
-        test_validation_params,
-        metrics,
-    ) = classifier.classify()
-
-    return (
-        model,
-        training_validation,
-        training_validation_params,
-        test_validation,
-        test_validation_params,
-        metrics,
-    )
+    return classifier.classify()
 
 
 def concatenate_modalities_rois(features_df, keep_identifiers=False):

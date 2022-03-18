@@ -44,31 +44,43 @@ def format_model(model):
     # De-serialize model # TODO - May not be required anymore if the concordance index is saved in the DB directly
     model_object = joblib.load(model.model_path)
 
+    test_metrics = None
+
     # Convert metrics to native Python types
     if MODEL_TYPES(model.label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
-        final_metrics = model.metrics
-        for metric in final_metrics:
-
-            # Do we have a range or just a single value for the metric?
-            if np.isscalar(final_metrics[metric]):
-                if math.isnan(final_metrics[metric]):
-                    final_metrics[metric] = "N/A"
-            else:
-                for value in final_metrics[metric]:
-                    if math.isnan(final_metrics[metric][value]):
-                        final_metrics[metric][value] = "N/A"
-
-        metrics = final_metrics
+        training_metrics = format_metrics(model.training_metrics)
+        test_metrics = (
+            format_metrics(model.test_metrics) if model.test_metrics else None
+        )
     elif MODEL_TYPES(model.label_category.label_type) == MODEL_TYPES.SURVIVAL:
-        metrics = collections.OrderedDict()
-        metrics["concordance_index"] = model_object.concordance_index_
+        training_metrics = collections.OrderedDict()
+        training_metrics["concordance_index"] = model_object.concordance_index_
         # metrics["events_observed"] = len(model_object.event_observed)
     else:
         raise NotImplementedError
 
-    model_dict["metrics"] = metrics
+    model_dict["training-metrics"] = training_metrics
+    model_dict["test-metrics"] = test_metrics if test_metrics else None
 
     return model_dict
+
+
+def format_metrics(metrics):
+
+    formatted_metrics = {**metrics}
+
+    for metric in metrics:
+
+        # Do we have a range or just a single value for the metric?
+        if np.isscalar(metrics[metric]):
+            if math.isnan(metrics[metric]):
+                formatted_metrics[metric] = "N/A"
+        else:
+            for value in formatted_metrics[metric]:
+                if math.isnan(metrics[metric][value]):
+                    formatted_metrics[metric][value] = "N/A"
+
+    return formatted_metrics
 
 
 @bp.route("/models/<album_id>", methods=("GET", "POST"))
@@ -101,22 +113,6 @@ def models_by_album(album_id):
         test_validation = None
         feature_selection = None
 
-        if collection_id:
-            feature_collection = FeatureCollection.find_by_id(collection_id)
-            formatted_collection = feature_collection.format_collection(
-                with_values=True
-            )
-            modalities = formatted_collection["modalities"]
-            rois = formatted_collection["rois"]
-            feature_names = formatted_collection["features"]
-        else:
-            feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
-            modalities = list(map(lambda m: m.name, feature_extraction.modalities))
-            rois = list(map(lambda r: r.name, feature_extraction.rois))
-            feature_names = list(
-                map(lambda f: f.name, feature_extraction.feature_definitions)
-            )
-
         try:
             if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
                 (
@@ -125,7 +121,8 @@ def models_by_album(album_id):
                     training_validation_params,
                     test_validation,
                     test_validation_params,
-                    metrics,
+                    training_metrics,
+                    test_metrics,
                 ) = train_classification_model(
                     feature_extraction_id,
                     collection_id,
@@ -136,13 +133,13 @@ def models_by_album(album_id):
                     gt,
                 )
 
-                model_path = get_model_path(
-                    g.user,
-                    album["album_id"],
-                    label_category.label_type,
-                    modalities,
-                    rois,
-                )
+                best_algorithm = trained_model.best_params_[
+                    "classifier"
+                ].__class__.__name__
+                best_normalization = trained_model.best_params_[
+                    "preprocessor"
+                ].__class__.__name__
+                feature_names = list(trained_model.best_estimator_.feature_names_in_)
             elif MODEL_TYPES(label_category.label_type) == MODEL_TYPES.SURVIVAL:
                 (
                     trained_model,
@@ -157,19 +154,20 @@ def models_by_album(album_id):
                     gt,
                 )
 
-                model_path = get_model_path(
-                    g.user,
-                    album["album_id"],
-                    label_category.label_type,
-                    modalities,
-                    rois,
-                )
+                best_algorithm = "Cox"  # TODO - Get this dynamically also
+                best_normalization = "Something"  # TODO - Get this dynamically also
             else:
                 raise NotImplementedError
 
+            model_path = get_model_path(
+                g.user,
+                album["album_id"],
+                label_category.label_type,
+            )
+
             # Persist model in DB and on disk (pickle it)
             os.makedirs(os.path.dirname(model_path), exist_ok=True)
-            model_file = joblib.dump(model, model_path)
+            joblib.dump(model, model_path)
 
             # Generate model name (for now)
             (file, ext) = os.path.splitext(os.path.basename(model_path))
@@ -177,7 +175,7 @@ def models_by_album(album_id):
 
             db_model = Model(
                 model_name,
-                "MULTIPLE",  # TODO - How to deal with trying multiple configurations?
+                best_algorithm,
                 data_splitting_type,
                 train_test_split_type,
                 f"{training_validation} ({training_validation_params['k']} folds, {training_validation_params['n']} repetitions)"
@@ -186,15 +184,14 @@ def models_by_album(album_id):
                 f"{test_validation} ({test_validation_params['n']} repetitions)"
                 if test_validation
                 else None,
-                "MULTIPLE",  # TODO - How to deal with trying multiple configurations?
+                best_normalization,
                 feature_selection,
                 feature_names,
-                modalities,
-                rois,
                 training_patients,
                 test_patients,
                 model_path,
-                metrics,
+                training_metrics,
+                test_metrics,
                 g.user,
                 album["album_id"],
                 label_category.id,
@@ -234,11 +231,11 @@ def models_by_user():
     return jsonify(albums)
 
 
-def get_model_path(user_id, album_id, model_type, modalities, rois):
+def get_model_path(user_id, album_id, model_type):
     # Define features path for storing the results
     models_dir = os.path.join(MODELS_BASE_DIR, user_id, album_id)
 
-    models_filename = f"model_{model_type}_{'-'.join(modalities)}_{'-'.join(rois)}"
+    models_filename = f"model_{model_type}"
 
     models_filename += f"_{str(int(time()))}"
     models_filename += ".joblib"

@@ -102,6 +102,9 @@ class Classification:
 
         print(f"Fitting the model took {elapsed}")
 
+        training_metrics = calculate_training_metrics(fitted_model.cv_results_)
+        test_metrics = None
+
         # Train/test only - Perform Bootstrap on the Test set
         if self.is_train_test():
             tic()
@@ -110,10 +113,8 @@ class Classification:
             )
             elapsed = toc()
             print(f"Running bootstrap took {elapsed}")
-            metrics = calculate_test_metrics(scores)
-        else:
-            print(fitted_model)
-            metrics = calculate_training_metrics(fitted_model.cv_results_)
+
+            test_metrics = calculate_test_metrics(scores)
 
         return (
             fitted_model,
@@ -121,7 +122,8 @@ class Classification:
             {"k": self.cv.get_n_splits(), "n": self.cv.n_repeats},
             "Bootstrap" if self.is_train_test() else None,
             {"n": n_bootstrap} if self.is_train_test() else None,
-            metrics,
+            training_metrics,
+            test_metrics,
         )
 
 
