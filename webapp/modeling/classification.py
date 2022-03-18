@@ -1,5 +1,6 @@
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
+from ttictoc import tic, toc
 
 from imaginebackend_common.const import DATA_SPLITTING_TYPES
 from modeling.utils import (
@@ -95,13 +96,20 @@ class Classification:
         )
 
         # Fit the model on the training set
+        tic()
         fitted_model = grid.fit(self.X_train, y_train_encoded)
+        elapsed = toc()
+
+        print(f"Fitting the model took {elapsed}")
 
         # Train/test only - Perform Bootstrap on the Test set
         if self.is_train_test():
+            tic()
             scores, n_bootstrap = run_bootstrap(
                 self.X_test, y_test_encoded, fitted_model, self.random_seed
             )
+            elapsed = toc()
+            print(f"Running bootstrap took {elapsed}")
             metrics = calculate_test_metrics(scores)
         else:
             print(fitted_model)

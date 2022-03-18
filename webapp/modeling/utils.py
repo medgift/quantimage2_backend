@@ -106,40 +106,37 @@ def select_classifier(classifier_name, random_seed):
     elif classifier_name == "random_forest":
         return {"classifier": [RandomForestClassifier(random_state=random_seed)]}
     elif classifier_name == "svm":
-        return {"classifier": [SVC(random_state=random_seed)]}
+        return {"classifier": [SVC(random_state=random_seed, probability=True)]}
 
 
 def run_bootstrap(
-    X_test, y_test, model, random_seed, n_bootstrap=100, scoring=get_scoring()
+    X_test, y_test, model, random_seed, n_bootstrap=1000, scoring=get_scoring()
 ):
 
-    all_scores = []
-    i = 0
+    all_test_predictions = model.predict(X_test)
+    all_test_predictions_probabilities = model.predict_proba(X_test)
 
-    for _ in range(n_bootstrap):
-        print(f"Running bootstrap n°{i}...")
-        tic()
-        X_test_resampled, y_test_resampled = resample(
-            X_test,
+    all_scores = []
+
+    for i in range(n_bootstrap):
+
+        predictions_resampled, probabilities_resampled, y_test_resampled = resample(
+            all_test_predictions,
+            all_test_predictions_probabilities,
             y_test,
             replace=True,
             n_samples=len(y_test),
-            stratify=y_test,
-            random_state=random_seed,
+            random_state=random_seed + i,
         )
 
-        y_pred = model.predict(X_test_resampled)
-
-        scores = calculate_scores(y_test_resampled, y_pred, scoring)
+        scores = calculate_scores(
+            y_test_resampled, predictions_resampled, probabilities_resampled, scoring
+        )
 
         all_scores.append(scores)
 
-        elapsed = toc()
-        print(f"Bootstrap iteration took {int(elapsed * 1000)}ms")
-
         if i % 100 == 0:
             print(f"Ran {i}/{n_bootstrap} iterations of the Bootstrap run")
-        i += 1
 
     return all_scores, n_bootstrap
 
@@ -153,14 +150,21 @@ def mean_confidence_interval(data, confidence=0.95):
     }
 
 
-def calculate_scores(y_true, y_pred, scoring):
+def calculate_scores(y_true, y_pred, y_pred_proba, scoring):
     scores = {}
 
     for score_name, scorer in scoring.items():
         if type(scorer) == str:
             scorer = get_scorer(scorer)
 
-        scores[score_name] = scorer._score_func(y_true, y_pred)
+        try:
+            # For metrics that need the probabilities (such as roc_auc_score)
+            # Calculate only with the "greater label" probability
+            # See https://scikit-learn.org/stable/modules/model_evaluation.html#roc-auc-binary
+            scores[score_name] = scorer._score_func(y_true, y_pred_proba[:, 1])
+        except ValueError:
+            # For metric that only need the binary predictions
+            scores[score_name] = scorer._score_func(y_true, y_pred)
 
     return scores
 
