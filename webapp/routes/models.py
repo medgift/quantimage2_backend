@@ -117,6 +117,7 @@ def models_by_album(album_id):
             if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
                 (
                     trained_model,
+                    feature_names,
                     training_validation,
                     training_validation_params,
                     test_validation,
@@ -139,9 +140,6 @@ def models_by_album(album_id):
                 best_normalization = trained_model.best_params_[
                     "preprocessor"
                 ].__class__.__name__
-                feature_names = list(
-                    trained_model.best_estimator_["classifier"].feature_names_in_
-                )
             elif MODEL_TYPES(label_category.label_type) == MODEL_TYPES.SURVIVAL:
                 (
                     trained_model,

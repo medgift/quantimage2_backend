@@ -38,6 +38,8 @@ class Classification:
         features_df = preprocess_features(features_df)
         labels_df = preprocess_labels(labels_df, training_patients, test_patients)
 
+        self.feature_names = list(features_df.columns)
+
         if self.is_train_test():
             # Split training & test set based on provided Patient IDs
             self.X_train, self.X_test, self.y_train, self.y_test = split_dataset(
@@ -116,6 +118,7 @@ class Classification:
 
         return (
             fitted_model,
+            self.feature_names,
             "Repeated Stratified K-Fold Cross-Validation",
             {"k": self.cv.get_n_splits(), "n": self.cv.n_repeats},
             "Bootstrap" if self.is_train_test() else None,
