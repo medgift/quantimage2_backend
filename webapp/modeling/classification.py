@@ -52,9 +52,7 @@ class Classification:
         self.encoder.fit(self.y_train)
 
         # Pipeline elements
-        self.pipeline = Pipeline(
-            [("preprocessor", "passthrough"), ("classifier", "passthrough")]
-        )
+        self.pipeline = Pipeline([("preprocessor", None), ("classifier", None)])
 
         # Cross-validator
         self.cv = get_cv(self.random_seed)
@@ -132,7 +130,7 @@ def generate_normalization_methods():
     for normalization_method in NORMALIZATION_METHODS:
         methods.append(select_normalizer(normalization_method))
 
-    methods.append("passthrough")
+    methods.append(None)
 
     return methods
 
