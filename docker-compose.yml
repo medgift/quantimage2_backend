@@ -20,7 +20,6 @@ services:
       - KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL}
       - KHEOPS_BASE_URL=${KHEOPS_BASE_URL}
       - PYTHONUNBUFFERED=TRUE
-      - JOBLIB_START_METHOD=spawn
     volumes:
       - backend-data:/imagine-data
       - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
