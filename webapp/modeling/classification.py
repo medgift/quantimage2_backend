@@ -30,7 +30,7 @@ class Classification:
         test_patients,
         random_seed,
         refit_metric="auc",
-        n_jobs=-1,
+        n_jobs=1,
     ):
         self.data_splitting_type = data_splitting_type
         self.random_seed = random_seed
