@@ -35,7 +35,7 @@ CLASSIFICATION_PARAMS = {
         "solver": ["saga"],
         "penalty": ["l1", "l2", "elasticnet"],
         "l1_ratio": [0.5],
-        "max_iter": [10000],
+        "max_iter": [1000],
     },
 }
 
