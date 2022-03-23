@@ -120,7 +120,7 @@ class Classification:
             fitted_model,
             self.feature_names,
             "Repeated Stratified K-Fold Cross-Validation",
-            {"k": self.cv.get_n_splits(), "n": self.cv.n_repeats},
+            {"k": self.cv.cvargs["n_splits"], "n": self.cv.n_repeats},
             "Bootstrap" if self.is_train_test() else None,
             {"n": n_bootstrap} if self.is_train_test() else None,
             training_metrics,
@@ -132,8 +132,6 @@ def generate_normalization_methods():
     methods = []
     for normalization_method in NORMALIZATION_METHODS:
         methods.append(select_normalizer(normalization_method))
-
-    methods.append(None)
 
     return methods
 
