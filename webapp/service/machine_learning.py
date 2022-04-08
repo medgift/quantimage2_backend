@@ -1,21 +1,19 @@
 import pandas
 
 from imaginebackend_common.models import FeatureExtraction, FeatureCollection
-from modeling.classification import Classification
 from service.feature_transformation import (
-    transform_studies_features_to_df,
     transform_studies_collection_features_to_df,
+    transform_studies_features_to_df,
+    OUTCOME_FIELD_CLASSIFICATION,
 )
 
 
-def train_classification_model(
+def get_features_labels(
     extraction_id,
     collection_id,
     studies,
-    data_splitting_type,
-    training_patients,
-    test_patients,
     gt,
+    outcome_columns=[OUTCOME_FIELD_CLASSIFICATION],
 ):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
@@ -29,12 +27,19 @@ def train_classification_model(
 
     # Get Labels DataFrame
     # TODO - Allow choosing a mode (Patient only or Patient + ROI)
-    labels_df = pandas.DataFrame(gt, columns=["PatientID", "Label"])
+    labels_df = pandas.DataFrame(gt, columns=["PatientID", *outcome_columns])
 
     labels_df_indexed = labels_df.set_index("PatientID", drop=True)
 
     # TODO - Check how to best deal with this, so far we ignore unlabelled patients
-    labelled_patients = list(labels_df[labels_df["Label"] != ""]["PatientID"])
+    label_conditions = None
+    for column in outcome_columns:
+        if label_conditions is None:
+            label_conditions = labels_df[column] != ""
+        else:
+            label_conditions = label_conditions & (labels_df[column] != "")
+
+    labelled_patients = list(labels_df[label_conditions]["PatientID"])
 
     # Filter out unlabelled patients
     features_df = features_df[features_df.PatientID.isin(labelled_patients)]
@@ -50,28 +55,10 @@ def train_classification_model(
     # Impute mean for NaNs
     features_df = features_df.fillna(features_df.mean())
 
-    training_validation = None
-    test_validation = None
-    test_validation_params = None
-
-    random_seed = get_random_seed(
-        extraction_id=extraction_id, collection_id=collection_id
-    )
-
-    classifier = Classification(
-        features_df,
-        labels_df_indexed,
-        data_splitting_type,
-        training_patients,
-        test_patients,
-        random_seed,
-    )
-
-    # Run modeling pipeline depending on the type of validation (full CV, train/test)
-    return classifier.classify()
+    return features_df, labels_df_indexed
 
 
-def concatenate_modalities_rois(features_df, keep_identifiers=False):
+def concatenate_modalities_rois(features_df):
     # Concatenate features from the various modalities & ROIs (if necessary)
 
     # Keep PatientID
@@ -99,7 +86,3 @@ def concatenate_modalities_rois(features_df, keep_identifiers=False):
     concatenated_df = pandas.concat(to_concat, axis=1)
 
     return concatenated_df
-
-
-def get_random_seed(extraction_id=None, collection_id=None):
-    return 100000 + collection_id if collection_id else extraction_id

@@ -1,0 +1,85 @@
+from sklearn.metrics import make_scorer
+from sklearn.model_selection import RepeatedStratifiedKFold
+from sklearn.pipeline import Pipeline
+from sksurv.linear_model import CoxPHSurvivalAnalysis, CoxnetSurvivalAnalysis, IPCRidge
+from sksurv.metrics import concordance_index_censored
+
+from modeling.modeling import Modeling
+
+from sksurv.util import Surv
+
+from service.feature_transformation import (
+    OUTCOME_FIELD_SURVIVAL_EVENT,
+    OUTCOME_FIELD_SURVIVAL_TIME,
+)
+
+SURVIVAL_METHODS = ["coxnet"]  # ["coxnet", "coxnet_elastic", "ipc_ridge"]
+SURVIVAL_PARAMS = {"coxnet": {"alpha": [0.1], "n_iter": [1000]}}
+
+
+class Survival(Modeling):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def analyze(self):
+        return self.create_model()
+
+    def select_survival_analyzer(self, analyzer_name):
+        if analyzer_name == "coxnet":
+            options = {"analyzer": [CoxPHSurvivalAnalysis()]}
+            for key, value in SURVIVAL_PARAMS[analyzer_name].items():
+                options[f"analyzer__{key}"] = value
+            return options
+        elif analyzer_name == "coxnet_elastic":
+            return {"analyzer": [CoxnetSurvivalAnalysis()]}
+        elif analyzer_name == "ipc_ridge":
+            return {"analyzer": [IPCRidge()]}
+
+    def encode_labels(self, labels):
+        # Transform to structured array
+        encoded_labels = Surv.from_dataframe(
+            OUTCOME_FIELD_SURVIVAL_EVENT, OUTCOME_FIELD_SURVIVAL_TIME, labels
+        )
+
+        return (
+            encoded_labels,
+            None,
+        )  # Return None for the "fitted encoder", as we don't use this mechanism here
+
+    def get_cv(self, n_splits=10, n_repeats=1):
+        return SurvivalRepeatedStratifiedKFold(
+            random_state=self.random_seed, n_splits=n_splits, n_repeats=n_repeats
+        )
+
+    def get_scoring(self):
+        # return {"c-index": as_concordance_index_ipcw_scorer}
+        return {"c-index": make_scorer(c_index_score)}
+
+    def get_pipeline(self):
+        return Pipeline([("preprocessor", None), ("analyzer", None)])
+
+    def get_grid(self):
+        methods = []
+        for survival_method in SURVIVAL_METHODS:
+            methods.append(
+                {**self.preprocessor, **self.select_survival_analyzer(survival_method)}
+            )
+
+        return methods
+
+
+def c_index_score(y_true, y_pred):
+    name_event, name_time = y_true.dtype.names
+
+    c_index, _, _, _, _ = concordance_index_censored(
+        y_true[name_event], y_true[name_time], y_pred
+    )
+
+    return c_index
+
+
+class SurvivalRepeatedStratifiedKFold(RepeatedStratifiedKFold):
+    def split(self, X, y, groups=None):
+        # Keep only the [0] element of each label, which corresponds to the Event (true/false)
+        for train_index, test_index in super().split(X, [o[0] for o in y]):
+            yield train_index, test_index

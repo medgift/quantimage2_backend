@@ -11,7 +11,11 @@ from time import time
 import numpy as np
 from sqlalchemy.orm import joinedload
 
-from imaginebackend_common.const import MODEL_TYPES, DATA_SPLITTING_TYPES
+from imaginebackend_common.const import (
+    MODEL_TYPES,
+    DATA_SPLITTING_TYPES,
+    ESTIMATOR_STEP,
+)
 
 from flask import Blueprint, jsonify, request, g, make_response
 
@@ -26,8 +30,8 @@ from imaginebackend_common.models import (
 # Define blueprint
 from imaginebackend_common.utils import format_extraction
 from routes.utils import validate_decorate
-from service.feature_analysis import train_classification_model
-from service.survival_analysis import train_survival_model
+from service.classification import train_classification_model
+from service.survival import train_survival_model
 
 bp = Blueprint(__name__, "models")
 
@@ -47,17 +51,8 @@ def format_model(model):
     test_metrics = None
 
     # Convert metrics to native Python types
-    if MODEL_TYPES(model.label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
-        training_metrics = format_metrics(model.training_metrics)
-        test_metrics = (
-            format_metrics(model.test_metrics) if model.test_metrics else None
-        )
-    elif MODEL_TYPES(model.label_category.label_type) == MODEL_TYPES.SURVIVAL:
-        training_metrics = collections.OrderedDict()
-        training_metrics["concordance_index"] = model_object.concordance_index_
-        # metrics["events_observed"] = len(model_object.event_observed)
-    else:
-        raise NotImplementedError
+    training_metrics = format_metrics(model.training_metrics)
+    test_metrics = format_metrics(model.test_metrics) if model.test_metrics else None
 
     model_dict["training-metrics"] = training_metrics
     model_dict["test-metrics"] = test_metrics if test_metrics else None
@@ -112,9 +107,11 @@ def models_by_album(album_id):
         training_validation = None
         test_validation = None
         feature_selection = None
+        estimator_step = None
 
         try:
             if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
+                estimator_step = ESTIMATOR_STEP.CLASSIFICATION
                 (
                     trained_model,
                     feature_names,
@@ -133,31 +130,35 @@ def models_by_album(album_id):
                     test_patients,
                     gt,
                 )
-
-                best_algorithm = trained_model.best_params_[
-                    "classifier"
-                ].__class__.__name__
-                best_normalization = trained_model.best_params_[
-                    "preprocessor"
-                ].__class__.__name__
             elif MODEL_TYPES(label_category.label_type) == MODEL_TYPES.SURVIVAL:
+                estimator_step = ESTIMATOR_STEP.SURVIVAL
                 (
                     trained_model,
-                    feature_selection,
-                    patient_ids,
                     feature_names,
+                    training_validation,
+                    training_validation_params,
+                    test_validation,
+                    test_validation_params,
+                    training_metrics,
+                    test_metrics,
                 ) = train_survival_model(
                     feature_extraction_id,
                     collection_id,
                     studies,
                     data_splitting_type,
+                    training_patients,
+                    test_patients,
                     gt,
                 )
-
-                best_algorithm = "Cox"  # TODO - Get this dynamically also
-                best_normalization = "Something"  # TODO - Get this dynamically also
             else:
                 raise NotImplementedError
+
+            best_algorithm = trained_model.best_params_[
+                estimator_step.value
+            ].__class__.__name__
+            best_normalization = trained_model.best_params_[
+                "preprocessor"
+            ].__class__.__name__
 
             model_path = get_model_path(
                 g.user,

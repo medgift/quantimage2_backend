@@ -17,6 +17,11 @@ class TRAIN_TEST_SPLIT_TYPES(Enum):
     MANUAL = "manual"
 
 
+class ESTIMATOR_STEP(Enum):
+    CLASSIFICATION = "classifier"
+    SURVIVAL = "analyzer"
+
+
 RIESZ_FEATURE_PREFIXES = ["tex"]
 PYRADIOMICS_FEATURE_PREFIXES = [
     "original",

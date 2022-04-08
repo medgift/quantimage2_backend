@@ -21,6 +21,12 @@ Flask-Compress
 # itsdangerous (for flask compatibility)
 itsdangerous==2.0.1
 
+# Jinja2 (for flask compatibility)
+Jinja2==3.0.3
+
+# Werkzeug (for flask compatibility)
+werkzeug==2.0.2
+
 # Celery
 Celery
 
@@ -54,10 +60,10 @@ pyyaml
 # Timing
 ttictoc
 
-# Melampus (temporary)
+# ML
 scikit-learn
+scikit-survival
 pandas
-lifelines
 
 # Iteration
 more-itertools

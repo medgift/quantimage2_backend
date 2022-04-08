@@ -1,146 +1,91 @@
-from sklearn.model_selection import GridSearchCV
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import make_scorer, recall_score
+from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.pipeline import Pipeline
-from ttictoc import tic, toc
+from sklearn.preprocessing import LabelEncoder
+from sklearn.svm import SVC
 
-from imaginebackend_common.const import DATA_SPLITTING_TYPES
-from modeling.utils import (
-    split_dataset,
-    get_labelencoder,
-    NORMALIZATION_METHODS,
-    CLASSIFICATION_METHODS,
-    select_normalizer,
-    select_classifier,
-    get_cv,
-    get_scoring,
-    run_bootstrap,
-    calculate_test_metrics,
-    calculate_training_metrics,
-    preprocess_features,
-    preprocess_labels,
-)
+from modeling.modeling import Modeling
+
+CLASSIFICATION_METHODS = [
+    "logistic_regression_lbfgs",
+    "logistic_regression_saga",
+    "svm",
+    "random_forest",
+]
+CLASSIFICATION_PARAMS = {
+    "logistic_regression_lbfgs": {
+        "solver": ["lbfgs"],
+        "penalty": ["l2"],
+        "max_iter": [1000],
+    },
+    "logistic_regression_saga": {
+        "solver": ["saga"],
+        "penalty": ["l1", "l2", "elasticnet"],
+        "l1_ratio": [0.5],
+        "max_iter": [1000],
+    },
+}
 
 
-class Classification:
-    def __init__(
-        self,
-        features_df,
-        labels_df,
-        data_splitting_type,
-        training_patients,
-        test_patients,
-        random_seed,
-        refit_metric="auc",
-        n_jobs=1,
-    ):
-        self.data_splitting_type = data_splitting_type
-        self.random_seed = random_seed
-
-        features_df = preprocess_features(features_df)
-        labels_df = preprocess_labels(labels_df, training_patients, test_patients)
-
-        self.feature_names = list(features_df.columns)
-
-        if self.is_train_test():
-            # Split training & test set based on provided Patient IDs
-            self.X_train, self.X_test, self.y_train, self.y_test = split_dataset(
-                features_df, labels_df, training_patients, test_patients
-            )
-        else:
-            self.X_train = features_df
-            self.y_train = labels_df
-
-        # Label Encoder
-        self.encoder = get_labelencoder()
-        self.encoder.fit(self.y_train)
-
-        # Pipeline elements
-        self.pipeline = Pipeline([("preprocessor", None), ("classifier", None)])
-
-        # Cross-validator
-        self.cv = get_cv(self.random_seed)
-
-        # Refit metric (for the grid search)
-        self.refit_metric = refit_metric
-
-        # Number of parallel jobs
-        self.n_jobs = n_jobs
-
-    def is_train_test(self):
-        return (
-            DATA_SPLITTING_TYPES(self.data_splitting_type)
-            == DATA_SPLITTING_TYPES.TRAINTESTSPLIT
-        )
+class Classification(Modeling):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def classify(self):
-        # Encode Labels
-        y_train_encoded = self.encoder.transform(self.y_train)
-        y_test_encoded = []
+        return self.create_model()
 
-        if self.is_train_test():
-            y_test_encoded = self.encoder.transform(self.y_test)
+    def select_classifier(self, classifier_name):
+        if classifier_name.startswith("logistic_regression"):
+            options = {
+                "classifier": [LogisticRegression(random_state=self.random_seed)]
+            }
+            for key, value in CLASSIFICATION_PARAMS[classifier_name].items():
+                options[f"classifier__{key}"] = value
+            return options
+        elif classifier_name == "random_forest":
+            return {
+                "classifier": [RandomForestClassifier(random_state=self.random_seed)]
+            }
+        elif classifier_name == "svm":
+            return {
+                "classifier": [SVC(random_state=self.random_seed, probability=True)]
+            }
 
-        # Populate search space with normalization & classification options
-        preprocessor = {"preprocessor": generate_normalization_methods()}
-        param_grid = generate_classification_methods(preprocessor, self.random_seed)
+    def encode_labels(self, labels):
+        encoder = LabelEncoder()
 
-        # Run grid search on the defined pipeline & search space
-        grid = GridSearchCV(
-            self.pipeline,
-            param_grid,
-            scoring=get_scoring(),
-            refit=self.refit_metric,
-            cv=self.cv,
-            n_jobs=self.n_jobs,
-            return_train_score=False,
-            verbose=2,
+        fitted_encoder = encoder.fit(labels)
+        labels_encoded = encoder.transform(labels)
+
+        return labels_encoded, fitted_encoder
+
+    def get_cv(self, n_splits=10, n_repeats=1):
+        return RepeatedStratifiedKFold(
+            random_state=self.random_seed, n_splits=n_splits, n_repeats=n_repeats
         )
 
-        # Fit the model on the training set
-        tic()
-        fitted_model = grid.fit(self.X_train, y_train_encoded)
-        elapsed = toc()
+    def get_scoring(self):
+        return {
+            "accuracy": "accuracy",
+            "precision": "precision",
+            "recall": "recall",
+            "specificity": make_scorer(recall_score, pos_label=0),
+            "auc": "roc_auc",
+        }
 
-        print(f"Fitting the model took {elapsed}")
+    def get_pipeline(self):
+        return Pipeline([("preprocessor", None), ("classifier", None)])
 
-        training_metrics = calculate_training_metrics(fitted_model.cv_results_)
-        test_metrics = None
-
-        # Train/test only - Perform Bootstrap on the Test set
-        if self.is_train_test():
-            tic()
-            scores, n_bootstrap = run_bootstrap(
-                self.X_test, y_test_encoded, fitted_model, self.random_seed
+    def get_grid(self):
+        methods = []
+        for classification_method in CLASSIFICATION_METHODS:
+            methods.append(
+                {
+                    **self.preprocessor,
+                    **self.select_classifier(classification_method),
+                }
             )
-            elapsed = toc()
-            print(f"Running bootstrap took {elapsed}")
 
-            test_metrics = calculate_test_metrics(scores)
-
-        return (
-            fitted_model,
-            self.feature_names,
-            "Repeated Stratified K-Fold Cross-Validation",
-            {"k": self.cv.cvargs["n_splits"], "n": self.cv.n_repeats},
-            "Bootstrap" if self.is_train_test() else None,
-            {"n": n_bootstrap} if self.is_train_test() else None,
-            training_metrics,
-            test_metrics,
-        )
-
-
-def generate_normalization_methods():
-    methods = []
-    for normalization_method in NORMALIZATION_METHODS:
-        methods.append(select_normalizer(normalization_method))
-
-    return methods
-
-
-def generate_classification_methods(preprocessor, random_seed):
-    methods = []
-    for classification_method in CLASSIFICATION_METHODS:
-        methods.append(
-            {**preprocessor, **select_classifier(classification_method, random_seed)}
-        )
-
-    return methods
+        return methods

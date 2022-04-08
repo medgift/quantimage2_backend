@@ -14,8 +14,8 @@ from imaginebackend_common.models import (
     AlbumOutcome,
 )
 from routes.utils import decorate_if_possible
-from service.feature_analysis import concatenate_modalities_rois
 from service.feature_extraction import get_studies_from_album
+from service.machine_learning import concatenate_modalities_rois
 from service.feature_transformation import (
     transform_studies_features_to_df,
     PATIENT_ID_FIELD,
