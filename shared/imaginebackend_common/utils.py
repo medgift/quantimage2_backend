@@ -1,10 +1,14 @@
 import json
+import math
 import os
 from enum import Enum
 
 
 # Exceptions
 from pathlib import Path
+
+import numpy as np
+from sklearn.model_selection import RepeatedStratifiedKFold
 from ttictoc import tic, toc
 
 import celery.states as celerystates
@@ -60,6 +64,7 @@ class ComputationError(CustomException):
 class MessageType(Enum):
     FEATURE_TASK_STATUS = "feature-status"
     EXTRACTION_STATUS = "extraction-status"
+    TRAINING_STATUS = "training-status"
 
 
 # Format feature extraction
@@ -287,6 +292,51 @@ def task_status_message_from_result(task_result):
     return task_status_message(
         task_result["current"], task_result["total"], task_result["status_message"]
     )
+
+
+# Get Training ID based on feature extration & (optionnally) collection IDs
+def get_training_id(feature_extraction_id, collection_id=None):
+    training_id = (
+        f"train_{feature_extraction_id}_{collection_id}"
+        if collection_id
+        else f"train_{feature_extraction_id}"
+    )
+
+    return training_id
+
+
+# Format ML models
+def format_model(model):
+
+    model_dict = model.to_dict()
+
+    # Convert metrics to native Python types
+    training_metrics = format_metrics(model.training_metrics)
+    test_metrics = format_metrics(model.test_metrics) if model.test_metrics else None
+
+    model_dict["training-metrics"] = training_metrics
+    model_dict["test-metrics"] = test_metrics if test_metrics else None
+
+    return model_dict
+
+
+# Format model metrics
+def format_metrics(metrics):
+
+    formatted_metrics = {**metrics}
+
+    for metric in metrics:
+
+        # Do we have a range or just a single value for the metric?
+        if np.isscalar(metrics[metric]):
+            if math.isnan(metrics[metric]):
+                formatted_metrics[metric] = "N/A"
+        else:
+            for value in formatted_metrics[metric]:
+                if math.isnan(metrics[metric][value]):
+                    formatted_metrics[metric][value] = "N/A"
+
+    return formatted_metrics
 
 
 # Feature Extraction Status

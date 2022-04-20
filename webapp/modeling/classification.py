@@ -26,6 +26,18 @@ CLASSIFICATION_PARAMS = {
         "l1_ratio": [0.5],
         "max_iter": [1000],
     },
+    "random_forest": {
+        "max_depth": [10, 100, None],
+        # "max_features": ["auto", "sqrt"],
+        # "min_samples_leaf": [1, 2, 4],
+        # "min_samples_split": [2, 5, 10],
+        "n_estimators": [10, 100, 1000],
+    },
+    "svm": {
+        "C": [0.1, 1, 10, 100],
+        "gamma": [1, 0.1, 0.01, 0.001],
+        "kernel": ["rbf", "poly", "sigmoid"],
+    },
 }
 
 
@@ -41,17 +53,19 @@ class Classification(Modeling):
             options = {
                 "classifier": [LogisticRegression(random_state=self.random_seed)]
             }
-            for key, value in CLASSIFICATION_PARAMS[classifier_name].items():
-                options[f"classifier__{key}"] = value
-            return options
         elif classifier_name == "random_forest":
-            return {
+            options = {
                 "classifier": [RandomForestClassifier(random_state=self.random_seed)]
             }
         elif classifier_name == "svm":
-            return {
+            options = {
                 "classifier": [SVC(random_state=self.random_seed, probability=True)]
             }
+
+        for key, value in CLASSIFICATION_PARAMS[classifier_name].items():
+            options[f"classifier__{key}"] = value
+
+        return options
 
     def encode_labels(self, labels):
         encoder = LabelEncoder()
@@ -78,7 +92,7 @@ class Classification(Modeling):
     def get_pipeline(self):
         return Pipeline([("preprocessor", None), ("classifier", None)])
 
-    def get_grid(self):
+    def get_parameter_grid(self):
         methods = []
         for classification_method in CLASSIFICATION_METHODS:
             methods.append(

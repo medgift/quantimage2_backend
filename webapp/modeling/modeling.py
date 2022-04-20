@@ -1,14 +1,12 @@
 import abc
 
-from sklearn.model_selection import GridSearchCV
+from flask import current_app, g
+from sklearn.model_selection import GridSearchCV, ParameterGrid
 from ttictoc import tic, toc
 
 from imaginebackend_common.const import DATA_SPLITTING_TYPES
 from modeling.utils import (
     split_dataset,
-    run_bootstrap,
-    calculate_test_metrics,
-    calculate_training_metrics,
     preprocess_features,
     preprocess_labels,
     generate_normalization_methods,
@@ -20,17 +18,39 @@ class Modeling:
 
     def __init__(
         self,
+        *,
+        feature_extraction_id,
+        collection_id,
+        album,
+        feature_selection,
+        feature_names,
+        estimator_step,
+        label_category,
         features_df,
         labels_df,
         data_splitting_type,
+        train_test_splitting_type,
         training_patients,
         test_patients,
         random_seed,
         refit_metric,
         n_jobs=1,
+        training_id,
     ):
+
+        # Album ID & Other Metadata
+        self.album = album
+        self.feature_extraction_id = feature_extraction_id
+        self.collection_id = collection_id
+        self.feature_selection = feature_selection
+        self.feature_names = feature_names
+        self.label_category = label_category
+        self.training_patients = training_patients
+        self.test_patients = test_patients
+
         # Type of data splitting (train/test or full dataset)
         self.data_splitting_type = data_splitting_type
+        self.train_test_splitting_type = train_test_splitting_type
 
         # Random seed (for reproducing results)
         self.random_seed = random_seed
@@ -61,6 +81,12 @@ class Modeling:
         # Number of parallel jobs
         self.n_jobs = n_jobs
 
+        # Training ID (for progress reporting)
+        self.training_id = training_id
+
+        # Estimator Step (for scoring calculation)
+        self.estimator_step = estimator_step
+
     def is_train_test(self):
         return (
             DATA_SPLITTING_TYPES(self.data_splitting_type)
@@ -85,57 +111,46 @@ class Modeling:
             y_train_encoded, y_test_encoded = self.y_train, self.y_test
 
         pipeline = self.get_pipeline()
-        grid = self.get_grid()
+        parameter_grid = self.get_parameter_grid()
         cv = self.get_cv()
         scoring = self.get_scoring()
 
-        # Run grid search on the defined pipeline & search space
-        grid = GridSearchCV(
-            pipeline,
-            grid,
-            scoring=scoring,
-            refit=self.refit_metric,
-            cv=cv,
-            n_jobs=self.n_jobs,
-            return_train_score=False,
-            verbose=2,
+        current_app.my_celery.send_task(
+            "imaginetasks.train",
+            kwargs={
+                "feature_extraction_id": self.feature_extraction_id,
+                "collection_id": self.collection_id,
+                "album": self.album,
+                "feature_selection": self.feature_selection,
+                "feature_names": self.feature_names,
+                "pipeline": pipeline,
+                "parameter_grid": parameter_grid,
+                "estimator_step": self.estimator_step,
+                "scoring": scoring,
+                "refit_metric": self.refit_metric,
+                "cv": cv,
+                "n_jobs": self.n_jobs,
+                "X_train": self.X_train,
+                "X_test": self.X_test,
+                "label_category": self.label_category,
+                "data_splitting_type": self.data_splitting_type,
+                "train_test_splitting_type": self.train_test_splitting_type,
+                "training_patients": self.training_patients,
+                "test_patients": self.test_patients,
+                "y_train_encoded": y_train_encoded,
+                "y_test_encoded": y_test_encoded,
+                "is_train_test": self.is_train_test(),
+                "random_seed": self.random_seed,
+                "training_id": self.training_id,
+                "user_id": g.user,
+            },
+            serializer="pickle",
         )
 
-        # Fit the model on the training set
-        tic()
-        fitted_model = grid.fit(self.X_train, y_train_encoded)
-        elapsed = toc()
+        pg = ParameterGrid(parameter_grid)
+        n_steps = len(pg) * cv.get_n_splits()
 
-        print(f"Fitting the model took {elapsed}")
-
-        training_metrics = calculate_training_metrics(fitted_model.cv_results_, scoring)
-        test_metrics = None
-
-        # Train/test only - Perform Bootstrap on the Test set
-        if self.is_train_test():
-            tic()
-            scores, n_bootstrap = run_bootstrap(
-                self.X_test,
-                y_test_encoded,
-                fitted_model,
-                self.random_seed,
-                scoring,
-            )
-            elapsed = toc()
-            print(f"Running bootstrap took {elapsed}")
-
-            test_metrics = calculate_test_metrics(scores, scoring)
-
-        return (
-            fitted_model,
-            self.feature_names,
-            "Repeated Stratified K-Fold Cross-Validation",
-            {"k": cv.cvargs["n_splits"], "n": cv.n_repeats},
-            "Bootstrap" if self.is_train_test() else None,
-            {"n": n_bootstrap} if self.is_train_test() else None,
-            training_metrics,
-            test_metrics,
-        )
+        return n_steps
 
     @abc.abstractmethod
     def encode_labels(self, labels):
@@ -157,6 +172,6 @@ class Modeling:
         return
 
     @abc.abstractmethod
-    def get_grid(self):
+    def get_parameter_grid(self):
         """Generate grid of parameters to explore"""
         return

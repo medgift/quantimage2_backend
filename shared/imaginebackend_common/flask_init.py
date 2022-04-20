@@ -3,6 +3,7 @@ import os
 from flask import Flask
 
 from flask_compress import Compress
+from ttictoc import tic, toc
 
 from imaginebackend_common.models import db
 

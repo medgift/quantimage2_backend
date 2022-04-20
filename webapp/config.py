@@ -20,6 +20,3 @@ CONFIGS_SUBDIR = "configs"
 
 # Feature Cache
 FEATURES_CACHE_BASE_DIR = "/imagine-data/features-cache"
-
-# Models
-MODELS_BASE_DIR = "/imagine-data/models"

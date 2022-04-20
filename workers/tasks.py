@@ -3,16 +3,24 @@ Celery tasks for running and finalizing feature extractions
 """
 import os
 import logging
+import re
 import shutil
 import socket
+import sys
 import tempfile
 import traceback
+from io import StringIO
+from multiprocessing import current_process
+from time import sleep
 
+import joblib
 import pydevd_pycharm
 import requests
 import warnings
 
 from typing import Dict, Any
+
+from flask import jsonify
 from flask_socketio import SocketIO
 from keycloak.realm import KeycloakRealm
 from celery import Celery
@@ -20,9 +28,21 @@ from celery import states as celerystates
 from celery.signals import celeryd_after_setup
 from zipfile import ZipFile
 
+from pygtail import Pygtail
+from sklearn.metrics import make_scorer, accuracy_score
+from sklearn.model_selection import GridSearchCV
+from sklearn.utils import parallel_backend
+from ttictoc import tic, toc
+
+from imaginebackend_common.const import FAKE_SCORER_KEY, TRAINING_PHASES
 from imaginebackend_common.feature_storage import store_features
 from imaginebackend_common.flask_init import create_app
-from imaginebackend_common.models import FeatureExtractionTask, db, FeatureExtraction
+from imaginebackend_common.models import (
+    FeatureExtractionTask,
+    db,
+    FeatureExtraction,
+    Model,
+)
 from imaginebackend_common.kheops_utils import get_token_header, dicomFields
 from imaginebackend_common.utils import (
     get_socketio_body_feature_task,
@@ -30,9 +50,17 @@ from imaginebackend_common.utils import (
     task_status_message,
     fetch_extraction_result,
     send_extraction_status_message,
+    format_model,
 )
 
 from okapy.dicomconverter.converter import ExtractorConverter
+
+from utils import (
+    calculate_training_metrics,
+    run_bootstrap,
+    calculate_test_metrics,
+    get_model_path,
+)
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
 
@@ -59,6 +87,7 @@ celery = Celery(
     backend=os.environ["CELERY_RESULT_BACKEND"],
     broker=os.environ["CELERY_BROKER_URL"],
 )
+celery.conf.accept_content = ["pickle", "json"]
 
 
 @celeryd_after_setup.connect
@@ -85,6 +114,169 @@ def setup(sender, instance, **kwargs):
     # Create basic Flask app and push an app context to allow DB operations
     flask_app = create_app()
     flask_app.app_context().push()
+
+
+@celery.task(name="imaginetasks.train", bind=True)
+def train_model(
+    self,
+    *,
+    feature_extraction_id,
+    collection_id,
+    album,
+    feature_selection,
+    feature_names,
+    pipeline,
+    parameter_grid,
+    estimator_step,
+    scoring,
+    refit_metric,
+    cv,
+    n_jobs,
+    X_train,
+    X_test,
+    label_category,
+    data_splitting_type,
+    train_test_splitting_type,
+    training_patients,
+    test_patients,
+    y_train_encoded,
+    y_test_encoded,
+    is_train_test,
+    random_seed,
+    training_id,
+    user_id,
+):
+    # TODO - This is a hack, would be best to find a better solution such as Dask
+    current_process()._config["daemon"] = False
+
+    # Fake scorer allowing to send progress reports
+    def fake_score(y_true, y_pred, training_id=None):
+        # Create basic Flask app and push an app context to allow DB operations
+        training_flask_app = create_app()
+        training_flask_app.app_context().push()
+
+        training_socketio = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
+        socketio_body = {
+            "training-id": training_id,
+            "phase": TRAINING_PHASES.TRAINING.value,
+        }
+        training_socketio.emit(
+            MessageType.TRAINING_STATUS.value, jsonify(socketio_body).get_json()
+        )
+        return 0
+
+    tic()
+
+    # Add fake scorer for progress monitoring
+    scoring = {
+        **scoring,
+        FAKE_SCORER_KEY: make_scorer(fake_score, training_id=training_id),
+    }
+
+    # Run grid search on the defined pipeline & search space
+    grid = GridSearchCV(
+        pipeline,
+        parameter_grid,
+        scoring=scoring,
+        refit=refit_metric,
+        cv=cv,
+        n_jobs=n_jobs,
+        return_train_score=False,
+        verbose=100,
+    )
+
+    fitted_model = grid.fit(X_train, y_train_encoded)
+
+    elapsed = toc()
+
+    print(f"Fitting the model took {elapsed}")
+
+    # Remove references to "fake" scorer in the fitted model for serialization & metrics calculation
+    fitted_model.cv_results_ = {
+        k: fitted_model.cv_results_[k]
+        for k in fitted_model.cv_results_
+        if not re.match(rf".*{FAKE_SCORER_KEY}$", k)
+    }
+    del fitted_model.scorer_[FAKE_SCORER_KEY]
+    del fitted_model.scoring[FAKE_SCORER_KEY]
+
+    # Calculate Training Metrics
+    training_metrics = calculate_training_metrics(fitted_model.cv_results_, scoring)
+    test_metrics = None
+
+    # Train/test only - Perform Bootstrap on the Test set
+    if is_train_test:
+        tic()
+        socket_io = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
+        scores, n_bootstrap = run_bootstrap(
+            X_test,
+            y_test_encoded,
+            fitted_model,
+            random_seed,
+            scoring,
+            training_id=training_id,
+            socket_io=socket_io,
+        )
+        elapsed = toc()
+        print(f"Running bootstrap took {elapsed}")
+
+        test_metrics = calculate_test_metrics(scores, scoring)
+
+    # Save model in the DB
+    best_algorithm = fitted_model.best_params_[estimator_step].__class__.__name__
+    best_normalization = fitted_model.best_params_["preprocessor"].__class__.__name__
+
+    model_path = get_model_path(
+        user_id,
+        album["album_id"],
+        label_category.label_type,
+    )
+
+    # Persist model in DB and on disk (pickle it)
+    os.makedirs(os.path.dirname(model_path), exist_ok=True)
+    joblib.dump(fitted_model, model_path)
+
+    # Generate model name (for now)
+    (file, ext) = os.path.splitext(os.path.basename(model_path))
+    model_name = f"{album['name']}_{file}"
+
+    # Get all other metadata for the model to be saved in the DB
+    training_validation = "Repeated Stratified K-Fold Cross-Validation"
+    training_validation_params = {"k": cv.cvargs["n_splits"], "n": cv.n_repeats}
+    test_validation = "Bootstrap" if is_train_test else None
+    test_validation_params = {"n": n_bootstrap} if is_train_test else None
+
+    db_model = Model(
+        model_name,
+        best_algorithm,
+        data_splitting_type,
+        train_test_splitting_type,
+        f"{training_validation} ({training_validation_params['k']} folds, {training_validation_params['n']} repetitions)",
+        f"{test_validation} ({test_validation_params['n']} repetitions)"
+        if test_validation
+        else None,
+        best_normalization,
+        feature_selection,
+        feature_names,
+        training_patients,
+        test_patients,
+        model_path,
+        training_metrics,
+        test_metrics,
+        user_id,
+        album["album_id"],
+        label_category.id,
+        feature_extraction_id,
+        collection_id,
+    )
+    db_model.save_to_db()
+
+    socketio_body = {
+        "training-id": training_id,
+        "complete": True,
+        "model": format_model(db_model),
+    }
+    socketio.emit(MessageType.TRAINING_STATUS.value, jsonify(socketio_body).get_json())
 
 
 @celery.task(name="imaginetasks.extract", bind=True)
@@ -153,9 +345,6 @@ def run_extraction(
         shutil.rmtree(dicom_dir, True)
 
         # Save the features
-        # json_features = jsonpickle.encode(features)
-        # os.makedirs(os.path.dirname(features_path), exist_ok=True)
-        # Path(features_path).write_text(json_features)
         store_features(
             feature_extraction_task_id,
             feature_extraction_id,
@@ -336,19 +525,6 @@ def download_study(token: str, study_uid: str, album_id: str) -> str:
 
     # Remove the ZIP file
     os.unlink(tmp_file)
-
-    # Get content-type header (with boundary)
-    # content_type = response.headers["content-type"]
-    #
-    # file_index = 1
-    # for part in decoder.MultipartDecoder(
-    #     get_bytes_from_file(tmp_file), content_type
-    # ).parts:
-    #     part_content = part.content
-    #     part_path = f"{tmp_dir}/{file_index}.dcm"
-    #     with open(part_path, "wb") as f:
-    #         f.write(part_content)
-    #     file_index += 1
 
     return tmp_dir
 

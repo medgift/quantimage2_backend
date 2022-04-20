@@ -1,5 +1,7 @@
 import math
 import os
+import uuid
+
 import joblib
 
 import traceback
@@ -19,7 +21,6 @@ from imaginebackend_common.const import (
 
 from flask import Blueprint, jsonify, request, g, make_response
 
-from config import MODELS_BASE_DIR
 from imaginebackend_common.models import (
     Model,
     FeatureExtraction,
@@ -28,7 +29,7 @@ from imaginebackend_common.models import (
 )
 
 # Define blueprint
-from imaginebackend_common.utils import format_extraction
+from imaginebackend_common.utils import format_extraction, get_training_id, format_model
 from routes.utils import validate_decorate
 from service.classification import train_classification_model
 from service.survival import train_survival_model
@@ -39,43 +40,6 @@ bp = Blueprint(__name__, "models")
 @bp.before_request
 def before_request():
     validate_decorate(request)
-
-
-def format_model(model):
-
-    model_dict = model.to_dict()
-
-    # De-serialize model # TODO - May not be required anymore if the concordance index is saved in the DB directly
-    model_object = joblib.load(model.model_path)
-
-    test_metrics = None
-
-    # Convert metrics to native Python types
-    training_metrics = format_metrics(model.training_metrics)
-    test_metrics = format_metrics(model.test_metrics) if model.test_metrics else None
-
-    model_dict["training-metrics"] = training_metrics
-    model_dict["test-metrics"] = test_metrics if test_metrics else None
-
-    return model_dict
-
-
-def format_metrics(metrics):
-
-    formatted_metrics = {**metrics}
-
-    for metric in metrics:
-
-        # Do we have a range or just a single value for the metric?
-        if np.isscalar(metrics[metric]):
-            if math.isnan(metrics[metric]):
-                formatted_metrics[metric] = "N/A"
-        else:
-            for value in formatted_metrics[metric]:
-                if math.isnan(metrics[metric][value]):
-                    formatted_metrics[metric][value] = "N/A"
-
-    return formatted_metrics
 
 
 @bp.route("/models/<album_id>", methods=("GET", "POST"))
@@ -104,48 +68,33 @@ def models_by_album(album_id):
         train_test_split_type = body["train-test-split-type"]
         training_patients = body["training-patients"]
         test_patients = body["test-patients"]
-        training_validation = None
-        test_validation = None
         feature_selection = None
-        estimator_step = None
 
         try:
             if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
-                estimator_step = ESTIMATOR_STEP.CLASSIFICATION
-                (
-                    trained_model,
-                    feature_names,
-                    training_validation,
-                    training_validation_params,
-                    test_validation,
-                    test_validation_params,
-                    training_metrics,
-                    test_metrics,
-                ) = train_classification_model(
+                n_steps = train_classification_model(
                     feature_extraction_id,
                     collection_id,
+                    album,
                     studies,
+                    feature_selection,
+                    label_category,
                     data_splitting_type,
+                    train_test_split_type,
                     training_patients,
                     test_patients,
                     gt,
                 )
             elif MODEL_TYPES(label_category.label_type) == MODEL_TYPES.SURVIVAL:
-                estimator_step = ESTIMATOR_STEP.SURVIVAL
-                (
-                    trained_model,
-                    feature_names,
-                    training_validation,
-                    training_validation_params,
-                    test_validation,
-                    test_validation_params,
-                    training_metrics,
-                    test_metrics,
-                ) = train_survival_model(
+                n_steps = train_survival_model(
                     feature_extraction_id,
                     collection_id,
+                    album,
                     studies,
+                    feature_selection,
+                    label_category,
                     data_splitting_type,
+                    train_test_split_type,
                     training_patients,
                     test_patients,
                     gt,
@@ -153,55 +102,10 @@ def models_by_album(album_id):
             else:
                 raise NotImplementedError
 
-            best_algorithm = trained_model.best_params_[
-                estimator_step.value
-            ].__class__.__name__
-            best_normalization = trained_model.best_params_[
-                "preprocessor"
-            ].__class__.__name__
+            training_id = get_training_id(feature_extraction_id, collection_id)
 
-            model_path = get_model_path(
-                g.user,
-                album["album_id"],
-                label_category.label_type,
-            )
+            return jsonify({"training-id": training_id, "n-steps": n_steps})
 
-            # Persist model in DB and on disk (pickle it)
-            os.makedirs(os.path.dirname(model_path), exist_ok=True)
-            joblib.dump(model, model_path)
-
-            # Generate model name (for now)
-            (file, ext) = os.path.splitext(os.path.basename(model_path))
-            model_name = f"{album['name']}_{file}"
-
-            db_model = Model(
-                model_name,
-                best_algorithm,
-                data_splitting_type,
-                train_test_split_type,
-                f"{training_validation} ({training_validation_params['k']} folds, {training_validation_params['n']} repetitions)"
-                if training_validation and training_validation_params
-                else "5-fold cross-validation",  # TODO - Get this from the survival analysis method
-                f"{test_validation} ({test_validation_params['n']} repetitions)"
-                if test_validation
-                else None,
-                best_normalization,
-                feature_selection,
-                feature_names,
-                training_patients,
-                test_patients,
-                model_path,
-                training_metrics,
-                test_metrics,
-                g.user,
-                album["album_id"],
-                label_category.id,
-                feature_extraction_id,
-                collection_id,
-            )
-            db_model.save_to_db()
-
-            return jsonify(format_model(db_model))
         except Exception as e:
             traceback.print_exc()
             error_message = {"error": str(e)}
@@ -230,16 +134,3 @@ def model(id):
 def models_by_user():
     albums = Model.find_by_user(g.user)
     return jsonify(albums)
-
-
-def get_model_path(user_id, album_id, model_type):
-    # Define features path for storing the results
-    models_dir = os.path.join(MODELS_BASE_DIR, user_id, album_id)
-
-    models_filename = f"model_{model_type}"
-
-    models_filename += f"_{str(int(time()))}"
-    models_filename += ".joblib"
-    models_path = os.path.join(models_dir, models_filename)
-
-    return models_path

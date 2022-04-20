@@ -7,6 +7,7 @@ services:
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - GRID_SEARCH_CONCURRENCY=${GRID_SEARCH_CONCURRENCY}
       - CELERY_BROKER_URL=${CELERY_REDIS_URL}
       - CELERY_RESULT_BACKEND=${CELERY_REDIS_URL}
       - SOCKET_MESSAGE_QUEUE=${SOCKET_REDIS_URL}
@@ -47,6 +48,7 @@ services:
       - KEYCLOAK_IMAGINE_CLIENT_SECRET=${KEYCLOAK_IMAGINE_CLIENT_SECRET}
       - PYTHONUNBUFFERED=TRUE
       - PYTHON_ENV=production
+      - C_FORCE_ROOT=true
     volumes:
       - backend-data:/imagine-data
       - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common

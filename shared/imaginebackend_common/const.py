@@ -22,6 +22,11 @@ class ESTIMATOR_STEP(Enum):
     SURVIVAL = "analyzer"
 
 
+class TRAINING_PHASES(Enum):
+    TRAINING = "training"
+    TESTING = "testing"
+
+
 RIESZ_FEATURE_PREFIXES = ["tex"]
 PYRADIOMICS_FEATURE_PREFIXES = [
     "original",
@@ -39,3 +44,5 @@ prefixes = RIESZ_FEATURE_PREFIXES + PYRADIOMICS_FEATURE_PREFIXES + PET_SPECIFIC_
 featureIDMatcher = re.compile(
     rf"(?P<modality>.*?)-(?P<roi>.*?)-(?P<feature>(?:{'|'.join(prefixes)}).*)"
 )
+
+FAKE_SCORER_KEY = "fake"

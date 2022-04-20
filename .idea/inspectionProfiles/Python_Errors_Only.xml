@@ -311,7 +311,7 @@
     <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
       <option name="ignoredPackages">
         <value>
-          <list size="28">
+          <list size="31">
             <item index="0" class="java.lang.String" itemvalue="defer" />
             <item index="1" class="java.lang.String" itemvalue="Brlapi" />
             <item index="2" class="java.lang.String" itemvalue="duplicity" />
@@ -340,6 +340,9 @@
             <item index="25" class="java.lang.String" itemvalue="command-not-found" />
             <item index="26" class="java.lang.String" itemvalue="protobuf" />
             <item index="27" class="java.lang.String" itemvalue="itsdangerous" />
+            <item index="28" class="java.lang.String" itemvalue="Werkzeug" />
+            <item index="29" class="java.lang.String" itemvalue="MarkupSafe" />
+            <item index="30" class="java.lang.String" itemvalue="Jinja2" />
           </list>
         </value>
       </option>
