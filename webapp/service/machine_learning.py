@@ -43,6 +43,7 @@ def get_features_labels(
 
     # Filter out unlabelled patients
     features_df = features_df[features_df.PatientID.isin(labelled_patients)]
+    labels_df_indexed = labels_df_indexed.filter(items=labelled_patients, axis=0)
 
     # Concatenate features by modality & ROI
     features_df = concatenate_modalities_rois(features_df)

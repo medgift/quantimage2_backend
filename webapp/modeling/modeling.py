@@ -45,8 +45,6 @@ class Modeling:
         self.feature_selection = feature_selection
         self.feature_names = feature_names
         self.label_category = label_category
-        self.training_patients = training_patients
-        self.test_patients = test_patients
 
         # Type of data splitting (train/test or full dataset)
         self.data_splitting_type = data_splitting_type
@@ -61,16 +59,36 @@ class Modeling:
         # Generate normalization options (for the grid search)
         self.preprocessor = {"preprocessor": generate_normalization_methods()}
 
+        # Filter out unlabelled patients
+        labelled_patients = list(labels_df.index)
+        training_patients_filtered = [
+            p for p in training_patients if p in labelled_patients
+        ]
+        test_patients_filtered = (
+            [p for p in test_patients if p in labelled_patients]
+            if test_patients
+            else None
+        )
+
+        # Save filtered patients
+        self.training_patients = training_patients_filtered
+        self.test_patients = test_patients_filtered
+
         # Preprocess features & labels
         features_df = preprocess_features(features_df)
-        labels_df = preprocess_labels(labels_df, training_patients, test_patients)
+        labels_df = preprocess_labels(
+            labels_df, training_patients_filtered, test_patients_filtered
+        )
 
         self.feature_names = list(features_df.columns)
 
         if self.is_train_test():
             # Split training & test set based on provided Patient IDs
             self.X_train, self.X_test, self.y_train, self.y_test = split_dataset(
-                features_df, labels_df, training_patients, test_patients
+                features_df,
+                labels_df,
+                training_patients_filtered,
+                test_patients_filtered,
             )
         else:
             self.X_train = features_df
@@ -131,14 +149,14 @@ class Modeling:
                 "cv": cv,
                 "n_jobs": self.n_jobs,
                 "X_train": self.X_train,
-                "X_test": self.X_test,
+                "X_test": self.X_test if self.is_train_test() else None,
                 "label_category": self.label_category,
                 "data_splitting_type": self.data_splitting_type,
                 "train_test_splitting_type": self.train_test_splitting_type,
                 "training_patients": self.training_patients,
                 "test_patients": self.test_patients,
                 "y_train_encoded": y_train_encoded,
-                "y_test_encoded": y_test_encoded,
+                "y_test_encoded": y_test_encoded if self.is_train_test() else None,
                 "is_train_test": self.is_train_test(),
                 "random_seed": self.random_seed,
                 "training_id": self.training_id,

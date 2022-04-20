@@ -15,8 +15,12 @@ from service.feature_transformation import (
     OUTCOME_FIELD_SURVIVAL_TIME,
 )
 
-SURVIVAL_METHODS = ["coxnet"]  # ["coxnet", "coxnet_elastic", "ipc_ridge"]
-SURVIVAL_PARAMS = {"coxnet": {"alpha": [0.1], "n_iter": [1000]}}
+SURVIVAL_METHODS = ["coxnet", "coxnet_elastic", "ipc_ridge"]
+SURVIVAL_PARAMS = {
+    "coxnet": {"alpha": [0.1], "n_iter": [100]},
+    "coxnet_elastic": {"n_alphas": [100], "l1_ratio": [0.5]},
+    "ipc_ridge": {"alpha": [1]},
+}
 
 
 class Survival(Modeling):
@@ -48,7 +52,7 @@ class Survival(Modeling):
             None,
         )  # Return None for the "fitted encoder", as we don't use this mechanism here
 
-    def get_cv(self, n_splits=10, n_repeats=10):
+    def get_cv(self, n_splits=10, n_repeats=1):
         return SurvivalRepeatedStratifiedKFold(
             random_state=self.random_seed, n_splits=n_splits, n_repeats=n_repeats
         )
