@@ -27,9 +27,15 @@ def mean_confidence_interval_student(data, confidence=0.95):
 
 def mean_confidence_interval_normal(data, confidence=0.95):
     mean = np.mean(data)
-    inf_value, sup_value = stats.norm.interval(
-        confidence, loc=np.mean(data), scale=stats.sem(data)
-    )
+    stderrmean = stats.sem(data)
+
+    # If the standard error is 0, we only have one value, take the mean as inf & sup value
+    if stderrmean == 0:
+        inf_value, sup_value = mean, mean
+    else:
+        inf_value, sup_value = stats.norm.interval(
+            confidence, loc=mean, scale=stats.sem(data)
+        )
 
     return {
         "mean": mean,
@@ -41,10 +47,11 @@ def mean_confidence_interval_normal(data, confidence=0.95):
 def calculate_training_metrics(cv_results, scoring):
     metrics = {}
 
-    for metric in scoring.keys():
+    for index, metric in enumerate(scoring.keys()):
         metrics[metric] = mean_confidence_interval_student(
             cv_results[f"mean_test_{metric}"]
         )
+        metrics[metric]["order"] = index
 
     return metrics
 
@@ -53,9 +60,10 @@ def calculate_test_metrics(scores, scoring):
 
     metrics = {}
 
-    for metric in scoring.keys():
+    for index, metric in enumerate(scoring.keys()):
         metric_scores = [score[metric] for score in scores]
         metrics[metric] = mean_confidence_interval_normal(metric_scores)
+        metrics[metric]["order"] = index
 
     return metrics
 

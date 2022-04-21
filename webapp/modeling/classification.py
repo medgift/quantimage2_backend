@@ -82,11 +82,11 @@ class Classification(Modeling):
 
     def get_scoring(self):
         return {
+            "auc": "roc_auc",
             "accuracy": "accuracy",
             "precision": "precision",
             "recall": "recall",
             "specificity": make_scorer(recall_score, pos_label=0),
-            "auc": "roc_auc",
         }
 
     def get_pipeline(self):
