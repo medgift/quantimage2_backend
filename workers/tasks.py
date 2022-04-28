@@ -146,6 +146,8 @@ def train_model(
     training_id,
     user_id,
 ):
+    db.session.commit()
+
     # TODO - This is a hack, would be best to find a better solution such as Dask
     current_process()._config["daemon"] = False
 
@@ -173,110 +175,119 @@ def train_model(
         FAKE_SCORER_KEY: make_scorer(fake_score, training_id=training_id),
     }
 
-    # Run grid search on the defined pipeline & search space
-    grid = GridSearchCV(
-        pipeline,
-        parameter_grid,
-        scoring=scoring,
-        refit=refit_metric,
-        cv=cv,
-        n_jobs=n_jobs,
-        return_train_score=False,
-        verbose=100,
-    )
-
-    fitted_model = grid.fit(X_train, y_train_encoded)
-
-    elapsed = toc()
-
-    print(f"Fitting the model took {elapsed}")
-
-    # Remove references to "fake" scorer in the fitted model for serialization & metrics calculation
-    fitted_model.cv_results_ = {
-        k: fitted_model.cv_results_[k]
-        for k in fitted_model.cv_results_
-        if not re.match(rf".*{FAKE_SCORER_KEY}$", k)
-    }
-    del fitted_model.scorer_[FAKE_SCORER_KEY]
-    del fitted_model.scoring[FAKE_SCORER_KEY]
-
-    # Calculate Training Metrics
-    training_metrics = calculate_training_metrics(fitted_model.cv_results_, scoring)
-    test_metrics = None
-
-    # Train/test only - Perform Bootstrap on the Test set
-    if is_train_test:
-        tic()
-        socket_io = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
-        scores, n_bootstrap = run_bootstrap(
-            X_test,
-            y_test_encoded,
-            fitted_model,
-            random_seed,
-            scoring,
-            training_id=training_id,
-            socket_io=socket_io,
+    try:
+        # Run grid search on the defined pipeline & search space
+        grid = GridSearchCV(
+            pipeline,
+            parameter_grid,
+            scoring=scoring,
+            refit=refit_metric,
+            cv=cv,
+            n_jobs=n_jobs,
+            return_train_score=False,
+            verbose=100,
         )
+
+        fitted_model = grid.fit(X_train, y_train_encoded)
+
         elapsed = toc()
-        print(f"Running bootstrap took {elapsed}")
 
-        test_metrics = calculate_test_metrics(scores, scoring)
+        print(f"Fitting the model took {elapsed}")
 
-    # Save model in the DB
-    best_algorithm = fitted_model.best_params_[estimator_step].__class__.__name__
-    best_normalization = fitted_model.best_params_["preprocessor"].__class__.__name__
+        # Remove references to "fake" scorer in the fitted model for serialization & metrics calculation
+        fitted_model.cv_results_ = {
+            k: fitted_model.cv_results_[k]
+            for k in fitted_model.cv_results_
+            if not re.match(rf".*{FAKE_SCORER_KEY}$", k)
+        }
+        del fitted_model.scorer_[FAKE_SCORER_KEY]
+        del fitted_model.scoring[FAKE_SCORER_KEY]
 
-    model_path = get_model_path(
-        user_id,
-        album["album_id"],
-        label_category.label_type,
-    )
+        # Calculate Training Metrics
+        training_metrics = calculate_training_metrics(fitted_model.cv_results_, scoring)
+        test_metrics = None
 
-    # Persist model in DB and on disk (pickle it)
-    os.makedirs(os.path.dirname(model_path), exist_ok=True)
-    joblib.dump(fitted_model, model_path)
+        # Train/test only - Perform Bootstrap on the Test set
+        if is_train_test:
+            tic()
+            socket_io = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
+            scores, n_bootstrap = run_bootstrap(
+                X_test,
+                y_test_encoded,
+                fitted_model,
+                random_seed,
+                scoring,
+                training_id=training_id,
+                socket_io=socket_io,
+            )
+            elapsed = toc()
+            print(f"Running bootstrap took {elapsed}")
 
-    # Generate model name (for now)
-    (file, ext) = os.path.splitext(os.path.basename(model_path))
-    model_name = f"{album['name']}_{file}"
+            test_metrics = calculate_test_metrics(scores, scoring)
 
-    # Get all other metadata for the model to be saved in the DB
-    training_validation = "Repeated Stratified K-Fold Cross-Validation"
-    training_validation_params = {"k": cv.cvargs["n_splits"], "n": cv.n_repeats}
-    test_validation = "Bootstrap" if is_train_test else None
-    test_validation_params = {"n": n_bootstrap} if is_train_test else None
+        # Save model in the DB
+        best_algorithm = fitted_model.best_params_[estimator_step].__class__.__name__
+        best_normalization = fitted_model.best_params_[
+            "preprocessor"
+        ].__class__.__name__
 
-    db_model = Model(
-        model_name,
-        best_algorithm,
-        data_splitting_type,
-        train_test_splitting_type,
-        f"{training_validation} ({training_validation_params['k']} folds, {training_validation_params['n']} repetitions)",
-        f"{test_validation} ({test_validation_params['n']} repetitions)"
-        if test_validation
-        else None,
-        best_normalization,
-        feature_selection,
-        feature_names,
-        training_patients,
-        test_patients,
-        model_path,
-        training_metrics,
-        test_metrics,
-        user_id,
-        album["album_id"],
-        label_category.id,
-        feature_extraction_id,
-        collection_id,
-    )
-    db_model.save_to_db()
+        model_path = get_model_path(
+            user_id,
+            album["album_id"],
+            label_category.label_type,
+        )
 
-    socketio_body = {
-        "training-id": training_id,
-        "complete": True,
-        "model": format_model(db_model),
-    }
-    socketio.emit(MessageType.TRAINING_STATUS.value, jsonify(socketio_body).get_json())
+        # Persist model in DB and on disk (pickle it)
+        os.makedirs(os.path.dirname(model_path), exist_ok=True)
+        joblib.dump(fitted_model, model_path)
+
+        # Generate model name (for now)
+        (file, ext) = os.path.splitext(os.path.basename(model_path))
+        model_name = f"{album['name']}_{file}"
+
+        # Get all other metadata for the model to be saved in the DB
+        training_validation = "Repeated Stratified K-Fold Cross-Validation"
+        training_validation_params = {"k": cv.cvargs["n_splits"], "n": cv.n_repeats}
+        test_validation = "Bootstrap" if is_train_test else None
+        test_validation_params = {"n": n_bootstrap} if is_train_test else None
+
+        db_model = Model(
+            model_name,
+            best_algorithm,
+            data_splitting_type,
+            train_test_splitting_type,
+            f"{training_validation} ({training_validation_params['k']} folds, {training_validation_params['n']} repetitions)",
+            f"{test_validation} ({test_validation_params['n']} repetitions)"
+            if test_validation
+            else None,
+            best_normalization,
+            feature_selection,
+            feature_names,
+            training_patients,
+            test_patients,
+            model_path,
+            training_metrics,
+            test_metrics,
+            user_id,
+            album["album_id"],
+            label_category.id,
+            feature_extraction_id,
+            collection_id,
+        )
+        db_model.save_to_db()
+
+        socketio_body = {
+            "training-id": training_id,
+            "complete": True,
+            "model": format_model(db_model),
+        }
+        socketio.emit(
+            MessageType.TRAINING_STATUS.value, jsonify(socketio_body).get_json()
+        )
+    except Exception as e:
+        logging.error(e)
+    finally:
+        db.session.remove()
 
 
 @celery.task(name="imaginetasks.extract", bind=True)
