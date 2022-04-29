@@ -34,9 +34,9 @@ CLASSIFICATION_PARAMS = {
         "n_estimators": [10, 100, 1000],
     },
     "svm": {
-        "C": [0.1, 1, 10, 100],
-        "gamma": [1, 0.1, 0.01, 0.001],
-        "kernel": ["rbf", "poly", "sigmoid"],
+        "C": [0.01, 0.1, 1, 10, 100],
+        "gamma": ["scale", "auto", 1, 0.1, 0.01, 0.001],
+        "kernel": ["linear", "rbf", "poly", "sigmoid"],
     },
 }
 
