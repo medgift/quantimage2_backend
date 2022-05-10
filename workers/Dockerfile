@@ -41,6 +41,9 @@ RUN pip install --no-cache-dir -r requirements-okapy.txt
 ADD https://$GIT_ACCESS_TOKEN:x-oauth-basic@api.github.com/repos/voreille/okapy/git/refs/heads/quantimage2 version-okapy.json
 RUN pip install git+https://${GIT_ACCESS_TOKEN}@github.com/voreille/okapy.git@quantimage2
 
+# Install ZRad manually (temporary)
+RUN pip install git+https://${GIT_ACCESS_TOKEN}@github.com/danielabler/zrad_QUANTIMAGE.git
+
 ENV MCR_HOME /mcr/v97
 ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6:/usr/lib/x86_64-linux-gnu/libexpat.so
 ENV LD_LIBRARY_PATH $MCR_HOME/runtime/glnxa64:$MCR_HOME/bin/glnxa64:$MCR_HOME/sys/os/glnxa64:$MCR_HOME/extern/bin/glnxa64:$LD_LIBRARY_PATH
