@@ -6,12 +6,9 @@ import logging
 import re
 import shutil
 import socket
-import sys
 import tempfile
 import traceback
-from io import StringIO
 from multiprocessing import current_process
-from time import sleep
 
 import joblib
 import pydevd_pycharm
@@ -28,10 +25,8 @@ from celery import states as celerystates
 from celery.signals import celeryd_after_setup
 from zipfile import ZipFile
 
-from pygtail import Pygtail
-from sklearn.metrics import make_scorer, accuracy_score
+from sklearn.metrics import make_scorer
 from sklearn.model_selection import GridSearchCV
-from sklearn.utils import parallel_backend
 from ttictoc import tic, toc
 
 from imaginebackend_common.const import FAKE_SCORER_KEY, TRAINING_PHASES
@@ -43,7 +38,7 @@ from imaginebackend_common.models import (
     FeatureExtraction,
     Model,
 )
-from imaginebackend_common.kheops_utils import get_token_header, dicomFields
+from imaginebackend_common.kheops_utils import get_token_header
 from imaginebackend_common.utils import (
     get_socketio_body_feature_task,
     MessageType,
@@ -204,7 +199,12 @@ def train_model(
         del fitted_model.scoring[FAKE_SCORER_KEY]
 
         # Calculate Training Metrics
-        training_metrics = calculate_training_metrics(fitted_model.cv_results_, scoring)
+        training_metrics = calculate_training_metrics(
+            fitted_model.best_index_,
+            fitted_model.cv_results_,
+            cv.get_n_splits(),
+            scoring,
+        )
         test_metrics = None
 
         # Train/test only - Perform Bootstrap on the Test set

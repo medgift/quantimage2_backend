@@ -12,10 +12,9 @@ from config import MODELS_BASE_DIR
 from imaginebackend_common.utils import MessageType
 
 
-def mean_confidence_interval_student(data, confidence=0.95):
-    mean = np.mean(data)
+def mean_confidence_interval_student(mean, std, n_samples, confidence=0.95):
     inf_value, sup_value = stats.t.interval(
-        confidence, len(data) - 1, loc=np.mean(data), scale=stats.sem(data)
+        alpha=confidence, df=n_samples - 1, loc=mean, scale=std
     )
 
     return {
@@ -25,44 +24,36 @@ def mean_confidence_interval_student(data, confidence=0.95):
     }
 
 
-def mean_confidence_interval_normal(data, confidence=0.95):
-    mean = np.mean(data)
-    stderrmean = stats.sem(data)
-
-    # If the standard error is 0, we only have one value, take the mean as inf & sup value
-    if stderrmean == 0:
-        inf_value, sup_value = mean, mean
-    else:
-        inf_value, sup_value = stats.norm.interval(
-            confidence, loc=mean, scale=stats.sem(data)
-        )
-
-    return {
-        "mean": mean,
-        "inf_value": inf_value if not math.isnan(inf_value) else 0,
-        "sup_value": sup_value if not math.isnan(sup_value) else 0,
-    }
-
-
-def calculate_training_metrics(cv_results, scoring):
+def calculate_training_metrics(best_index, cv_results, n_splits, scoring):
     metrics = {}
 
     for index, metric in enumerate(scoring.keys()):
         metrics[metric] = mean_confidence_interval_student(
-            cv_results[f"mean_test_{metric}"]
+            cv_results[f"mean_test_{metric}"][best_index],
+            cv_results[f"std_test_{metric}"][best_index],
+            n_splits,
         )
         metrics[metric]["order"] = index
 
     return metrics
 
 
-def calculate_test_metrics(scores, scoring):
+def calculate_test_metrics(scores, scoring, confidence=0.95):
 
     metrics = {}
 
     for index, metric in enumerate(scoring.keys()):
         metric_scores = [score[metric] for score in scores]
-        metrics[metric] = mean_confidence_interval_normal(metric_scores)
+
+        inf_value = np.quantile(metric_scores, ((1 - confidence) / 2))
+        sup_value = np.quantile(metric_scores, 1 - ((1 - confidence) / 2))
+        mean_value = np.mean(metric_scores)
+
+        metrics[metric] = {
+            "mean": mean_value,
+            "inf_value": inf_value if not math.isnan(inf_value) else 0,
+            "sup_value": sup_value if not math.isnan(sup_value) else 0,
+        }
         metrics[metric]["order"] = index
 
     return metrics
@@ -161,12 +152,16 @@ def calculate_scores(y_true, y_pred, y_pred_proba, scoring):
                 # For metrics that need the probabilities (such as roc_auc_score)
                 # Calculate only with the "greater label" probability
                 # See https://scikit-learn.org/stable/modules/model_evaluation.html#roc-auc-binary
-                scores[score_name] = scorer._score_func(y_true, y_pred_proba[:, 1])
+                scores[score_name] = scorer._score_func(
+                    y_true, y_pred_proba[:, 1], **scorer._kwargs
+                )
             except ValueError:
                 # For metric that only need the binary predictions
-                scores[score_name] = scorer._score_func(y_true, y_pred)
+                scores[score_name] = scorer._score_func(
+                    y_true, y_pred, **scorer._kwargs
+                )
         else:
-            scores[score_name] = scorer._score_func(y_true, y_pred)
+            scores[score_name] = scorer._score_func(y_true, y_pred, **scorer._kwargs)
 
     return scores
 
