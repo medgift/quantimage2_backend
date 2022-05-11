@@ -19,8 +19,8 @@ def mean_confidence_interval_student(mean, std, n_samples, confidence=0.95):
 
     return {
         "mean": mean,
-        "inf_value": inf_value if not math.isnan(inf_value) else 0,
-        "sup_value": sup_value if not math.isnan(sup_value) else 0,
+        "inf_value": inf_value if not math.isnan(inf_value) else mean,
+        "sup_value": sup_value if not math.isnan(sup_value) else mean,
     }
 
 
