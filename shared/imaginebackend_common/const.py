@@ -28,6 +28,7 @@ class TRAINING_PHASES(Enum):
 
 
 RIESZ_FEATURE_PREFIXES = ["tex"]
+ZRAD_FEATURE_PREFIXES = ["zrad"]
 PYRADIOMICS_FEATURE_PREFIXES = [
     "original",
     "log",
@@ -40,7 +41,12 @@ PYRADIOMICS_FEATURE_PREFIXES = [
 ]
 PET_SPECIFIC_PREFIXES = ["PET"]
 
-prefixes = RIESZ_FEATURE_PREFIXES + PYRADIOMICS_FEATURE_PREFIXES + PET_SPECIFIC_PREFIXES
+prefixes = (
+    RIESZ_FEATURE_PREFIXES
+    + ZRAD_FEATURE_PREFIXES
+    + PYRADIOMICS_FEATURE_PREFIXES
+    + PET_SPECIFIC_PREFIXES
+)
 featureIDMatcher = re.compile(
     rf"(?P<modality>.*?)-(?P<roi>.*?)-(?P<feature>(?:{'|'.join(prefixes)}).*)"
 )
