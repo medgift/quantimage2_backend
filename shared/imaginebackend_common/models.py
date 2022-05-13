@@ -1029,7 +1029,7 @@ class Model(BaseModel, db.Model):
 
 # Data Label Category
 class LabelCategory(BaseModel, db.Model):
-    def __init__(self, album_id, label_type, name, user_id, pos_label=1):
+    def __init__(self, album_id, label_type, name, user_id, pos_label=None):
         self.album_id = album_id
         self.label_type = label_type
         self.name = name

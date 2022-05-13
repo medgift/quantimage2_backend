@@ -18,7 +18,9 @@ def labels(label_category_id):
 
     if request.method == "POST":
         return save_labels(
-            label_category_id, request.json["label_map"], request.json["pos_label"]
+            label_category_id,
+            request.json["label_map"],
+            request.json["pos_label"] if "pos_label" in request.json else None,
         )
 
     if request.method == "PATCH":
