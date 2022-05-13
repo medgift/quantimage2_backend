@@ -1029,11 +1029,12 @@ class Model(BaseModel, db.Model):
 
 # Data Label Category
 class LabelCategory(BaseModel, db.Model):
-    def __init__(self, album_id, label_type, name, user_id):
+    def __init__(self, album_id, label_type, name, user_id, pos_label=1):
         self.album_id = album_id
         self.label_type = label_type
         self.name = name
         self.user_id = user_id
+        self.pos_label = pos_label
 
     # Album ID
     album_id = db.Column(db.String(255), nullable=False, unique=False)
@@ -1043,6 +1044,9 @@ class LabelCategory(BaseModel, db.Model):
 
     # Label Category nam (PLC Status, ...)
     name = db.Column(db.String(255), nullable=False, unique=False)
+
+    # The positive label for classification (in case we use textual labels)
+    pos_label = db.Column(db.String(255), nullable=True)
 
     # User who created the label category
     user_id = db.Column(db.String(255), nullable=False, unique=False)
@@ -1069,6 +1073,7 @@ class LabelCategory(BaseModel, db.Model):
             "label_type": self.label_type,
             "name": self.name,
             "labels": list(map(lambda label: label.to_dict(), self.labels)),
+            "pos_label": self.pos_label,
         }
 
 

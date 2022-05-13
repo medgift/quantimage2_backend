@@ -17,7 +17,9 @@ def before_request():
 def labels(label_category_id):
 
     if request.method == "POST":
-        return save_labels(label_category_id, request.json)
+        return save_labels(
+            label_category_id, request.json["label_map"], request.json["pos_label"]
+        )
 
     if request.method == "PATCH":
         return edit_label_category(label_category_id, request.json["name"])
@@ -66,11 +68,17 @@ def delete_label_category(label_category_id):
     return jsonify(category.to_dict())
 
 
-def save_labels(label_category_id, labels_dict):
+def save_labels(label_category_id, labels_dict, pos_label):
     labels_to_save = []
     for patient_id, label_content in labels_dict.items():
         labels_to_save.append(Label(label_category_id, patient_id, label_content))
 
     labels = Label.save_labels(label_category_id, labels_to_save)
+
+    # Define the positive label if defined
+    category = LabelCategory.find_by_id(label_category_id)
+    if pos_label:
+        category.pos_label = pos_label
+    category.save_to_db()
 
     return jsonify([l.to_dict() for l in labels])

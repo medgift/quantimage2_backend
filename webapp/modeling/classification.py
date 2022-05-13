@@ -3,10 +3,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import make_scorer, recall_score
 from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import label_binarize
 from sklearn.svm import SVC
 
 from modeling.modeling import Modeling
+from service.feature_transformation import OUTCOME_FIELD_CLASSIFICATION
 
 CLASSIFICATION_METHODS = [
     "logistic_regression_lbfgs",
@@ -45,6 +46,24 @@ class Classification(Modeling):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # Check if a positive label is defined for the current label category
+        if self.label_category.pos_label:
+            available_classes = list(
+                set(
+                    [
+                        l.label_content[OUTCOME_FIELD_CLASSIFICATION]
+                        for l in self.label_category.labels
+                    ]
+                )
+            )
+            sorted_classes = sorted(
+                available_classes,
+                key=lambda i: 1 if i == self.label_category.pos_label else 0,
+            )
+            self.classes = sorted_classes
+        else:
+            self.classes = None
+
     def classify(self):
         return self.create_model()
 
@@ -68,12 +87,17 @@ class Classification(Modeling):
         return options
 
     def encode_labels(self, labels):
-        encoder = LabelEncoder()
 
-        fitted_encoder = encoder.fit(labels)
-        labels_encoded = encoder.transform(labels)
+        # Classes must be sorted so that the negative class is first & the positive class is second
+        if self.classes is not None:
+            labels_binarized = label_binarize(labels, classes=self.classes)
+            labels_encoded = [l[0] for l in labels_binarized]
+        else:
+            labels_encoded = [
+                int(l) for l in labels[OUTCOME_FIELD_CLASSIFICATION].values
+            ]
 
-        return labels_encoded, fitted_encoder
+        return labels_encoded
 
     def get_cv(self, n_splits=10, n_repeats=1):
         return RepeatedStratifiedKFold(

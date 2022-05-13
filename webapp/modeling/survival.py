@@ -47,10 +47,7 @@ class Survival(Modeling):
             OUTCOME_FIELD_SURVIVAL_EVENT, OUTCOME_FIELD_SURVIVAL_TIME, labels
         )
 
-        return (
-            encoded_labels,
-            None,
-        )  # Return None for the "fitted encoder", as we don't use this mechanism here
+        return encoded_labels
 
     def get_cv(self, n_splits=10, n_repeats=1):
         return SurvivalRepeatedStratifiedKFold(

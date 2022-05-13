@@ -116,15 +116,11 @@ class Modeling:
         # Encode Labels (if applicable)
         # TODO - Check if there is a better method to see if this was implemented by the subclass
         if hasattr(self, "encode_labels"):
-            y_train_encoded, fitted_encoder = self.encode_labels(self.y_train)
+            y_train_encoded = self.encode_labels(self.y_train)
             y_test_encoded = []
 
             if self.is_train_test():
-                # TODO - Find a better way to handle both ScikitLearn encoders & other encoding functions
-                if fitted_encoder is not None:
-                    y_test_encoded = fitted_encoder.transform(self.y_test)
-                else:
-                    y_test_encoded, _ = self.encode_labels(self.y_test)
+                y_test_encoded = self.encode_labels(self.y_test)
         else:
             y_train_encoded, y_test_encoded = self.y_train, self.y_test
 
@@ -171,7 +167,7 @@ class Modeling:
         return n_steps
 
     @abc.abstractmethod
-    def encode_labels(self, labels):
+    def encode_labels(self, labels, classes=None):
         """Function to encode labels"""
 
     @abc.abstractmethod
