@@ -109,7 +109,7 @@ class Classification(Modeling):
             "auc": "roc_auc",
             "accuracy": "accuracy",
             "precision": "precision",
-            "recall": "recall",
+            "sensitivity": "recall",
             "specificity": make_scorer(recall_score, pos_label=0),
         }
 
