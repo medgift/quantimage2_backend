@@ -11,6 +11,7 @@ from imaginebackend_common.kheops_utils import get_user_token
 from imaginebackend_common.utils import (
     fetch_extraction_result,
     format_extraction,
+    read_config_file,
 )
 from service.feature_extraction import (
     run_feature_extraction,
@@ -161,6 +162,22 @@ def get_features_cache_or_db(extraction, collection_id, studies):
         print("Serializing features to HDF5 took", elapsed)
 
     return header, features_df
+
+
+@bp.route("/extractions/<id>/download-configuration")
+def download_extraction_configuration(id):
+    feature_extraction = FeatureExtraction.find_by_id(id)
+
+    config_file = read_config_file(feature_extraction.config_file)
+
+    return Response(
+        config_file,
+        mimetype="text/yaml",
+        headers={
+            "Content-disposition": f"attachment; filename={os.path.basename(feature_extraction.config_file)}",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
 
 
 # Download features in CSV format
