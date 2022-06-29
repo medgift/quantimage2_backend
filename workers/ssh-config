@@ -1,9 +1,9 @@
 Host github.com-okapy
         StrictHostKeyChecking no
         Hostname github.com
-        IdentityFile=~/.ssh/id_rsa_okapy
+        IdentityFile AAAAB3NzaC1yc2EAAAADAQABAAABgQCoCK0nkd2LlgYZ1cWAy98nEfkfYb9umYH5wwarNWXMc2OaVM9CTWnWrnT2aRDGHFhiH7PZN0JpvtdYsgmNTNFOqOvWqciq3Xfv1V4LVxmJWfr/AF1JOzHKYYPLB+pbHgXPsBOAFz/8NFRPLxyI/tkJXZAgGrbC1TuLcHe0HfIuU6bDqavW3wWCEv0rBIKg1bMK/CWRp6OQR+AIFuH9y9KtMV9VdyWX97SKW4QoyW+5+QoxlmSGng4Xs/wp/57TbmahyKxHpl2rXlx77C6lh9Vug/iFFjWcK7jMP4hxPNE4NF6fB/egNsQqpy2XUAQ2ivnS/SvUul5F+xR4IyaAcN0qoQNNB/4K5xI5WXEVk76YaPW4qGoUqyHr3DikXJBZuGbXfvm1j23ivpcvXthAnC1xLHurrbYUY/iW1fhiiQwjX5EB6PwpkdEraa/OXYwCpsCwh5LaSmieDD/5NLo3MH9Dcd/enxIf3/gKHQ5n6QjmzzfTCA6ZG4d2Up1/7l6DK8s=
 
 Host github.com-zrad
         StrictHostKeyChecking no
         Hostname github.com
-        IdentityFile=~/.ssh/id_rsa_zrad
+        IdentityFile AAAAB3NzaC1yc2EAAAADAQABAAABgQDM6COlgufBswctuxmWzES4/0OfYaQGZvEoGkgS4m/WX65so2rg2EZnaFvkQbxcgdwoMKC7JQFrhtmqp40ORZ1LJYikQnMbCkjFC6Q63Db1/8gHNr67bg/2QoR53G3VVOFhew4UyQ85A5wL5CaDKMLqTpIbelQa5o1fjC7/kQlF26gCs3s/rQ8bvnZsoDjk4T1EKx32JRtfXH1u7QYzBc5wXbPpVefl4MB+IQLbYIDi883sl1ISnRarbMWG8UJxm1gACvUWQWd1B4mpc74Hz9L1lXK+wikVl5rWXroZRB+V9G9UQrL8X6nBL5N6MnrAWdNCW3qHc5SGKgdbqvKMhFA9348L3fAMBqLf2gNTF/FoVIYyO/rpoR36O0mvbn9azSzhgZKeUi807Chxds/qpvh8kAaLJI7tTCAp2HoMWmi7qq0PoQ8P9pN7SF7j8dhmJYdz5mJ0PTic+tIN3dS0eHpmjmXN+PX0If7iMsg27BimKLpFoe2tFhqomgXSln0NJjE=
