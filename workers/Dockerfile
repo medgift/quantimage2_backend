@@ -13,8 +13,6 @@ RUN /mcr_setup/MATLAB_Runtime_R2019b_Update_1_glnxa64/install -inputFile /instal
 FROM python:3.8
 MAINTAINER Roger Schaer
 
-ARG GIT_ACCESS_TOKEN
-
 # Copy the MCR
 COPY --from=build-env /mcr /mcr
 
@@ -36,13 +34,22 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install okapy dependencies (temporary)
 RUN pip install --no-cache-dir -r requirements-okapy.txt
 
+# Copy required SSH config
+ADD ./workers/ssh-config /root/.ssh/config
+RUN chmod 0600 /root/.ssh/config
+
+# Bust cache to ensure installation of latest versions of Okapy & ZRad
+ADD http://worldtimeapi.org/api/timezone/Europe/Zurich cache-bust.json
+
 # Install okapy manually (temporary)
-#RUN pip install --index-url https://test.pypi.org/simple/ --no-deps okapy==0.2.0
-ADD https://$GIT_ACCESS_TOKEN:x-oauth-basic@api.github.com/repos/voreille/okapy/git/refs/heads/quantimage2 version-okapy.json
-RUN pip install git+https://${GIT_ACCESS_TOKEN}@github.com/voreille/okapy.git@quantimage2
+# Requires BuildKit to be enabled with the environment variable DOCKER_BUILDKIT=1
+# Requires ~/.ssh to contain a id_rsa_okapy deploy key that can read the repo
+RUN --mount=type=ssh pip install git+ssh://git@github.com-okapy/voreille/okapy.git@quantimage2
 
 # Install ZRad manually (temporary)
-RUN pip install git+https://${GIT_ACCESS_TOKEN}@github.com/danielabler/zrad_QUANTIMAGE.git
+# Requires BuildKit to be enabled with the environment variable DOCKER_BUILDKIT=1
+# Requires ~/.ssh to contain a id_rsa_zrad deploy key that can read the repo
+RUN --mount=type=ssh pip install git+ssh://git@github.com-zrad/danielabler/zrad_QUANTIMAGE.git
 
 ENV MCR_HOME /mcr/v97
 ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6:/usr/lib/x86_64-linux-gnu/libexpat.so

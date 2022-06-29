@@ -10,9 +10,10 @@ COPY requirements*.txt ./
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install melampus manually (temporary)
-#RUN pip install --index-url https://test.pypi.org/simple/ --no-deps quantimage-melampus==0.0.7
+# Bust cache if version of melampus has changed
 ADD https://api.github.com/repos/medgift/quantimage-melampus/git/refs/heads/dev-da version-melampus.json
+
+# Install melampus manually (temporary)
 RUN pip install git+https://github.com/medgift/quantimage-melampus.git@dev-da
 
 # Copy source code

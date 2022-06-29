@@ -1,0 +1,9 @@
+Host github.com-okapy
+        StrictHostKeyChecking no
+        Hostname github.com
+        IdentityFile=~/.ssh/id_rsa_okapy
+
+Host github.com-zrad
+        StrictHostKeyChecking no
+        Hostname github.com
+        IdentityFile=~/.ssh/id_rsa_zrad
