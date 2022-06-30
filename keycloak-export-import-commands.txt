@@ -9,10 +9,4 @@ docker compose exec -it keycloak /opt/jboss/keycloak/bin/standalone.sh \
             -Dkeycloak.profile=preview
 
 # Import Realm
-docker compose exec -it keycloak /opt/jboss/keycloak/bin/standalone.sh \
-            -Djboss.socket.binding.port-offset=500 \
-            -Dkeycloak.migration.action=import \
-            -Dkeycloak.migration.provider=singleFile \
-            -Dkeycloak.migration.realmName=Example-Realm \
-            -Dkeycloak.migration.file=/tmp/imagine-realm.json
-            -Dkeycloak.profile=preview
+Import through the Web Interface
