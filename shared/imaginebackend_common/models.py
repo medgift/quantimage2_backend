@@ -759,10 +759,23 @@ class FeatureValue(BaseModel, db.Model):
 
 # Customized Feature Collection (filtered rows & columns so far)
 class FeatureCollection(BaseModel, db.Model):
-    def __init__(self, name, feature_extraction_id, feature_ids):
+    def __init__(
+        self,
+        name,
+        feature_extraction_id,
+        feature_ids,
+        data_splitting_type,
+        train_test_split_type,
+        training_patients,
+        test_patients,
+    ):
         self.name = name
         self.feature_extraction_id = feature_extraction_id
         self.feature_ids = feature_ids
+        self.data_splitting_type = data_splitting_type
+        self.train_test_split_type = train_test_split_type
+        self.training_patients = training_patients
+        self.test_patients = test_patients
 
     @classmethod
     def find_by_extraction(cls, extraction_id):

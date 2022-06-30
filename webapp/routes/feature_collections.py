@@ -25,18 +25,6 @@ def before_request():
     validate_decorate(request)
 
 
-@bp.route("/feature-collections", methods=("GET", "POST"))
-def feature_collections():
-    if request.method == "POST":
-        collection = save_feature_collection(
-            request.json["featureExtractionID"],
-            request.json["name"],
-            request.json["featureIDs"],
-        )
-
-        return jsonify(collection.format_collection(with_values=True))
-
-
 @bp.route("/feature-collections/new", methods=["POST"])
 def feature_collections_new():
     if request.method == "POST":
@@ -44,6 +32,10 @@ def feature_collections_new():
             request.json["featureExtractionID"],
             request.json["name"],
             request.json["featureIDs"],
+            request.json["dataSplittingType"],
+            request.json["trainTestSplitType"],
+            request.json["trainingPatients"],
+            request.json["testPatients"],
         )
 
         return jsonify(collection.format_collection(with_values=True))
@@ -120,22 +112,33 @@ def download_collection_by_id(feature_collection_id):
     )
 
 
-def save_feature_collection_new(feature_extraction_id, name, feature_ids):
-    token = g.token
-
-    # Get all necessary elements from the DB
-    extraction = FeatureExtraction.find_by_id(feature_extraction_id)
-
+def save_feature_collection_new(
+    feature_extraction_id,
+    name,
+    feature_ids,
+    data_splitting_type,
+    train_test_split_type,
+    training_patients,
+    test_patients,
+):
     collection, created = FeatureCollection.get_or_create(
         criteria={
             "name": name,
             "feature_extraction_id": feature_extraction_id,
             "feature_ids": feature_ids,
+            "data_splitting_type": data_splitting_type,
+            "train_test_split_type": train_test_split_type,
+            "training_patients": training_patients,
+            "test_patients": test_patients,
         },
         defaults={
             "name": name,
             "feature_extraction_id": feature_extraction_id,
             "feature_ids": feature_ids,
+            "data_splitting_type": data_splitting_type,
+            "train_test_split_type": train_test_split_type,
+            "training_patients": training_patients,
+            "test_patients": test_patients,
         },
     )
 
@@ -143,12 +146,6 @@ def save_feature_collection_new(feature_extraction_id, name, feature_ids):
 
 
 def save_feature_collection(feature_extraction_id, name, feature_ids):
-    token = g.token
-
-    # Get all necessary elements from the DB
-    extraction = FeatureExtraction.find_by_id(feature_extraction_id)
-    studies = get_studies_from_album(extraction.album_id, token)
-
     # Find all FeatureValues corresponding to the supplied criteria
     collection, created = FeatureCollection.get_or_create(
         criteria={"name": name, "feature_extraction_id": feature_extraction_id},
