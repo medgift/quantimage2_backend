@@ -34,22 +34,23 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install okapy dependencies (temporary)
 RUN pip install --no-cache-dir -r requirements-okapy.txt
 
-# Copy required SSH config
-ADD ./workers/ssh-config /root/.ssh/config
-RUN chmod 0600 /root/.ssh/config
-
 # Bust cache to ensure installation of latest versions of Okapy & ZRad
 ADD http://worldtimeapi.org/api/timezone/Europe/Zurich cache-bust.json
 
+# Add GitHub public key as a known host
+RUN mkdir -p -m 0600 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
+
 # Install okapy manually (temporary)
 # Requires BuildKit to be enabled with the environment variable DOCKER_BUILDKIT=1
-# Requires ~/.ssh to contain a id_rsa_okapy deploy key that can read the repo
-RUN --mount=type=ssh pip install git+ssh://git@github.com-okapy/voreille/okapy.git@quantimage2
+# Requires ~/.ssh (on the host) to contain a id_rsa_okapy deploy key that can read the repo
+# Requires docker-compose.yml to contain an SSH mapping okapy=$HOME/.ssh/id_rsa_okapy
+RUN --mount=type=ssh,id=okapy pip install git+ssh://git@github.com/voreille/okapy.git@quantimage2
 
 # Install ZRad manually (temporary)
 # Requires BuildKit to be enabled with the environment variable DOCKER_BUILDKIT=1
-# Requires ~/.ssh to contain a id_rsa_zrad deploy key that can read the repo
-RUN --mount=type=ssh pip install git+ssh://git@github.com-zrad/danielabler/zrad_QUANTIMAGE.git
+# Requires ~/.ssh (on the host) to contain a id_rsa_zrad deploy key that can read the repo
+# Requires docker-compose.yml to contain an SSH mapping zrad=$HOME/.ssh/id_rsa_zrad
+RUN --mount=type=ssh,id=zrad pip install git+ssh://git@github.com/danielabler/zrad_QUANTIMAGE.git
 
 ENV MCR_HOME /mcr/v97
 ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6:/usr/lib/x86_64-linux-gnu/libexpat.so
