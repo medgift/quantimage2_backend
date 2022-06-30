@@ -1,0 +1,18 @@
+# Export Realm
+docker compose exec -it keycloak /opt/jboss/keycloak/bin/standalone.sh \
+            -Djboss.socket.binding.port-offset=500 \
+            -Dkeycloak.migration.action=export \
+            -Dkeycloak.migration.provider=singleFile \
+            -Dkeycloak.migration.realmName=IMAGINE \
+            -Dkeycloak.migration.usersExportStrategy=REALM_FILE \
+            -Dkeycloak.migration.file=/tmp/export/imagine-realm.json
+            -Dkeycloak.profile=preview
+
+# Import Realm
+docker compose exec -it keycloak /opt/jboss/keycloak/bin/standalone.sh \
+            -Djboss.socket.binding.port-offset=500 \
+            -Dkeycloak.migration.action=import \
+            -Dkeycloak.migration.provider=singleFile \
+            -Dkeycloak.migration.realmName=Example-Realm \
+            -Dkeycloak.migration.file=/tmp/imagine-realm.json
+            -Dkeycloak.profile=preview
