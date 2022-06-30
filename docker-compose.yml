@@ -90,7 +90,7 @@ services:
     image: redis
 
   keycloak:
-    image: jboss/keycloak
+    image: jboss/keycloak:16.1.1
     environment:
       - KEYCLOAK_REALM_NAME=${KEYCLOAK_REALM_NAME}
       - KEYCLOAK_USER=${KEYCLOAK_USER}
