@@ -39,14 +39,8 @@ PYRADIOMICS_FEATURE_PREFIXES = [
     "exponential",
     "logarithm",
 ]
-PET_SPECIFIC_PREFIXES = ["PET"]
 
-prefixes = (
-    RIESZ_FEATURE_PREFIXES
-    + ZRAD_FEATURE_PREFIXES
-    + PYRADIOMICS_FEATURE_PREFIXES
-    + PET_SPECIFIC_PREFIXES
-)
+prefixes = RIESZ_FEATURE_PREFIXES + ZRAD_FEATURE_PREFIXES + PYRADIOMICS_FEATURE_PREFIXES
 featureIDMatcher = re.compile(
     rf"(?P<modality>.*?)-(?P<roi>.*?)-(?P<feature>(?:{'|'.join(prefixes)}).*)"
 )
