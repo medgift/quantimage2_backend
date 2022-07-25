@@ -1034,6 +1034,7 @@ class Model(BaseModel, db.Model):
             "test_metrics": self.test_metrics,
             "user_id": self.user_id,
             "album_id": self.album_id,
+            "feature_extraction_id": self.feature_extraction_id,
             "feature_collection_id": self.feature_collection_id,
             "type": self.label_category.label_type,
             "label_category": self.label_category.name,
