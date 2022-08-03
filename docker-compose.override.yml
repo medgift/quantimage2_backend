@@ -18,13 +18,10 @@ services:
       - KHEOPS_ANNOTATOR_USER_ID=${KHEOPS_ANNOTATOR_USER_ID}
       - KHEOPS_OUTCOME_USER_ID=${KHEOPS_OUTCOME_USER_ID}
     extra_hosts:
-      - "roger:192.168.1.35" # Home
-      #- "roger:153.109.130.73" # HES-SO
+      - host.docker.internal:host-gateway
+      - keycloak:host-gateway
 
   celery:
-    extra_hosts:
-      - "roger:192.168.1.35" # Home
-      #- "roger:153.109.130.73" # HES-SO
     volumes:
       - ./workers:/usr/src/app
       - ./venv/src/okapy:/usr/local/lib/python3.8/site-packages/okapy
@@ -35,6 +32,9 @@ services:
       - DEBUGGER_IP=${DEBUGGER_IP}
       - DEBUGGER_PORT_CELERY=${DEBUGGER_PORT_CELERY}
       - PYTHON_ENV=nodebug
+    extra_hosts:
+      - host.docker.internal:host-gateway
+      - keycloak:host-gateway
     #ports:
       #- 34000-34100:34000-34100
     command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo"]
