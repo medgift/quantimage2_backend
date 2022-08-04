@@ -281,12 +281,13 @@ def train_model(
             "complete": True,
             "model": format_model(db_model),
         }
+    except Exception as e:
+        socketio_body = {"training-id": training_id, "failed": True, "error": str(e)}
+        logging.error(e)
+    finally:
         socketio.emit(
             MessageType.TRAINING_STATUS.value, jsonify(socketio_body).get_json()
         )
-    except Exception as e:
-        logging.error(e)
-    finally:
         db.session.remove()
 
 
