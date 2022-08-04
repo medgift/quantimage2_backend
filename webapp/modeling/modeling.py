@@ -1,10 +1,12 @@
 import abc
 
+import numpy
 from flask import current_app, g
 from sklearn.model_selection import GridSearchCV, ParameterGrid
 from ttictoc import tic, toc
 
 from imaginebackend_common.const import DATA_SPLITTING_TYPES
+from imaginebackend_common.utils import CV_SPLITS
 from modeling.utils import (
     split_dataset,
     preprocess_features,
@@ -124,9 +126,16 @@ class Modeling:
         else:
             y_train_encoded, y_test_encoded = self.y_train, self.y_test
 
+        # Determine maximum number of splits based on available data
+        unique, counts = numpy.unique(y_train_encoded, return_counts=True)
+        min_elements_per_class = min(counts)
+        n_splits = (
+            CV_SPLITS if min_elements_per_class > CV_SPLITS else min_elements_per_class
+        )
+
         pipeline = self.get_pipeline()
         parameter_grid = self.get_parameter_grid()
-        cv = self.get_cv()
+        cv = self.get_cv(n_splits=n_splits)
         scoring = self.get_scoring()
 
         current_app.my_celery.send_task(

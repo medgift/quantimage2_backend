@@ -22,6 +22,9 @@ from imaginebackend_common.models import FeatureExtraction
 # Constants
 DATE_FORMAT = "%d.%m.%Y %H:%M"
 
+CV_SPLITS = 10
+CV_REPEATS = 1
+
 # Celery instance
 celery = Celery(
     "tasks",

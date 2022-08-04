@@ -6,6 +6,7 @@ from imaginebackend_common.modeling_utils import (
     c_index_score,
     SurvivalRepeatedStratifiedKFold,
 )
+from imaginebackend_common.utils import CV_SPLITS, CV_REPEATS
 from modeling.modeling import Modeling
 
 from sksurv.util import Surv
@@ -49,7 +50,7 @@ class Survival(Modeling):
 
         return encoded_labels
 
-    def get_cv(self, n_splits=10, n_repeats=1):
+    def get_cv(self, n_splits=CV_SPLITS, n_repeats=CV_REPEATS):
         return SurvivalRepeatedStratifiedKFold(
             random_state=self.random_seed, n_splits=n_splits, n_repeats=n_repeats
         )

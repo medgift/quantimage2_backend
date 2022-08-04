@@ -6,6 +6,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import label_binarize
 from sklearn.svm import SVC
 
+from imaginebackend_common.utils import CV_SPLITS, CV_REPEATS
 from modeling.modeling import Modeling
 from service.feature_transformation import OUTCOME_FIELD_CLASSIFICATION
 
@@ -99,7 +100,7 @@ class Classification(Modeling):
 
         return labels_encoded
 
-    def get_cv(self, n_splits=10, n_repeats=1):
+    def get_cv(self, n_splits=CV_SPLITS, n_repeats=CV_REPEATS):
         return RepeatedStratifiedKFold(
             random_state=self.random_seed, n_splits=n_splits, n_repeats=n_repeats
         )
