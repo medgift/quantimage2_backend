@@ -25,7 +25,7 @@ services:
       - backend-data:/imagine-data
       - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
 
-  celery:
+  celery_extraction:
     build:
       context: .
       dockerfile: ./workers/Dockerfile
@@ -39,7 +39,7 @@ services:
       - MYSQL_DATABASE=${MYSQL_DATABASE}
       - CELERY_BROKER_URL=${CELERY_REDIS_URL}
       - CELERY_RESULT_BACKEND=${CELERY_REDIS_URL}
-      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY}
+      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY_EXTRACTION}
       - CELERY_CONFIG_MODULE=celeryconfig
       - SOCKET_MESSAGE_QUEUE=${SOCKET_REDIS_URL}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
@@ -54,6 +54,39 @@ services:
     volumes:
       - backend-data:/imagine-data
       - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
+    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=prefork", "--hostname=extraction@%h", "--queues=extraction"]
+
+  celery_training:
+    build:
+      context: .
+      dockerfile: ./workers/Dockerfile
+      # SSH mappings to allow cloning private Okapy & ZRad repos
+      ssh:
+        - okapy=$HOME/.ssh/id_rsa_okapy
+        - zrad=$HOME/.ssh/id_rsa_zrad
+    environment:
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - CELERY_BROKER_URL=${CELERY_REDIS_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_REDIS_URL}
+      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY_TRAINING}
+      - CELERY_CONFIG_MODULE=celeryconfig
+      - SOCKET_MESSAGE_QUEUE=${SOCKET_REDIS_URL}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - KHEOPS_BASE_URL=${KHEOPS_BASE_URL}
+      - KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL}
+      - KEYCLOAK_REALM_NAME=${KEYCLOAK_REALM_NAME}
+      - KEYCLOAK_IMAGINE_CLIENT_ID=${KEYCLOAK_IMAGINE_CLIENT_ID}
+      - KEYCLOAK_IMAGINE_CLIENT_SECRET=${KEYCLOAK_IMAGINE_CLIENT_SECRET}
+      - PYTHONUNBUFFERED=TRUE
+      - PYTHON_ENV=production
+      - C_FORCE_ROOT=true
+    volumes:
+      - backend-data:/imagine-data
+      - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
+    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=prefork", "--hostname=training@%h", "--queues=training"]
+
 
   flower:
     build: ./flower

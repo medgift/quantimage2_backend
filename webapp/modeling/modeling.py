@@ -5,7 +5,7 @@ from flask import current_app, g
 from sklearn.model_selection import GridSearchCV, ParameterGrid
 from ttictoc import tic, toc
 
-from imaginebackend_common.const import DATA_SPLITTING_TYPES
+from imaginebackend_common.const import DATA_SPLITTING_TYPES, QUEUE_TRAINING
 from imaginebackend_common.utils import CV_SPLITS
 from modeling.utils import (
     split_dataset,
@@ -168,6 +168,7 @@ class Modeling:
                 "user_id": g.user,
             },
             serializer="pickle",
+            queue=QUEUE_TRAINING,
         )
 
         pg = ParameterGrid(parameter_grid)

@@ -21,23 +21,33 @@ services:
       - host.docker.internal:host-gateway
       - keycloak:host-gateway
 
-  celery:
+  celery_extraction:
     volumes:
       - ./workers:/usr/src/app
       - ./venv/src/okapy:/usr/local/lib/python3.8/site-packages/okapy
       - /data/imagine-data:/imagine-data
     environment:
-      #- CELERY_RDB_HOST=0.0.0.0
-      #- CELERY_RDB_PORT=34000
       - DEBUGGER_IP=${DEBUGGER_IP}
-      - DEBUGGER_PORT_CELERY=${DEBUGGER_PORT_CELERY}
+      - DEBUGGER_PORT_CELERY=${DEBUGGER_PORT_CELERY_EXTRACTION}
       - PYTHON_ENV=nodebug
     extra_hosts:
       - host.docker.internal:host-gateway
       - keycloak:host-gateway
-    #ports:
-      #- 34000-34100:34000-34100
-    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo"]
+    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=extraction@%h", "--queues=extraction"]
+
+  celery_training:
+    volumes:
+      - ./workers:/usr/src/app
+      - ./venv/src/okapy:/usr/local/lib/python3.8/site-packages/okapy
+      - /data/imagine-data:/imagine-data
+    environment:
+      - DEBUGGER_IP=${DEBUGGER_IP}
+      - DEBUGGER_PORT_CELERY=${DEBUGGER_PORT_CELERY_TRAINING}
+      - PYTHON_ENV=nodebug
+    extra_hosts:
+      - host.docker.internal:host-gateway
+      - keycloak:host-gateway
+    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=training@%h", "--queues=training"]
 
   flower:
     ports:

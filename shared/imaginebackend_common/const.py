@@ -46,3 +46,6 @@ featureIDMatcher = re.compile(
 )
 
 FAKE_SCORER_KEY = "fake"
+
+QUEUE_EXTRACTION = "extraction"
+QUEUE_TRAINING = "training"

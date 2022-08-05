@@ -8,6 +8,7 @@ from celery import chord
 from flask import current_app
 
 from config import EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR
+from imaginebackend_common.const import QUEUE_EXTRACTION
 
 from imaginebackend_common.kheops_utils import endpoints, get_token_header, dicomFields
 from imaginebackend_common.utils import (
@@ -90,7 +91,9 @@ def run_feature_extraction(
             link=current_app.my_celery.signature(
                 "imaginetasks.finalize_extraction_task",
                 args=[feature_extraction.id, feature_extraction_task.id],
+                queue=QUEUE_EXTRACTION,
             ),
+            queue=QUEUE_EXTRACTION,
         )
 
         task_signatures.append(task_signature)
@@ -102,6 +105,7 @@ def run_feature_extraction(
     finalize_signature = current_app.my_celery.signature(
         "imaginetasks.finalize_extraction",
         args=[feature_extraction.id],
+        queue=QUEUE_EXTRACTION,
     )
 
     tic()
