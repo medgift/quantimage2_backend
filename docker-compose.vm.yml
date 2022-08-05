@@ -9,7 +9,13 @@ services:
       - host.docker.internal:host-gateway
       - keycloak:host-gateway
 
-  celery:
+  celery_extraction:
+    restart: unless-stopped
+    extra_hosts:
+      - host.docker.internal:host-gateway
+      - keycloak:host-gateway
+
+  celery_training:
     restart: unless-stopped
     extra_hosts:
       - host.docker.internal:host-gateway
