@@ -33,6 +33,7 @@ services:
       ssh:
         - okapy=$HOME/.ssh/id_rsa_okapy
         - zrad=$HOME/.ssh/id_rsa_zrad
+    image: imagine_backend_celery
     environment:
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
@@ -57,13 +58,7 @@ services:
     command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=prefork", "--hostname=extraction@%h", "--queues=extraction"]
 
   celery_training:
-    build:
-      context: .
-      dockerfile: ./workers/Dockerfile
-      # SSH mappings to allow cloning private Okapy & ZRad repos
-      ssh:
-        - okapy=$HOME/.ssh/id_rsa_okapy
-        - zrad=$HOME/.ssh/id_rsa_zrad
+    image: imagine_backend_celery
     environment:
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
