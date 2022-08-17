@@ -5,7 +5,11 @@ from flask import current_app, g
 from sklearn.model_selection import GridSearchCV, ParameterGrid
 from ttictoc import tic, toc
 
-from imaginebackend_common.const import DATA_SPLITTING_TYPES, QUEUE_TRAINING
+from imaginebackend_common.const import (
+    DATA_SPLITTING_TYPES,
+    QUEUE_TRAINING,
+    MODEL_TYPES,
+)
 from imaginebackend_common.utils import CV_SPLITS
 from modeling.utils import (
     split_dataset,
@@ -127,7 +131,13 @@ class Modeling:
             y_train_encoded, y_test_encoded = self.y_train, self.y_test
 
         # Determine maximum number of splits based on available data
-        unique, counts = numpy.unique(y_train_encoded, return_counts=True)
+        # Use Outcome for classification models & Event for survival models
+        label_values_to_count = (
+            y_train_encoded
+            if self.label_category.label_type == MODEL_TYPES.CLASSIFICATION
+            else [y[0] for y in y_train_encoded]
+        )
+        unique, counts = numpy.unique(label_values_to_count, return_counts=True)
         min_elements_per_class = min(counts)
         n_splits = (
             CV_SPLITS if min_elements_per_class > CV_SPLITS else min_elements_per_class
