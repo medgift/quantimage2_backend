@@ -134,7 +134,7 @@ class Modeling:
         # Use Outcome for classification models & Event for survival models
         label_values_to_count = (
             y_train_encoded
-            if self.label_category.label_type == MODEL_TYPES.CLASSIFICATION
+            if MODEL_TYPES(self.label_category.label_type) == MODEL_TYPES.CLASSIFICATION
             else [y[0] for y in y_train_encoded]
         )
         unique, counts = numpy.unique(label_values_to_count, return_counts=True)
