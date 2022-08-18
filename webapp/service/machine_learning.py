@@ -35,9 +35,13 @@ def get_features_labels(
     label_conditions = None
     for column in outcome_columns:
         if label_conditions is None:
-            label_conditions = labels_df[column] != ""
+            label_conditions = (labels_df[column] != "") & (labels_df[column].notnull())
         else:
-            label_conditions = label_conditions & (labels_df[column] != "")
+            label_conditions = (
+                label_conditions
+                & (labels_df[column] != "")
+                & (labels_df[column].notnull())
+            )
 
     labelled_patients = list(labels_df[label_conditions]["PatientID"])
 
