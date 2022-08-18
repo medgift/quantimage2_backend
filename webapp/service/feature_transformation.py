@@ -1,6 +1,7 @@
 import csv
 import io
 import pandas
+import itertools
 from ttictoc import tic, toc
 
 from imaginebackend_common.kheops_utils import dicomFields
@@ -75,6 +76,28 @@ def transform_feature_values_to_tabular(values, studies):
             MODALITY_FIELD.lower(): MODALITY_FIELD,
             ROI_FIELD.lower(): ROI_FIELD,
         }
+    )
+
+    # Pad dataframe with any patients that are missing (because no values exist for it)
+    existing_patients = renamed_df[PATIENT_ID_FIELD].unique()
+    existing_modalities = renamed_df[MODALITY_FIELD].unique()
+    existing_rois = renamed_df[ROI_FIELD].unique()
+
+    missing_patients = [
+        patient_id
+        for patient_id in study_to_patient_map.values()
+        if patient_id not in existing_patients
+    ]
+
+    missing_row_combinations = list(
+        itertools.product(missing_patients, existing_modalities, existing_rois)
+    )
+
+    renamed_df = renamed_df.append(
+        pandas.DataFrame(
+            missing_row_combinations,
+            columns=[PATIENT_ID_FIELD, MODALITY_FIELD, ROI_FIELD],
+        )
     )
 
     # Sort DataFrame

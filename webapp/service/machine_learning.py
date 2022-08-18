@@ -83,8 +83,8 @@ def concatenate_modalities_rois(features_df):
         without_modality_and_roi_df = without_modality_and_roi_df.add_prefix(
             prefix + "-"
         )
-        # Drop columns with NaNs (should not exist anyway)
-        without_modality_and_roi_df.dropna(axis=1, inplace=True)
+        # Drop columns with only NaNs
+        without_modality_and_roi_df.dropna(axis=1, inplace=True, how="all")
         to_concat.append(without_modality_and_roi_df)
 
     # Add back the Patient ID at the end
