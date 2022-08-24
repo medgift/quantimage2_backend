@@ -92,3 +92,9 @@ docs/build
 # Node.js
 package-lock.json
 node_modules
+
+# VS Code
+.vscode
+
+# DB Migrations
+webapp/alembic/versions/*
