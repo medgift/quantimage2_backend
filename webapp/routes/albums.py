@@ -162,14 +162,24 @@ def get_roi_names(instance):
 
     roi_names = set()
 
-    modality = instance[dicomFields.MODALITY][dicomFields.VALUE][0]
-    if modality == "RTSTRUCT":
-        for roi in instance[dicomFields.STRUCTURE_SET_ROI_SEQUENCE][dicomFields.VALUE]:
-            roi_names.add(roi[dicomFields.ROI_NAME][dicomFields.VALUE][0])
-    elif modality == "SEG":
-        for roi in instance[dicomFields.SEGMENT_SEQUENCE][dicomFields.VALUE]:
-            roi_names.add(roi[dicomFields.SEGMENT_DESCRIPTION][dicomFields.VALUE][0])
-    else:
-        raise ValueError("Unsupported ROI modality")
+    try:
+        modality = instance[dicomFields.MODALITY][dicomFields.VALUE][0]
+        if modality == "RTSTRUCT":
+            for roi in instance[dicomFields.STRUCTURE_SET_ROI_SEQUENCE][
+                dicomFields.VALUE
+            ]:
+                roi_names.add(roi[dicomFields.ROI_NAME][dicomFields.VALUE][0])
+        elif modality == "SEG":
+            for roi in instance[dicomFields.SEGMENT_SEQUENCE][dicomFields.VALUE]:
+                roi_names.add(
+                    roi[dicomFields.SEGMENT_DESCRIPTION][dicomFields.VALUE][0]
+                )
+        else:
+            raise ValueError("Unsupported ROI modality")
+    except Exception as e:
+        print(
+            f"Error obtaining ROI names for patient ID {instance[dicomFields.PATIENT_ID][dicomFields.VALUE][0]}"
+        )
+        print(e)
 
     return roi_names
