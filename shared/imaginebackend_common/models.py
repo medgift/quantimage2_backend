@@ -1282,6 +1282,7 @@ class Album(BaseModel, db.Model):
 
     album_id = db.Column(db.String(255), nullable=False, unique=True)
     rois = db.Column(db.JSON, nullable=True, unique=False)
+    studies = db.Column(db.JSON, nullable=True, unique=False)
 
     @classmethod
     def save_rois(cls, album_id, rois):

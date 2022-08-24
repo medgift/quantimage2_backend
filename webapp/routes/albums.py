@@ -49,7 +49,6 @@ def album_rois_force(album_id):
     "/albums/<album_id>/current-outcome/<labelcategory_id>", methods=("GET", "PATCH")
 )
 def album_labelcategory(album_id, labelcategory_id=None):
-
     if request.method == "PATCH":
         return save_current_outcome(album_id, g.user, labelcategory_id)
 
@@ -78,9 +77,25 @@ def save_rois(album_id, rois):
 
 
 def get_rois(album_id, force=False):
+    token = g.token
+
     album = Album.find_by_album_id(album_id)
 
-    if album.rois is None or force == True:
+    studies = get_studies_from_album(album_id, token)
+
+    study_uids = [
+        study[dicomFields.STUDY_UID][dicomFields.VALUE][0] for study in studies
+    ]
+
+    forced = force
+
+    # Check if studies have changed, if yes then force fetching the ROIs again
+    if album.studies is None or sorted(album.studies) != sorted(study_uids):
+        forced = True
+        album.studies = study_uids
+        album.save_to_db()
+
+    if album.rois is None or forced is True:
         rois_map = get_rois_from_kheops(album_id)
         Album.save_rois(album_id, rois_map)
 
@@ -136,7 +151,6 @@ def get_study_rois(study_dict):
     study_rois = set()
 
     for roi_serie in roi_series:
-
         # Get list of instances
         instance = get_instances_from_series(
             study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
@@ -159,7 +173,6 @@ def get_study_rois(study_dict):
 
 
 def get_roi_names(instance):
-
     roi_names = set()
 
     try:
