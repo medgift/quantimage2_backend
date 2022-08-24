@@ -13,6 +13,7 @@
       <excludeFolder url="file://$MODULE_DIR$/venv" />
       <excludeFolder url="file://$MODULE_DIR$/venv/src/melampus" />
       <excludeFolder url="file://$MODULE_DIR$/docs" />
+      <excludeFolder url="file://$MODULE_DIR$/webapp/alembic/versions" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.8 (imagine_backend)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
