@@ -149,16 +149,6 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  keycloak-db-admin:
-    image:                 dpage/pgadmin4
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL}
-      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD}
-    volumes:
-      - /var/lib/pgadmin
-    depends_on:
-      - keycloak-db
-
   ohif:
     image: rogerschaer/ohif:latest
     volumes:
