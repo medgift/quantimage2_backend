@@ -36,13 +36,6 @@ target_metadata = BaseModel.metadata
 # ... etc.
 
 
-def include_object(object, name, type_, reflected, compare_to):
-    if type_ == "foreign_key_constraint":
-        return False
-    else:
-        return True
-
-
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -61,7 +54,6 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        include_object=include_object,
     )
 
     with context.begin_transaction():

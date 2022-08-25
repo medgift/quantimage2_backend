@@ -284,24 +284,46 @@ class FeatureExtraction(BaseModel, db.Model):
 feature_extraction_definition = Table(
     "feature_extraction_definition",
     db.metadata,
-    Column("feature_extraction_id", Integer, ForeignKey("feature_extraction.id")),
-    Column("feature_definition_id", Integer, ForeignKey("feature_definition.id")),
+    Column(
+        "feature_extraction_id",
+        Integer,
+        ForeignKey("feature_extraction.id", ondelete="CASCADE", onupdate="CASCADE"),
+    ),
+    Column(
+        "feature_definition_id",
+        Integer,
+        ForeignKey("feature_definition.id", ondelete="CASCADE", onupdate="CASCADE"),
+    ),
 )
 
 # A link between a modality and a feature extraction
 feature_extraction_modality = Table(
     "feature_extraction_modality",
     db.metadata,
-    Column("feature_extraction_id", Integer, ForeignKey("feature_extraction.id")),
-    Column("modality_id", Integer, ForeignKey("modality.id")),
+    Column(
+        "feature_extraction_id",
+        Integer,
+        ForeignKey("feature_extraction.id", ondelete="CASCADE", onupdate="CASCADE"),
+    ),
+    Column(
+        "modality_id",
+        Integer,
+        ForeignKey("modality.id", ondelete="CASCADE", onupdate="CASCADE"),
+    ),
 )
 
 # A link between a ROI and a feature extraction
 feature_extraction_roi = Table(
     "feature_extraction_roi",
     db.metadata,
-    Column("feature_extraction_id", Integer, ForeignKey("feature_extraction.id")),
-    Column("roi_id", Integer, ForeignKey("roi.id")),
+    Column(
+        "feature_extraction_id",
+        Integer,
+        ForeignKey("feature_extraction.id", ondelete="CASCADE", onupdate="CASCADE"),
+    ),
+    Column(
+        "roi_id", Integer, ForeignKey("roi.id", ondelete="CASCADE", onupdate="CASCADE")
+    ),
 )
 
 
@@ -324,7 +346,10 @@ class FeatureExtractionTask(BaseModel, db.Model):
     task_id = db.Column(db.String(255), nullable=True)
 
     # Associate feature extraction task with a feature extraction
-    feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
+    feature_extraction_id = db.Column(
+        db.Integer,
+        ForeignKey("feature_extraction.id", ondelete="CASCADE", onupdate="CASCADE"),
+    )
     feature_extraction = db.relationship("FeatureExtraction", back_populates="tasks")
 
     # Associate feature extraction task with feature values
@@ -736,15 +761,25 @@ class FeatureValue(BaseModel, db.Model):
     value = db.Column(db.Float)
 
     # Relationships
-    feature_definition_id = db.Column(db.Integer, ForeignKey("feature_definition.id"))
+    feature_definition_id = db.Column(
+        db.Integer,
+        ForeignKey("feature_definition.id", ondelete="CASCADE", onupdate="CASCADE"),
+    )
     feature_definition = db.relationship("FeatureDefinition")
     feature_extraction_task_id = db.Column(
-        db.Integer, ForeignKey("feature_extraction_task.id")
+        db.Integer,
+        ForeignKey(
+            "feature_extraction_task.id", ondelete="CASCADE", onupdate="CASCADE"
+        ),
     )
     feature_extraction_task = db.relationship("FeatureExtractionTask")
-    modality_id = db.Column(db.Integer, ForeignKey("modality.id"))
+    modality_id = db.Column(
+        db.Integer, ForeignKey("modality.id", ondelete="CASCADE", onupdate="CASCADE")
+    )
     modality = db.relationship("Modality")
-    roi_id = db.Column(db.Integer, ForeignKey("roi.id"))
+    roi_id = db.Column(
+        db.Integer, ForeignKey("roi.id", ondelete="CASCADE", onupdate="CASCADE")
+    )
     roi = db.relationship("ROI")
 
     def to_formatted_dict(self, study_uid=None):
@@ -811,7 +846,10 @@ class FeatureCollection(BaseModel, db.Model):
     test_patients = db.Column(db.JSON, nullable=True)
 
     # Association to a FeatureExtraction
-    feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
+    feature_extraction_id = db.Column(
+        db.Integer,
+        ForeignKey("feature_extraction.id", ondelete="CASCADE", onupdate="CASCADE"),
+    )
     feature_extraction = db.relationship(
         "FeatureExtraction", back_populates="collections"
     )
@@ -994,15 +1032,24 @@ class Model(BaseModel, db.Model):
     album_id = db.Column(db.String(255), nullable=False, unique=False)
 
     # Relationship - Label Category
-    label_category_id = db.Column(db.Integer, ForeignKey("label_category.id"))
+    label_category_id = db.Column(
+        db.Integer,
+        ForeignKey("label_category.id", ondelete="CASCADE", onupdate="CASCADE"),
+    )
     label_category = db.relationship("LabelCategory")
 
     # Relationship - Feature Extraction
-    feature_extraction_id = db.Column(db.Integer, ForeignKey("feature_extraction.id"))
+    feature_extraction_id = db.Column(
+        db.Integer,
+        ForeignKey("feature_extraction.id", ondelete="CASCADE", onupdate="CASCADE"),
+    )
     feature_extraction = db.relationship("FeatureExtraction", back_populates="models")
 
     # Relationship - Collection
-    feature_collection_id = db.Column(db.Integer, ForeignKey("feature_collection.id"))
+    feature_collection_id = db.Column(
+        db.Integer,
+        ForeignKey("feature_collection.id", ondelete="CASCADE", onupdate="CASCADE"),
+    )
     feature_collection = db.relationship("FeatureCollection", back_populates="models")
 
     @classmethod
@@ -1101,7 +1148,10 @@ class Label(BaseModel, db.Model):
         self.label_content = label_content
 
     # Label Category
-    label_category_id = db.Column(db.Integer, ForeignKey("label_category.id"))
+    label_category_id = db.Column(
+        db.Integer,
+        ForeignKey("label_category.id", ondelete="CASCADE", onupdate="CASCADE"),
+    )
     label_category = db.relationship("LabelCategory", back_populates="labels")
 
     # Patient ID
@@ -1321,7 +1371,10 @@ class AlbumOutcome(BaseModel, db.Model):
 
     album_id = db.Column(db.String(255), nullable=False, unique=False)
     user_id = db.Column(db.String(255), nullable=True, unique=False)
-    outcome_id = db.Column(db.Integer, ForeignKey("label_category.id"))
+    outcome_id = db.Column(
+        db.Integer,
+        ForeignKey("label_category.id", ondelete="CASCADE", onupdate="CASCADE"),
+    )
     outcome = db.relationship("LabelCategory")
 
     @classmethod
