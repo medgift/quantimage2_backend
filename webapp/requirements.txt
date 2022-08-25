@@ -42,6 +42,9 @@ python-keycloak-client
 # SQLAlchemy
 SQLAlchemy<1.4
 
+# Alembic
+alembic
+
 # MySQL
 mysqlclient
 

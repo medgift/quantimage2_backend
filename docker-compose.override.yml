@@ -17,6 +17,7 @@ services:
       - KHEOPS_ALBUM_TOKEN=${KHEOPS_ALBUM_TOKEN}
       - KHEOPS_ANNOTATOR_USER_ID=${KHEOPS_ANNOTATOR_USER_ID}
       - KHEOPS_OUTCOME_USER_ID=${KHEOPS_OUTCOME_USER_ID}
+      - DB_AUTOMIGRATE=1
     extra_hosts:
       - host.docker.internal:host-gateway
       - keycloak:host-gateway
@@ -33,7 +34,7 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
       - keycloak:host-gateway
-    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=extraction@%h", "--queues=extraction"]
+    #command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=extraction@%h", "--queues=extraction"]
 
   celery_training:
     volumes:
@@ -47,7 +48,7 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
       - keycloak:host-gateway
-    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=training@%h", "--queues=training"]
+    #command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=training@%h", "--queues=training"]
 
   flower:
     ports:

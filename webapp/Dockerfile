@@ -20,4 +20,4 @@ RUN pip install git+https://github.com/medgift/quantimage-melampus.git@dev-da
 COPY . .
 
 # Start app
-CMD ["python", "app.py"]
+CMD ["./entrypoint.sh"]

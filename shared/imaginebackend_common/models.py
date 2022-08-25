@@ -26,7 +26,9 @@ def alchemyencoder(obj):
 
 
 # Base Model with basic methods (find by id, find all, save to DB, etc.)
-class BaseModel(object):
+class BaseModel(db.Model):
+    __abstract__ = True
+
     id = db.Column(db.Integer, primary_key=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
