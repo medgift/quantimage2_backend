@@ -152,7 +152,7 @@ services:
   ohif:
     image: rogerschaer/ohif:latest
     volumes:
-      - ./ohif-config.js:/usr/share/nginx/html/app-config.js
+      - ./ohif/ohif-config.js:/usr/share/nginx/html/app-config.js
 
 volumes:
   backend-data:
