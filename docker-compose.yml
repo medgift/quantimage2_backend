@@ -134,7 +134,6 @@ services:
       - DB_SCHEMA=public
     volumes:
       - ./keycloak_theme:/opt/jboss/keycloak/themes/imagine
-      - ./createRealmsLocal.sh:/createRealmsLocal.sh
       - $KEYCLOAK_EXPORT_FOLDER:/tmp/export
     depends_on:
       - keycloak-db
