@@ -1,2 +1,2 @@
-venv
-workers/external_deps/*
+venv/
+docs/

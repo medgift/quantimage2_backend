@@ -80,9 +80,6 @@ venv
 # Environment
 .env
 
-# Worker external dependencies
-external_deps
-
 # Docs
 docs/build
 
