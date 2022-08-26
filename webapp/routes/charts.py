@@ -38,27 +38,15 @@ def before_request():
 @bp.route("/charts/<album_id>/lasagna", defaults={"collection_id": None})
 @bp.route("/charts/<album_id>/<collection_id>/lasagna")
 def lasagna_chart(album_id, collection_id):
+    token = g.token
+    user_id = g.user
 
-    print("collection_id", collection_id)
+    # Find latest feature extraction for this album
+    latest_extraction_of_album = FeatureExtraction.find_latest_by_user_and_album_id(
+        user_id, album_id
+    )
 
-    # TODO - Remove this hard-coded test route that's used by Julien
-    if album_id.isnumeric():
-        # To simplify the access, use album token (for fixed album so far)
-        token = os.environ["KHEOPS_ALBUM_TOKEN"]
-        # User is taken from the environment too
-        user_id = os.environ["KHEOPS_OUTCOME_USER_ID"]
-        # Album ID is actually an extraction ID in this setting
-        extraction_id = int(album_id)
-    else:
-        token = g.token
-        user_id = g.user
-
-        # Find latest feature extraction for this album
-        latest_extraction_of_album = FeatureExtraction.find_latest_by_user_and_album_id(
-            user_id, album_id
-        )
-
-        extraction_id = latest_extraction_of_album.id
+    extraction_id = latest_extraction_of_album.id
 
     extraction = FeatureExtraction.find_by_id(extraction_id)
     studies = get_studies_from_album(extraction.album_id, token)

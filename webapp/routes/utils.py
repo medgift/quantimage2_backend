@@ -1,14 +1,17 @@
 import os
 from functools import wraps
 
+import requests
 from flask import abort, g
 from jose import JWTError, ExpiredSignatureError
 from jose.exceptions import JWTClaimsError
 
-from config import oidc_client
+from config import oidc_client, realm
 
 KEYCLOAK_RESOURCE_ACCESS = "resource_access"
 KEYCLOAK_ROLES = "roles"
+
+KEYCLOAK_REALM_PUBLIC_KEY = None
 
 
 def role_required(role_name):
@@ -17,12 +20,11 @@ def role_required(role_name):
         def authorize(*args, **kwargs):
             token_decoded = decode_token(g.token)
 
-            print(token_decoded)
-
             if (
                 not os.environ["KEYCLOAK_IMAGINE_FRONTEND_CLIENT_ID"]
                 in token_decoded[KEYCLOAK_RESOURCE_ACCESS]
-                or not os.environ["KEYCLOAK_FRONTEND_ADMIN_ROLE"]
+            ) or (
+                not role_name
                 in token_decoded[KEYCLOAK_RESOURCE_ACCESS][
                     os.environ["KEYCLOAK_IMAGINE_FRONTEND_CLIENT_ID"]
                 ][KEYCLOAK_ROLES]
@@ -77,11 +79,20 @@ def validate_request(request):
 
 
 def decode_token(token):
-    secret = f"-----BEGIN PUBLIC KEY-----\n{os.environ['KEYCLOAK_REALM_PUBLIC_KEY']}\n-----END PUBLIC KEY-----"
+    global KEYCLOAK_REALM_PUBLIC_KEY
+
+    if KEYCLOAK_REALM_PUBLIC_KEY is None:
+        r = requests.get(oidc_client.get_url("issuer"))
+        public_key = r.json()["public_key"]
+        KEYCLOAK_REALM_PUBLIC_KEY = (
+            f"-----BEGIN PUBLIC KEY-----\n{public_key}\n-----END PUBLIC KEY-----"
+        )
 
     # Verify signature & expiration
     options = {"verify_signature": True, "verify_aud": False}
-    token_decoded = oidc_client.decode_token(token, key=secret, options=options)
+    token_decoded = oidc_client.decode_token(
+        token, key=KEYCLOAK_REALM_PUBLIC_KEY, options=options
+    )
 
     return token_decoded
 
