@@ -148,7 +148,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   ohif:
-    image: rogerschaer/ohif:latest
+    image: ohif/viewer:latest
     volumes:
       - ./ohif/ohif-config.js:/usr/share/nginx/html/app-config.js
 
