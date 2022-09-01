@@ -132,7 +132,7 @@ services:
       - DB_PASSWORD=${KEYCLOAK_DB_PASSWORD}
       - DB_SCHEMA=public
     volumes:
-      - ./keycloak_theme:/opt/jboss/keycloak/themes/imagine
+      - ./keycloak/imagine_theme:/opt/jboss/keycloak/themes/imagine
       - $KEYCLOAK_EXPORT_FOLDER:/tmp/export
     depends_on:
       - keycloak-db
