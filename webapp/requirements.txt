@@ -8,7 +8,7 @@ eventlet
 requests-toolbelt
 
 # Debug
-pydevd-pycharm==222.3345.131
+pydevd-pycharm==222.3739.56
 ptvsd
 
 # Flask
@@ -37,7 +37,7 @@ redis
 requests
 
 # Keycloak
-python-keycloak-client
+python-keycloak
 
 # SQLAlchemy
 SQLAlchemy<1.4

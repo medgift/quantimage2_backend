@@ -95,6 +95,7 @@ services:
     volumes:
       - ./keycloak/imagine_theme:/opt/jboss/keycloak/themes/imagine
       - ./keycloak/exports:/tmp/export
+      - ./keycloak/export-realm.sh:/opt/jboss/tools/export-realm.sh
     depends_on:
       - keycloak-db
     command: [ "-b", "0.0.0.0","-Dkeycloak.profile=preview" ]

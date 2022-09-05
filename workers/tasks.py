@@ -19,8 +19,6 @@ from typing import Dict, Any
 
 from flask import jsonify
 from flask_socketio import SocketIO
-from get_docker_secret import get_docker_secret
-from keycloak.realm import KeycloakRealm
 from celery import Celery
 from celery import states as celerystates
 from celery.signals import celeryd_after_setup
@@ -91,19 +89,11 @@ def setup(sender, instance, **kwargs):
     """
     Run once the Celery worker has started.
 
-    Initialize the Keycloak OpenID client & the Flask-SocketIO instance.
+    Initialize the Flask-SocketIO instance.
     """
 
     # Backend client
-    realm = KeycloakRealm(
-        server_url=os.environ["KEYCLOAK_BASE_URL"],
-        realm_name=os.environ["KEYCLOAK_REALM_NAME"],
-    )
-    global oidc_client, socketio
-    oidc_client = realm.open_id_connect(
-        client_id=os.environ["KEYCLOAK_IMAGINE_CLIENT_ID"],
-        client_secret=get_docker_secret("keycloak-client-secret"),
-    )
+    global socketio
 
     socketio = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
 

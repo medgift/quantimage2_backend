@@ -1,18 +1,13 @@
 import os
 
 from get_docker_secret import get_docker_secret
-from keycloak.realm import KeycloakRealm
+from keycloak import KeycloakOpenID
 
-# Keycloak Realm
-realm = KeycloakRealm(
-    server_url=os.environ["KEYCLOAK_BASE_URL"],
+# Keycloak Client (for decoding tokens)
+oidc_client = KeycloakOpenID(
+    server_url=f"{os.environ['KEYCLOAK_BASE_URL']}",
     realm_name=os.environ["KEYCLOAK_REALM_NAME"],
-)
-
-# Backend client
-oidc_client = realm.open_id_connect(
-    client_id=os.environ["KEYCLOAK_IMAGINE_CLIENT_ID"],
-    client_secret=get_docker_secret("keycloak-client-secret"),
+    client_id=os.environ["KEYCLOAK_IMAGINE_FRONTEND_CLIENT_ID"],
 )
 
 # Extractions

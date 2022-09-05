@@ -2,7 +2,7 @@
 black
 
 # Debug
-pydevd-pycharm==222.3345.131
+pydevd-pycharm==222.3739.56
 
 # HTTP requests handler
 requests
@@ -30,9 +30,6 @@ mysqlclient
 
 # SQLAlchemy
 SQLAlchemy<1.4
-
-# Keycloak
-python-keycloak-client
 
 # Celery
 Celery

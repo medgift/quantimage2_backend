@@ -58,7 +58,7 @@ def get_token_header(token):
 
 
 def get_user_token(album_id, token):
-    capability_title = "quantimage-extraction"
+    capability_title = f"quantimage-extraction-{album_id}"
     capability_scope = "user"
     capability_read = "true"
     capability_write = "true"

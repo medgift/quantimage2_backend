@@ -6,7 +6,7 @@ from flask import abort, g
 from jose import JWTError, ExpiredSignatureError
 from jose.exceptions import JWTClaimsError
 
-from config import oidc_client, realm
+from config import oidc_client
 
 KEYCLOAK_RESOURCE_ACCESS = "resource_access"
 KEYCLOAK_ROLES = "roles"
@@ -82,14 +82,10 @@ def decode_token(token):
     global KEYCLOAK_REALM_PUBLIC_KEY
 
     if KEYCLOAK_REALM_PUBLIC_KEY is None:
-        r = requests.get(oidc_client.get_url("issuer"))
-        public_key = r.json()["public_key"]
-        KEYCLOAK_REALM_PUBLIC_KEY = (
-            f"-----BEGIN PUBLIC KEY-----\n{public_key}\n-----END PUBLIC KEY-----"
-        )
+        KEYCLOAK_REALM_PUBLIC_KEY = f"-----BEGIN PUBLIC KEY-----\n{oidc_client.public_key()}\n-----END PUBLIC KEY-----"
 
     # Verify signature & expiration
-    options = {"verify_signature": True, "verify_aud": False}
+    options = {"verify_signature": True, "verify_exp": True, "verify_aud": False}
     token_decoded = oidc_client.decode_token(
         token, key=KEYCLOAK_REALM_PUBLIC_KEY, options=options
     )
