@@ -34,6 +34,12 @@ def album_rois(album_id):
         return get_rois(album_id)
 
 
+@bp.route("/albums/<album_id>/force")
+def album_rois_force(album_id):
+    if request.method == "GET":
+        return get_rois(album_id, True)
+
+
 @bp.route(
     "/albums/<album_id>/current-outcome",
     defaults={"labelcategory_id": None},
@@ -70,7 +76,7 @@ def save_rois(album_id, rois):
     return jsonify(album.to_dict())
 
 
-def get_rois(album_id):
+def get_rois(album_id, forced=False):
     token = g.token
 
     album = Album.find_by_album_id(album_id)
@@ -80,8 +86,6 @@ def get_rois(album_id):
     study_uids = [
         study[dicomFields.STUDY_UID][dicomFields.VALUE][0] for study in studies
     ]
-
-    forced = False
 
     # Check if studies have changed, if yes then force fetching the ROIs again
     if album.studies is None or sorted(album.studies) != sorted(study_uids):
