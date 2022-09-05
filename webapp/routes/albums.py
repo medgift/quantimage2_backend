@@ -14,8 +14,7 @@ from routes.utils import validate_decorate
 from service.feature_extraction import (
     get_studies_from_album,
     get_series_from_study,
-    get_instances_from_series,
-    get_instance_metadata_from_instance,
+    get_series_metadata,
 )
 
 bp = Blueprint(__name__, "albums")
@@ -146,23 +145,17 @@ def get_study_rois(study_dict):
     study_rois = set()
 
     for roi_serie in roi_series:
-        # Get list of instances
-        instance = get_instances_from_series(
-            study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
-            roi_serie[dicomFields.SERIES_UID][dicomFields.VALUE][0],
-            token,
-        )
 
-        # Get instance metadata
-        instance_metadata = get_instance_metadata_from_instance(
+        # Get Series metadata
+        series_metadata = get_series_metadata(
             study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
             roi_serie[dicomFields.SERIES_UID][dicomFields.VALUE][0],
-            instance[0][dicomFields.INSTANCE_UID][dicomFields.VALUE][0],
+            album_id,
             token,
         )
 
         # Add the ROI name to the study ROIs set
-        study_rois = study_rois.union(get_roi_names(instance_metadata[0]))
+        study_rois = study_rois.union(get_roi_names(series_metadata[0]))
 
     return study_rois
 

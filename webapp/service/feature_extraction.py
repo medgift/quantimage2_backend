@@ -195,37 +195,16 @@ def get_series_from_study(study_uid, modalities, album_id, token):
     return study_series
 
 
-def get_instances_from_series(study_uid, series_uid, token):
-    series_instances_url = (
-        f"{endpoints.studies}/{study_uid}/series/{series_uid}/instances"
+def get_series_metadata(study_uid, series_uid, album_id, token):
+    series_metadata_url = (
+        f"{endpoints.studies}/{study_uid}/series/{series_uid}/metadata?album={album_id}"
     )
 
     access_token = get_token_header(token)
 
-    series_instances = requests.get(series_instances_url, headers=access_token).json()
+    series_metadata = requests.get(series_metadata_url, headers=access_token).json()
 
-    return series_instances
-
-
-def get_instance_metadata_from_instance(study_uid, series_uid, instance_uid, token):
-    instance_metadata_url = f"{endpoints.studies}/{study_uid}/series/{series_uid}/instances/{instance_uid}/metadata"
-
-    access_token = get_token_header(token)
-
-    instance_metadata = requests.get(instance_metadata_url, headers=access_token).json()
-
-    return instance_metadata
-
-
-# def get_features_path(user_id, study_uid, feature_family_name):
-#     # Define features path for storing the results
-#     features_dir = os.path.join(
-#         EXTRACTIONS_BASE_DIR, FEATURES_SUBDIR, user_id, study_uid
-#     )
-#     features_filename = feature_family_name + ".json"
-#     features_path = os.path.join(features_dir, features_filename)
-#
-#     return features_path
+    return series_metadata
 
 
 def save_config(feature_extraction, feature_config, user_id, album_id):
