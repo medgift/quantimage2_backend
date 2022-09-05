@@ -1,50 +1,45 @@
 version: "3.7"
 
+# Host mappings
+x-host-mappings: &host-mappings
+  extra_hosts:
+    - host.docker.internal:host-gateway
+    - keycloak:host-gateway
+
 services:
   backend:
+    ports:
+      - 5000:5000
+    env_file:
+      - env_files/debug.env
     volumes:
       - ./webapp:/usr/src/app
       - ./venv/src/melampus:/usr/local/lib/python3.8/site-packages/melampus
       - /data/imagine-data:/imagine-data
-    ports:
-      - 5000:5000
-      - 5678:5678
-    environment:
-      - DEBUGGER_IP=${DEBUGGER_IP}
-      - DEBUGGER_PORT=${DEBUGGER_PORT}
-      - GEVENT_SUPPORT=True
-      - AUTHLIB_INSECURE_TRANSPORT=1
-      - DB_AUTOMIGRATE=1
-    extra_hosts:
-      - host.docker.internal:host-gateway
-      - keycloak:host-gateway
+    <<: *host-mappings
 
   celery_extraction:
+    env_file:
+      - env_files/debug.env
+      - env_files/debug-extraction.env
     volumes:
       - ./workers:/usr/src/app
-      - ./venv/src/okapy:/usr/local/lib/python3.8/site-packages/okapy
+      - ./venv/src/melampus:/usr/local/lib/python3.8/site-packages/melampus
       - /data/imagine-data:/imagine-data
-    environment:
-      - DEBUGGER_IP=${DEBUGGER_IP}
-      - DEBUGGER_PORT_CELERY=${DEBUGGER_PORT_CELERY_EXTRACTION}
-      - PYTHON_ENV=nodebug
-    extra_hosts:
-      - host.docker.internal:host-gateway
-      - keycloak:host-gateway
+    <<: *host-mappings
+    # Uncomment for debugging celery worker tasks
     #command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=extraction@%h", "--queues=extraction"]
 
   celery_training:
+    env_file:
+      - env_files/debug.env
+      - env_files/debug-training.env
     volumes:
       - ./workers:/usr/src/app
-      - ./venv/src/okapy:/usr/local/lib/python3.8/site-packages/okapy
+      - ./venv/src/melampus:/usr/local/lib/python3.8/site-packages/melampus
       - /data/imagine-data:/imagine-data
-    environment:
-      - DEBUGGER_IP=${DEBUGGER_IP}
-      - DEBUGGER_PORT_CELERY=${DEBUGGER_PORT_CELERY_TRAINING}
-      - PYTHON_ENV=nodebug
-    extra_hosts:
-      - host.docker.internal:host-gateway
-      - keycloak:host-gateway
+    <<: *host-mappings
+    # Uncomment for debugging celery worker tasks
     #command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=training@%h", "--queues=training"]
 
   flower:

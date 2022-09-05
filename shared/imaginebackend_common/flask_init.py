@@ -3,7 +3,7 @@ import os
 from flask import Flask
 
 from flask_compress import Compress
-from ttictoc import tic, toc
+from get_docker_secret import get_docker_secret
 
 from imaginebackend_common.models import db
 
@@ -12,15 +12,16 @@ compress = Compress()
 
 
 def create_app():
+
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
     app.config["SQLALCHEMY_DATABASE_URI"] = (
         "mysql://"
-        + os.environ["MYSQL_USER"]
+        + os.environ["DB_USER"]
         + ":"
-        + os.environ["MYSQL_PASSWORD"]
+        + get_docker_secret("db-user-password")
         + "@db/"
-        + os.environ["MYSQL_DATABASE"]
+        + os.environ["DB_DATABASE"]
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SQLALCHEMY_ECHO"] = False

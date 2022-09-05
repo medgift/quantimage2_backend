@@ -44,7 +44,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir -r requirements-okapy.txt
 
 # Bust cache to ensure installation of latest versions of Okapy & ZRad
-ADD http://worldtimeapi.org/api/timezone/Europe/Zurich cache-bust.json
+ADD "https://www.random.org/cgi-bin/randbyte?nbytes=10&format=h" skipcache
 
 # Add GitHub public key as a known host
 RUN mkdir -p -m 0600 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts

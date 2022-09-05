@@ -71,3 +71,6 @@ more-itertools
 
 # Pygtail
 pygtail
+
+# Read Docker Secrets
+get-docker-secret

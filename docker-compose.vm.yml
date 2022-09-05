@@ -1,4 +1,10 @@
-version: '3.7'
+version: "3.7"
+
+# Host mappings
+x-host-mappings: &host-mappings
+  extra_hosts:
+    - host.docker.internal:host-gateway
+    - keycloak:host-gateway
 
 services:
   backend:
@@ -7,21 +13,15 @@ services:
     restart: unless-stopped
     ports:
       - 5000:5000
-    extra_hosts:
-      - host.docker.internal:host-gateway
-      - keycloak:host-gateway
+    <<: *host-mappings
 
   celery_extraction:
     restart: unless-stopped
-    extra_hosts:
-      - host.docker.internal:host-gateway
-      - keycloak:host-gateway
+    <<: *host-mappings
 
   celery_training:
     restart: unless-stopped
-    extra_hosts:
-      - host.docker.internal:host-gateway
-      - keycloak:host-gateway
+    <<: *host-mappings
 
   flower:
     restart: unless-stopped
@@ -36,12 +36,6 @@ services:
     ports:
       - 8888:80
 
-  redis:
-    restart: unless-stopped
-
-  redis-socket:
-    restart: unless-stopped
-
   keycloak:
     restart: unless-stopped
     ports:
@@ -54,3 +48,11 @@ services:
     restart: unless-stopped
     ports:
       - 4567:80
+
+  redis:
+    ports:
+      - 6379:6379
+
+  redis-socket:
+    ports:
+      - 6380:6379

@@ -73,3 +73,6 @@ more-itertools
 
 # Tables (HDF5)
 tables
+
+# Read Docker Secrets
+get-docker-secret

@@ -1,6 +1,7 @@
 import os
 from logging.config import fileConfig
 
+from get_docker_secret import get_docker_secret
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
@@ -15,9 +16,9 @@ config = context.config
 # here we allow ourselves to pass interpolation vars to alembic.ini
 # fron the host env
 section = config.config_ini_section
-config.set_section_option(section, "DB_USER", os.environ.get("MYSQL_USER"))
-config.set_section_option(section, "DB_PASS", os.environ.get("MYSQL_PASSWORD"))
-config.set_section_option(section, "DB_NAME", os.environ.get("MYSQL_DATABASE"))
+config.set_section_option(section, "DB_USER", os.environ.get("DB_USER"))
+config.set_section_option(section, "DB_PASS", get_docker_secret("db-user-password"))
+config.set_section_option(section, "DB_NAME", os.environ.get("DB_DATABASE"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

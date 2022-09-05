@@ -1,5 +1,6 @@
 import os
 
+from get_docker_secret import get_docker_secret
 from keycloak.realm import KeycloakRealm
 
 # Keycloak Realm
@@ -11,7 +12,7 @@ realm = KeycloakRealm(
 # Backend client
 oidc_client = realm.open_id_connect(
     client_id=os.environ["KEYCLOAK_IMAGINE_CLIENT_ID"],
-    client_secret=os.environ["KEYCLOAK_IMAGINE_CLIENT_SECRET"],
+    client_secret=get_docker_secret("keycloak-client-secret"),
 )
 
 # Extractions

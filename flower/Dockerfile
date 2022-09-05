@@ -17,4 +17,4 @@ EXPOSE 3333
 # Run as a non-root user by default, run as user with least privileges.
 USER nobody
 
-ENTRYPOINT ["flower"]
+ENTRYPOINT ["flower", "--broker=${CELERY_BROKER_URL}", "--result-backend=${CELERY_RESULT_BACKEND}", "--port=3333"]

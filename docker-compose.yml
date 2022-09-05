@@ -3,23 +3,12 @@ version: '3.7'
 services:
   backend:
     build: webapp
-    environment:
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - GRID_SEARCH_CONCURRENCY=${GRID_SEARCH_CONCURRENCY}
-      - CELERY_BROKER_URL=${CELERY_REDIS_URL}
-      - CELERY_RESULT_BACKEND=${CELERY_REDIS_URL}
-      - SOCKET_MESSAGE_QUEUE=${SOCKET_REDIS_URL}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-      - KEYCLOAK_IMAGINE_FRONTEND_CLIENT_ID=${KEYCLOAK_IMAGINE_FRONTEND_CLIENT_ID}
-      - KEYCLOAK_FRONTEND_ADMIN_ROLE=${KEYCLOAK_FRONTEND_ADMIN_ROLE}
-      - KEYCLOAK_IMAGINE_CLIENT_ID=${KEYCLOAK_IMAGINE_CLIENT_ID}
-      - KEYCLOAK_IMAGINE_CLIENT_SECRET=${KEYCLOAK_IMAGINE_CLIENT_SECRET}
-      - KEYCLOAK_REALM_NAME=${KEYCLOAK_REALM_NAME}
-      - KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL}
-      - KHEOPS_BASE_URL=${KHEOPS_BASE_URL}
-      - PYTHONUNBUFFERED=TRUE
+    env_file:
+      - env_files/common.env
+      - env_files/webapp.env
+    secrets:
+      - db-user-password
+      - keycloak-client-secret
     volumes:
       - backend-data:/imagine-data
       - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
@@ -33,76 +22,52 @@ services:
         - okapy=$HOME/.ssh/id_rsa_okapy
         - zrad=$HOME/.ssh/id_rsa_zrad
     image: imagine_backend_celery
-    environment:
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - CELERY_BROKER_URL=${CELERY_REDIS_URL}
-      - CELERY_RESULT_BACKEND=${CELERY_REDIS_URL}
-      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY_EXTRACTION}
-      - CELERY_CONFIG_MODULE=celeryconfig
-      - SOCKET_MESSAGE_QUEUE=${SOCKET_REDIS_URL}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-      - KHEOPS_BASE_URL=${KHEOPS_BASE_URL}
-      - KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL}
-      - KEYCLOAK_REALM_NAME=${KEYCLOAK_REALM_NAME}
-      - KEYCLOAK_IMAGINE_CLIENT_ID=${KEYCLOAK_IMAGINE_CLIENT_ID}
-      - KEYCLOAK_IMAGINE_CLIENT_SECRET=${KEYCLOAK_IMAGINE_CLIENT_SECRET}
-      - PYTHONUNBUFFERED=TRUE
-      - PYTHON_ENV=production
-      - C_FORCE_ROOT=true
+    env_file:
+      - env_files/common.env
+      - env_files/workers.env
+      - env_files/workers-extraction.env
+    secrets:
+      - db-user-password
+      - keycloak-client-secret
     volumes:
       - backend-data:/imagine-data
       - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
-    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=prefork", "--hostname=extraction@%h", "--queues=extraction"]
+    command: [ "celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=prefork", "--hostname=extraction@%h", "--queues=extraction" ]
 
   celery_training:
     image: imagine_backend_celery
-    environment:
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - CELERY_BROKER_URL=${CELERY_REDIS_URL}
-      - CELERY_RESULT_BACKEND=${CELERY_REDIS_URL}
-      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY_TRAINING}
-      - CELERY_CONFIG_MODULE=celeryconfig
-      - SOCKET_MESSAGE_QUEUE=${SOCKET_REDIS_URL}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-      - KHEOPS_BASE_URL=${KHEOPS_BASE_URL}
-      - KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL}
-      - KEYCLOAK_REALM_NAME=${KEYCLOAK_REALM_NAME}
-      - KEYCLOAK_IMAGINE_CLIENT_ID=${KEYCLOAK_IMAGINE_CLIENT_ID}
-      - KEYCLOAK_IMAGINE_CLIENT_SECRET=${KEYCLOAK_IMAGINE_CLIENT_SECRET}
-      - PYTHONUNBUFFERED=TRUE
-      - PYTHON_ENV=production
-      - C_FORCE_ROOT=true
+    env_file:
+      - env_files/common.env
+      - env_files/workers.env
+      - env_files/workers-training.env
+    secrets:
+      - db-user-password
+      - keycloak-client-secret
     volumes:
       - backend-data:/imagine-data
       - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
-    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=prefork", "--hostname=training@%h", "--queues=training"]
+    command: [ "celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=prefork", "--hostname=training@%h", "--queues=training" ]
 
 
   flower:
     build: ./flower
-    command: ["flower", "--broker=${CELERY_REDIS_URL}", "--result-backend=${CELERY_REDIS_URL}", "--port=3333"]
+    env_file:
+      - env_files/common.env
 
   db:
     image: mysql:5.7
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
+    env_file:
+      - env_files/common.env
+    secrets:
+      - db-root-password
+      - db-user-password
     volumes:
       - backend-db:/var/lib/mysql
 
   phpmyadmin:
-    image:                 phpmyadmin/phpmyadmin
-    environment:
-      PMA_ARBITRARY:       1
-      PMA_HOST:            db
-      PMA_PORT:            3306
-      UPLOAD_LIMIT:        100M
+    image: phpmyadmin/phpmyadmin
+    env_file:
+      - env_files/phpmyadmin.env
     volumes:
       - /sessions
     depends_on:
@@ -110,7 +75,7 @@ services:
 
   redis:
     image: redis
-    command: ["redis-server", "--appendonly", "yes"]
+    command: [ "redis-server", "--appendonly", "yes" ]
     volumes:
       - tasks-db:/data
 
@@ -119,31 +84,27 @@ services:
 
   keycloak:
     image: jboss/keycloak:16.1.1
+    env_file:
+      - env_files/common.env
+      - env_files/keycloak.env
     environment:
-      - KEYCLOAK_REALM_NAME=${KEYCLOAK_REALM_NAME}
-      - KEYCLOAK_USER=${KEYCLOAK_USER}
-      - KEYCLOAK_PASSWORD=${KEYCLOAK_PASSWORD}
-      - KEYCLOAK_LOGLEVEL=DEBUG
-      - ROOT_LOGLEVEL=DEBUG
-      - DB_VENDOR=POSTGRES
-      - DB_ADDR=keycloak-db
-      - DB_DATABASE=${KEYCLOAK_DB}
-      - DB_USER=${KEYCLOAK_DB_USER}
-      - DB_PASSWORD=${KEYCLOAK_DB_PASSWORD}
-      - DB_SCHEMA=public
+      DB_ADDR: keycloak-db
+    secrets:
+      - keycloak-db-user-password
+      - keycloak-admin-password
     volumes:
       - ./keycloak/imagine_theme:/opt/jboss/keycloak/themes/imagine
-      - $KEYCLOAK_EXPORT_FOLDER:/tmp/export
+      - ./keycloak/exports:/tmp/export
     depends_on:
       - keycloak-db
-    command: ["-b", "0.0.0.0","-Dkeycloak.profile=preview"]
+    command: [ "-b", "0.0.0.0","-Dkeycloak.profile=preview" ]
 
   keycloak-db:
     image: postgres
-    environment:
-      - POSTGRES_USER=${KEYCLOAK_DB_USER}
-      - POSTGRES_PASSWORD=${KEYCLOAK_DB_PASSWORD}
-      - POSTGRES_DB=${KEYCLOAK_DB}
+    env_file:
+      - env_files/keycloak.env
+    secrets:
+      - keycloak-db-user-password
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -151,6 +112,18 @@ services:
     image: ohif/viewer:latest
     volumes:
       - ./ohif/ohif-config.js:/usr/share/nginx/html/app-config.js
+
+secrets:
+  db-root-password:
+    file: secrets/db_root_password
+  db-user-password:
+    file: secrets/db_user_password
+  keycloak-client-secret:
+    file: secrets/keycloak_client_secret
+  keycloak-db-user-password:
+    file: secrets/keycloak_db_user_password
+  keycloak-admin-password:
+    file: secrets/keycloak_admin_password
 
 volumes:
   backend-data:

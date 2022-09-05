@@ -19,6 +19,7 @@ from typing import Dict, Any
 
 from flask import jsonify
 from flask_socketio import SocketIO
+from get_docker_secret import get_docker_secret
 from keycloak.realm import KeycloakRealm
 from celery import Celery
 from celery import states as celerystates
@@ -66,7 +67,7 @@ if "DEBUGGER_IP" in os.environ and os.environ["DEBUGGER_IP"] != "":
     try:
         pydevd_pycharm.settrace(
             os.environ["DEBUGGER_IP"],
-            port=int(os.environ["DEBUGGER_PORT_CELERY"]),
+            port=int(os.environ["DEBUGGER_PORT"]),
             suspend=False,
             stderrToServer=True,
             stdoutToServer=True,
@@ -101,7 +102,7 @@ def setup(sender, instance, **kwargs):
     global oidc_client, socketio
     oidc_client = realm.open_id_connect(
         client_id=os.environ["KEYCLOAK_IMAGINE_CLIENT_ID"],
-        client_secret=os.environ["KEYCLOAK_IMAGINE_CLIENT_SECRET"],
+        client_secret=get_docker_secret("keycloak-client-secret"),
     )
 
     socketio = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
