@@ -146,16 +146,22 @@ def get_study_rois(study_dict):
 
     for roi_serie in roi_series:
 
-        # Get Series metadata
-        series_metadata = get_series_metadata(
-            study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
-            roi_serie[dicomFields.SERIES_UID][dicomFields.VALUE][0],
-            album_id,
-            token,
-        )
+        try:
+            # Get Series metadata
+            series_metadata = get_series_metadata(
+                study[dicomFields.STUDY_UID][dicomFields.VALUE][0],
+                roi_serie[dicomFields.SERIES_UID][dicomFields.VALUE][0],
+                album_id,
+                token,
+            )
 
-        # Add the ROI name to the study ROIs set
-        study_rois = study_rois.union(get_roi_names(series_metadata[0]))
+            # Add the ROI name to the study ROIs set
+            study_rois = study_rois.union(get_roi_names(series_metadata[0]))
+        except Exception as e:
+            print(
+                f"Error obtaining ROI names for patient ID {study[dicomFields.PATIENT_ID][dicomFields.VALUE][0]}"
+            )
+            print(e)
 
     return study_rois
 
