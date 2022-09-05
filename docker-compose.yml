@@ -8,7 +8,6 @@ services:
       - env_files/webapp.env
     secrets:
       - db-user-password
-      - keycloak-client-secret
     volumes:
       - backend-data:/imagine-data
       - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
@@ -28,7 +27,6 @@ services:
       - env_files/workers-extraction.env
     secrets:
       - db-user-password
-      - keycloak-client-secret
     volumes:
       - backend-data:/imagine-data
       - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
@@ -42,7 +40,6 @@ services:
       - env_files/workers-training.env
     secrets:
       - db-user-password
-      - keycloak-client-secret
     volumes:
       - backend-data:/imagine-data
       - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
@@ -119,8 +116,6 @@ secrets:
     file: secrets/db_root_password
   db-user-password:
     file: secrets/db_user_password
-  keycloak-client-secret:
-    file: secrets/keycloak_client_secret
   keycloak-db-user-password:
     file: secrets/keycloak_db_user_password
   keycloak-admin-password:
