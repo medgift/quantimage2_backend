@@ -1,6 +1,5 @@
 import os
 
-from get_docker_secret import get_docker_secret
 from keycloak import KeycloakOpenID
 
 # Keycloak Client (for decoding tokens)
