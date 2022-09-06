@@ -16,10 +16,6 @@ services:
     build:
       context: .
       dockerfile: ./workers/Dockerfile
-      # SSH mappings to allow cloning private Okapy & ZRad repos
-      ssh:
-        - okapy=$HOME/.ssh/id_rsa_okapy
-        - zrad=$HOME/.ssh/id_rsa_zrad
     image: quantimage2_backend_celery
     env_file:
       - env_files/common.env
@@ -91,11 +87,12 @@ services:
       - keycloak-admin-password
     volumes:
       - ./keycloak/quantimage2_theme:/opt/jboss/keycloak/themes/quantimage-v2
+      - ./keycloak/QuantImage-v2-realm.json:/QuantImage-v2-realm.json
       - ./keycloak/exports:/tmp/export
       - ./keycloak/export-realm.sh:/opt/jboss/tools/export-realm.sh
     depends_on:
       - keycloak-db
-    command: [ "-b", "0.0.0.0","-Dkeycloak.profile=preview" ]
+    command: [ "-b", "0.0.0.0","-Dkeycloak.profile=preview","-Dkeycloak.migration.strategy=IGNORE_EXISTING" ]
 
   keycloak-db:
     image: postgres

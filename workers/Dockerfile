@@ -49,17 +49,15 @@ ADD "https://www.random.org/cgi-bin/randbyte?nbytes=10&format=h" skipcache
 # Add GitHub public key as a known host
 RUN mkdir -p -m 0600 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-# Install okapy manually (temporary)
+########################################################################################################################
+# OPTIONAL - Requires "docker-compose.zrad.yml" to be included in the "docker compose build" command to execute        #
+########################################################################################################################
+# Install Privatee ZRad repository manually (temporary)
 # Requires BuildKit to be enabled with the environment variable DOCKER_BUILDKIT=1
-# Requires ~/.ssh (on the host) to contain a id_rsa_okapy deploy key that can read the repo
-# Requires docker-compose.yml to contain an SSH mapping okapy=$HOME/.ssh/id_rsa_okapy
-RUN --mount=type=ssh,id=okapy pip install git+ssh://git@github.com/voreille/okapy.git@quantimage2
-
-# Install ZRad manually (temporary)
-# Requires BuildKit to be enabled with the environment variable DOCKER_BUILDKIT=1
-# Requires ~/.ssh (on the host) to contain a id_rsa_zrad deploy key that can read the repo
+# Requires ~/.ssh (on the host) to contain an id_rsa_zrad deploy key that can read the repo
 # Requires docker-compose.yml to contain an SSH mapping zrad=$HOME/.ssh/id_rsa_zrad
-RUN --mount=type=ssh,id=zrad pip install git+ssh://git@github.com/danielabler/zrad_QUANTIMAGE.git
+# Fails silently in order not to break the build process when the installation is not successful
+RUN --mount=type=ssh,id=zrad pip install git+ssh://git@github.com/danielabler/zrad_QUANTIMAGE.git; exit 0
 
 ENV MCR_HOME /mcr/v97
 ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6:/usr/lib/x86_64-linux-gnu/libexpat.so

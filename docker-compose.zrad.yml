@@ -1,0 +1,8 @@
+version: '3.7'
+
+services:
+  celery_extraction:
+    build:
+      # SSH mappings to allow cloning private ZRad repo
+      ssh:
+        - zrad=$HOME/.ssh/id_rsa_zrad
