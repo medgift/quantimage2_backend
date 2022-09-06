@@ -1,0 +1,88 @@
+general:
+  padding: 10
+  submodalities: False
+  result_format: "long"
+  combine_segmentation: True
+  additional_dicom_tags:
+    - "SeriesInstanceUID"
+
+volume_preprocessing:
+  common:
+    bspline_resampler:
+      resampling_spacing: [1.0, 1.0, 1.0]
+      order: 3
+  default:
+
+mask_preprocessing:
+  default:
+    binary_bspline_resampler:
+      order: 3
+
+feature_extraction:
+  CT:
+    pyradiomics:
+      original:
+        imageType:
+          Original: {}
+        featureClass:
+          shape:
+          firstorder:
+          glcm:
+          glszm:
+          glrlm:
+          ngtdm:
+          gldm:
+
+        setting:
+          binWidth: 20
+          voxelArrayShift: 1000
+          label: 1
+
+      log:
+        imageType:
+          LoG:
+            sigma: [1.0, 2.0, 3.0, 4.0, 5.0] # If you include sigma values >5, remember to also increase the padDistance.
+
+        featureClass:
+          firstorder:
+
+        setting:
+          binWidth: 20
+          voxelArrayShift: 1000
+          label: 1
+  PT:
+    pyradiomics:
+      original:
+        imageType:
+          Original: {}
+        featureClass:
+          shape:
+          firstorder:
+          glcm:
+          glszm:
+          glrlm:
+          ngtdm:
+          gldm:
+
+        setting:
+          binWidth: 0.2
+          voxelArrayShift: 0
+          label: 1
+
+      log:
+        imageType:
+          LoG:
+            sigma: [1.0, 2.0, 3.0, 4.0, 5.0] # If you include sigma values >5, remember to also increase the padDistance.
+
+        featureClass:
+          firstorder:
+
+        setting:
+          binWidth: 0.2
+          voxelArrayShift: 0
+          label: 1
+  common:
+    riesz:
+      extractor0:
+        RieszOrder: 1
+        RieszScales: 4
