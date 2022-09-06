@@ -3,6 +3,9 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/venv" />
+      <excludeFolder url="file://$MODULE_DIR$/keycloak/quantimage2_theme" />
+      <excludeFolder url="file://$MODULE_DIR$/keycloak/exports" />
+      <excludeFolder url="file://$MODULE_DIR$/secrets" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

@@ -40,10 +40,13 @@ RUN pip install --no-cache-dir numpy
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install okapy dependencies (temporary)
-RUN pip install --no-cache-dir -r requirements-okapy.txt
+# Bust cache if version of okapy has changed
+ADD https://api.github.com/repos/voreille/okapy/git/refs/heads/quantimage2 version-okapy.json
 
-# Bust cache to ensure installation of latest versions of Okapy & ZRad
+# Install okapy manually
+RUN pip install git+https://github.com/voreille/okapy.git@quantimage2
+
+# Bust cache to ensure installation of latest versions of ZRad
 ADD "https://www.random.org/cgi-bin/randbyte?nbytes=10&format=h" skipcache
 
 # Add GitHub public key as a known host

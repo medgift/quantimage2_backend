@@ -60,9 +60,6 @@ pandas
 # tictoc
 ttictoc
 
-# Okapy
-git+https://git@github.com/voreille/okapy.git@quantimage2
-
 # Iteration
 more-itertools
 
