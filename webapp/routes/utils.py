@@ -21,12 +21,12 @@ def role_required(role_name):
             token_decoded = decode_token(g.token)
 
             if (
-                not os.environ["KEYCLOAK_IMAGINE_FRONTEND_CLIENT_ID"]
+                not os.environ["KEYCLOAK_QUANTIMAGE2_FRONTEND_CLIENT_ID"]
                 in token_decoded[KEYCLOAK_RESOURCE_ACCESS]
             ) or (
                 not role_name
                 in token_decoded[KEYCLOAK_RESOURCE_ACCESS][
-                    os.environ["KEYCLOAK_IMAGINE_FRONTEND_CLIENT_ID"]
+                    os.environ["KEYCLOAK_QUANTIMAGE2_FRONTEND_CLIENT_ID"]
                 ][KEYCLOAK_ROLES]
             ):
                 abort(401)  # not authorized

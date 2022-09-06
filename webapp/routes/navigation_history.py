@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, g
 
-from imaginebackend_common.models import NavigationHistory
+from quantimage2_backend_common.models import NavigationHistory
 
 # Define blueprint
 from routes.utils import validate_decorate

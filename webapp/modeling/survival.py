@@ -2,11 +2,11 @@ from sklearn.metrics import make_scorer
 from sklearn.pipeline import Pipeline
 from sksurv.linear_model import CoxPHSurvivalAnalysis, CoxnetSurvivalAnalysis, IPCRidge
 
-from imaginebackend_common.modeling_utils import (
+from quantimage2_backend_common.modeling_utils import (
     c_index_score,
     SurvivalRepeatedStratifiedKFold,
 )
-from imaginebackend_common.utils import CV_SPLITS, CV_REPEATS
+from quantimage2_backend_common.utils import CV_SPLITS, CV_REPEATS
 from modeling.modeling import Modeling
 
 from sksurv.util import Surv

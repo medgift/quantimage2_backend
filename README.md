@@ -1,1 +1,1 @@
-# imagine-backend
+# quantimage2_backend

@@ -7,8 +7,8 @@ from requests_toolbelt import MultipartEncoder
 from ttictoc import tic, toc
 
 from config import FEATURES_CACHE_BASE_DIR
-from imaginebackend_common.kheops_utils import get_user_token
-from imaginebackend_common.utils import (
+from quantimage2_backend_common.kheops_utils import get_user_token
+from quantimage2_backend_common.utils import (
     fetch_extraction_result,
     format_extraction,
     read_config_file,
@@ -19,7 +19,7 @@ from service.feature_extraction import (
     get_album_details,
 )
 
-from imaginebackend_common.models import (
+from quantimage2_backend_common.models import (
     FeatureExtraction,
     FeatureExtractionTask,
     FeatureCollection,
@@ -59,11 +59,6 @@ DATE_FORMAT = "%d.%m.%Y %H:%M"
 @bp.before_request
 def before_request():
     validate_decorate(request)
-
-
-@bp.route("/")
-def hello():
-    return "Hello IMAGINE!"
 
 
 # Get feature payload for a given feature extraction

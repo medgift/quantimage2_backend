@@ -5,7 +5,7 @@ TIMEOUT_SECONDS=300
 
 # Define log file & export file paths
 LOGFILE=/tmp/export.log
-EXPORT_DIR=/tmp/export/imagine-realm
+EXPORT_DIR=/tmp/export/quantimage2-realm
 
 # Remove previous log & backup
 rm -rf ${LOGFILE} ${EXPORT_DIR}
@@ -31,7 +31,7 @@ timeout ${TIMEOUT_SECONDS}s \
   -Dkeycloak.migration.action=export \
   -Dkeycloak.migration.provider=dir \
   -Dkeycloak.migration.dir=${EXPORT_DIR} \
-  -Dkeycloak.migration.realmName=IMAGINE \
+  -Dkeycloak.migration.realmName=QuantImage-v2 \
   -Dkeycloak.migration.usersExportStrategy=${EXPORT_USERS} \
   -Dkeycloak.profile=preview &>${LOGFILE} &
 

@@ -21,9 +21,9 @@ from flask_socketio import SocketIO
 
 from flask import jsonify
 
-from imaginebackend_common.flask_init import create_app
-from imaginebackend_common.models import db
-from imaginebackend_common.utils import InvalidUsage
+from quantimage2_backend_common.flask_init import create_app
+from quantimage2_backend_common.models import db
+from quantimage2_backend_common.utils import InvalidUsage
 
 # Routes
 from routes.features import bp as features_bp

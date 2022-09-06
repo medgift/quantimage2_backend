@@ -1,53 +1,53 @@
-imaginebackend\_common package
+quantimage2\_backend\_common package
 ==============================
 
 Submodules
 ----------
 
-imaginebackend\_common.feature\_backends module
+quantimage2\_backend\_common.feature\_backends module
 -----------------------------------------------
 
-.. automodule:: imaginebackend_common.feature_backends
+.. automodule:: quantimage2_backend_common.feature_backends
    :members:
    :undoc-members:
    :show-inheritance:
 
-imaginebackend\_common.feature\_extractors module
+quantimage2\_backend\_common.feature\_extractors module
 -------------------------------------------------
 
-.. automodule:: imaginebackend_common.feature_extractors
+.. automodule:: quantimage2_backend_common.feature_extractors
    :members:
    :undoc-members:
    :show-inheritance:
 
-imaginebackend\_common.flask\_init module
+quantimage2\_backend\_common.flask\_init module
 -----------------------------------------
 
-.. automodule:: imaginebackend_common.flask_init
+.. automodule:: quantimage2_backend_common.flask_init
    :members:
    :undoc-members:
    :show-inheritance:
 
-imaginebackend\_common.kheops\_utils module
+quantimage2\_backend\_common.kheops\_utils module
 -------------------------------------------
 
-.. automodule:: imaginebackend_common.kheops_utils
+.. automodule:: quantimage2_backend_common.kheops_utils
    :members:
    :undoc-members:
    :show-inheritance:
 
-imaginebackend\_common.models module
+quantimage2\_backend\_common.models module
 ------------------------------------
 
-.. automodule:: imaginebackend_common.models
+.. automodule:: quantimage2_backend_common.models
    :members:
    :undoc-members:
    :show-inheritance:
 
-imaginebackend\_common.utils module
+quantimage2\_backend\_common.utils module
 -----------------------------------
 
-.. automodule:: imaginebackend_common.utils
+.. automodule:: quantimage2_backend_common.utils
    :members:
    :undoc-members:
    :show-inheritance:
@@ -56,7 +56,7 @@ imaginebackend\_common.utils module
 Module contents
 ---------------
 
-.. automodule:: imaginebackend_common
+.. automodule:: quantimage2_backend_common
    :members:
    :undoc-members:
    :show-inheritance:

@@ -1,8 +1,8 @@
 import os
 
-from imaginebackend_common.const import ESTIMATOR_STEP
-from imaginebackend_common.models import FeatureExtraction, FeatureCollection
-from imaginebackend_common.utils import get_training_id
+from quantimage2_backend_common.const import ESTIMATOR_STEP
+from quantimage2_backend_common.models import FeatureExtraction, FeatureCollection
+from quantimage2_backend_common.utils import get_training_id
 from modeling.classification import Classification
 from service.feature_transformation import (
     transform_studies_features_to_df,

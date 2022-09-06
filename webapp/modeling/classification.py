@@ -6,7 +6,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import label_binarize
 from sklearn.svm import SVC
 
-from imaginebackend_common.utils import CV_SPLITS, CV_REPEATS
+from quantimage2_backend_common.utils import CV_SPLITS, CV_REPEATS
 from modeling.modeling import Modeling
 from service.feature_transformation import OUTCOME_FIELD_CLASSIFICATION
 

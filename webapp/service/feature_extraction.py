@@ -8,15 +8,15 @@ from celery import chord
 from flask import current_app
 
 from config import EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR
-from imaginebackend_common.const import QUEUE_EXTRACTION
+from quantimage2_backend_common.const import QUEUE_EXTRACTION
 
-from imaginebackend_common.kheops_utils import endpoints, get_token_header, dicomFields
-from imaginebackend_common.utils import (
+from quantimage2_backend_common.kheops_utils import endpoints, get_token_header, dicomFields
+from quantimage2_backend_common.utils import (
     MessageType,
     get_socketio_body_extraction,
     fetch_extraction_result,
 )
-from imaginebackend_common.models import (
+from quantimage2_backend_common.models import (
     FeatureExtraction,
     FeatureExtractionTask,
     db,
@@ -74,7 +74,7 @@ def run_feature_extraction(
 
         # Create new task signature
         task_signature = current_app.my_celery.signature(
-            "imaginetasks.extract",
+            "quantimage2tasks.extract",
             args=[
                 feature_extraction.id,
                 user_id,
@@ -89,7 +89,7 @@ def run_feature_extraction(
             kwargs={},
             countdown=1,
             link=current_app.my_celery.signature(
-                "imaginetasks.finalize_extraction_task",
+                "quantimage2tasks.finalize_extraction_task",
                 args=[feature_extraction.id, feature_extraction_task.id],
                 queue=QUEUE_EXTRACTION,
             ),
@@ -103,7 +103,7 @@ def run_feature_extraction(
     print(f"---------------------------------------------------------")
 
     finalize_signature = current_app.my_celery.signature(
-        "imaginetasks.finalize_extraction",
+        "quantimage2tasks.finalize_extraction",
         args=[feature_extraction.id],
         queue=QUEUE_EXTRACTION,
     )

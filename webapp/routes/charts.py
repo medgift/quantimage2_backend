@@ -5,8 +5,8 @@ from flask import Blueprint, jsonify, request, g
 
 from sklearn.preprocessing import StandardScaler
 
-from imaginebackend_common.const import MODEL_TYPES
-from imaginebackend_common.models import (
+from quantimage2_backend_common.const import MODEL_TYPES
+from quantimage2_backend_common.models import (
     FeatureExtraction,
     Label,
     FeatureCollection,

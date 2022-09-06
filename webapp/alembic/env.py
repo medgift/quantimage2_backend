@@ -7,7 +7,7 @@ from sqlalchemy import pool
 
 from alembic import context
 
-from imaginebackend_common.models import *
+from quantimage2_backend_common.models import *
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

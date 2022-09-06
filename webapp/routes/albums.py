@@ -4,8 +4,8 @@ from collections import Counter
 from flask import Blueprint, jsonify, request, g, Response
 from ttictoc import tic, toc
 
-from imaginebackend_common.kheops_utils import dicomFields
-from imaginebackend_common.models import Album, LabelCategory, AlbumOutcome
+from quantimage2_backend_common.kheops_utils import dicomFields
+from quantimage2_backend_common.models import Album, LabelCategory, AlbumOutcome
 
 from multiprocessing.pool import ThreadPool
 

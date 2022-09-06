@@ -1,7 +1,7 @@
 from flask import Blueprint, abort, jsonify, request, g
 
-from imaginebackend_common.models import FeatureExtractionTask
-from imaginebackend_common.utils import fetch_task_result, format_feature_tasks
+from quantimage2_backend_common.models import FeatureExtractionTask
+from quantimage2_backend_common.utils import fetch_task_result, format_feature_tasks
 from .utils import validate_decorate
 import celery.states as celery_states
 

@@ -9,8 +9,8 @@ services:
     secrets:
       - db-user-password
     volumes:
-      - backend-data:/imagine-data
-      - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
+      - backend-data:/quantimage2-data
+      - ./shared/quantimage2_backend_common/:/usr/local/lib/python3.8/quantimage2_backend_common
 
   celery_extraction:
     build:
@@ -20,7 +20,7 @@ services:
       ssh:
         - okapy=$HOME/.ssh/id_rsa_okapy
         - zrad=$HOME/.ssh/id_rsa_zrad
-    image: imagine_backend_celery
+    image: quantimage2_backend_celery
     env_file:
       - env_files/common.env
       - env_files/workers.env
@@ -28,12 +28,12 @@ services:
     secrets:
       - db-user-password
     volumes:
-      - backend-data:/imagine-data
-      - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
+      - backend-data:/quantimage2-data
+      - ./shared/quantimage2_backend_common/:/usr/local/lib/python3.8/quantimage2_backend_common
     command: [ "celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=prefork", "--hostname=extraction@%h", "--queues=extraction" ]
 
   celery_training:
-    image: imagine_backend_celery
+    image: quantimage2_backend_celery
     env_file:
       - env_files/common.env
       - env_files/workers.env
@@ -41,8 +41,8 @@ services:
     secrets:
       - db-user-password
     volumes:
-      - backend-data:/imagine-data
-      - ./shared/imaginebackend_common/:/usr/local/lib/python3.8/imaginebackend_common
+      - backend-data:/quantimage2-data
+      - ./shared/quantimage2_backend_common/:/usr/local/lib/python3.8/quantimage2_backend_common
     command: [ "celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=prefork", "--hostname=training@%h", "--queues=training" ]
 
 
@@ -90,7 +90,7 @@ services:
       - keycloak-db-user-password
       - keycloak-admin-password
     volumes:
-      - ./keycloak/imagine_theme:/opt/jboss/keycloak/themes/imagine
+      - ./keycloak/quantimage2_theme:/opt/jboss/keycloak/themes/quantimage-v2
       - ./keycloak/exports:/tmp/export
       - ./keycloak/export-realm.sh:/opt/jboss/tools/export-realm.sh
     depends_on:

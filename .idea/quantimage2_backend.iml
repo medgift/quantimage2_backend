@@ -17,7 +17,7 @@
       <excludeFolder url="file://$MODULE_DIR$/keycloak" />
       <excludeFolder url="file://$MODULE_DIR$/secrets" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.8 (imagine_backend)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.8 (quantimage2_backend)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="TemplatesService">

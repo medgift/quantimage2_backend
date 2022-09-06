@@ -13,7 +13,7 @@ from time import time
 import numpy as np
 from sqlalchemy.orm import joinedload
 
-from imaginebackend_common.const import (
+from quantimage2_backend_common.const import (
     MODEL_TYPES,
     DATA_SPLITTING_TYPES,
     ESTIMATOR_STEP,
@@ -21,7 +21,7 @@ from imaginebackend_common.const import (
 
 from flask import Blueprint, jsonify, request, g, make_response
 
-from imaginebackend_common.models import (
+from quantimage2_backend_common.models import (
     Model,
     FeatureExtraction,
     FeatureCollection,
@@ -29,7 +29,7 @@ from imaginebackend_common.models import (
 )
 
 # Define blueprint
-from imaginebackend_common.utils import format_extraction, get_training_id, format_model
+from quantimage2_backend_common.utils import format_extraction, get_training_id, format_model
 from routes.utils import validate_decorate
 from service.classification import train_classification_model
 from service.survival import train_survival_model

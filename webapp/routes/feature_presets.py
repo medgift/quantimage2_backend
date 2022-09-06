@@ -4,7 +4,7 @@ from pathlib import Path
 import yaml
 from flask import Blueprint, abort, jsonify, request, current_app
 
-from imaginebackend_common.models import FeaturePreset
+from quantimage2_backend_common.models import FeaturePreset
 from .utils import validate_decorate, role_required
 
 # Define blueprint

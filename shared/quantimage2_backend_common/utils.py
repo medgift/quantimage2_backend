@@ -17,7 +17,7 @@ from celery import Celery
 from flask import jsonify
 from numpy.core.records import ndarray
 
-from imaginebackend_common.models import FeatureExtraction
+from quantimage2_backend_common.models import FeatureExtraction
 
 # Constants
 DATE_FORMAT = "%d.%m.%Y %H:%M"

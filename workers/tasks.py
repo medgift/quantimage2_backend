@@ -28,17 +28,17 @@ from sklearn.metrics import make_scorer
 from sklearn.model_selection import GridSearchCV
 from ttictoc import tic, toc
 
-from imaginebackend_common.const import FAKE_SCORER_KEY, TRAINING_PHASES
-from imaginebackend_common.feature_storage import store_features
-from imaginebackend_common.flask_init import create_app
-from imaginebackend_common.models import (
+from quantimage2_backend_common.const import FAKE_SCORER_KEY, TRAINING_PHASES
+from quantimage2_backend_common.feature_storage import store_features
+from quantimage2_backend_common.flask_init import create_app
+from quantimage2_backend_common.models import (
     FeatureExtractionTask,
     db,
     FeatureExtraction,
     Model,
 )
-from imaginebackend_common.kheops_utils import get_token_header
-from imaginebackend_common.utils import (
+from quantimage2_backend_common.kheops_utils import get_token_header
+from quantimage2_backend_common.utils import (
     get_socketio_body_feature_task,
     MessageType,
     task_status_message,
@@ -58,7 +58,7 @@ from utils import (
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
 
-from imaginebackend_common.kheops_utils import endpoints
+from quantimage2_backend_common.kheops_utils import endpoints
 
 # Setup Debugger
 if "DEBUGGER_IP" in os.environ and os.environ["DEBUGGER_IP"] != "":
@@ -102,7 +102,7 @@ def setup(sender, instance, **kwargs):
     flask_app.app_context().push()
 
 
-@celery.task(name="imaginetasks.train", bind=True)
+@celery.task(name="quantimage2tasks.train", bind=True)
 def train_model(
     self,
     *,
@@ -282,7 +282,7 @@ def train_model(
         db.session.remove()
 
 
-@celery.task(name="imaginetasks.extract", bind=True)
+@celery.task(name="quantimage2tasks.extract", bind=True)
 def run_extraction(
     self,
     feature_extraction_id,
@@ -399,7 +399,7 @@ def run_extraction(
         db.session.remove()
 
 
-@celery.task(name="imaginetasks.finalize_extraction", bind=True)
+@celery.task(name="quantimage2tasks.finalize_extraction", bind=True)
 def finalize_extraction(task, results, feature_extraction_id):
     send_extraction_status_message(
         feature_extraction_id, celery, socketio, send_extraction=True
@@ -407,7 +407,7 @@ def finalize_extraction(task, results, feature_extraction_id):
     db.session.remove()
 
 
-@celery.task(name="imaginetasks.finalize_extraction_task", bind=True)
+@celery.task(name="quantimage2tasks.finalize_extraction_task", bind=True)
 def finalize_extraction_task(
     task, result, feature_extraction_id, feature_extraction_task_id
 ):

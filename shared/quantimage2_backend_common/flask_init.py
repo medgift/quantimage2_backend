@@ -5,7 +5,7 @@ from flask import Flask
 from flask_compress import Compress
 from get_docker_secret import get_docker_secret
 
-from imaginebackend_common.models import db
+from quantimage2_backend_common.models import db
 
 # Initialize Flask Compress
 compress = Compress()
@@ -30,7 +30,7 @@ def create_app():
     app.config["CELERY_BROKER_URL"] = os.environ["CELERY_BROKER_URL"]
     app.config["CELERY_RESULT_BACKEND"] = os.environ["CELERY_RESULT_BACKEND"]
 
-    app.config["UPLOAD_FOLDER"] = "/imagine-data/feature-presets"
+    app.config["UPLOAD_FOLDER"] = "/quantimage2-data/feature-presets"
 
     # app.config[
     #    "COMPRESS_REGISTER"

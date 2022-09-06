@@ -8,12 +8,12 @@ from ttictoc import tic, toc
 
 from sqlalchemy.dialects.mysql import LONGTEXT
 
-from imaginebackend_common.const import (
+from quantimage2_backend_common.const import (
     featureIDMatcher,
     DATA_SPLITTING_TYPES,
     TRAIN_TEST_SPLIT_TYPES,
 )
-from imaginebackend_common.kheops_utils import dicomFields
+from quantimage2_backend_common.kheops_utils import dicomFields
 
 db = SQLAlchemy()
 

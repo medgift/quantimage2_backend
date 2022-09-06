@@ -4,8 +4,8 @@ import pandas
 import itertools
 from ttictoc import tic, toc
 
-from imaginebackend_common.kheops_utils import dicomFields
-from imaginebackend_common.models import (
+from quantimage2_backend_common.kheops_utils import dicomFields
+from quantimage2_backend_common.models import (
     FeatureValue,
     FeatureCollection,
 )

@@ -9,7 +9,7 @@ from sklearn.utils import resample
 from scipy import stats
 
 from config import MODELS_BASE_DIR
-from imaginebackend_common.utils import MessageType
+from quantimage2_backend_common.utils import MessageType
 
 
 def mean_confidence_interval_student(mean, std, n_samples, confidence=0.95):

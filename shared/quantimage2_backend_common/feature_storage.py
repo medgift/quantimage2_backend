@@ -1,4 +1,4 @@
-from imaginebackend_common.models import (
+from quantimage2_backend_common.models import (
     Modality,
     ROI,
     FeatureDefinition,

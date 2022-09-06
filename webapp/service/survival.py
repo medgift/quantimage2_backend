@@ -1,7 +1,7 @@
 import os
 
-from imaginebackend_common.const import ESTIMATOR_STEP
-from imaginebackend_common.utils import get_training_id
+from quantimage2_backend_common.const import ESTIMATOR_STEP
+from quantimage2_backend_common.utils import get_training_id
 from modeling.survival import Survival
 from service.feature_transformation import (
     OUTCOME_FIELD_SURVIVAL_TIME,

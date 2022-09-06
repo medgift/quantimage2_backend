@@ -3,7 +3,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 from flask import Blueprint, jsonify, request, g, Response
 
-from imaginebackend_common.models import (
+from quantimage2_backend_common.models import (
     FeatureExtraction,
     FeatureCollection,
 )

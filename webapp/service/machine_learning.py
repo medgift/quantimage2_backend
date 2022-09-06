@@ -1,6 +1,6 @@
 import pandas
 
-from imaginebackend_common.models import FeatureExtraction, FeatureCollection
+from quantimage2_backend_common.models import FeatureExtraction, FeatureCollection
 from service.feature_transformation import (
     transform_studies_collection_features_to_df,
     transform_studies_features_to_df,

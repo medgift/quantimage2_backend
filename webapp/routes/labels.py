@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, g
 
-from imaginebackend_common.models import Label, LabelCategory
+from quantimage2_backend_common.models import Label, LabelCategory
 
 # Define blueprint
 from routes.utils import validate_decorate

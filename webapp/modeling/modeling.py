@@ -5,12 +5,12 @@ from flask import current_app, g
 from sklearn.model_selection import GridSearchCV, ParameterGrid
 from ttictoc import tic, toc
 
-from imaginebackend_common.const import (
+from quantimage2_backend_common.const import (
     DATA_SPLITTING_TYPES,
     QUEUE_TRAINING,
     MODEL_TYPES,
 )
-from imaginebackend_common.utils import CV_SPLITS
+from quantimage2_backend_common.utils import CV_SPLITS
 from modeling.utils import (
     split_dataset,
     preprocess_features,
@@ -149,7 +149,7 @@ class Modeling:
         scoring = self.get_scoring()
 
         current_app.my_celery.send_task(
-            "imaginetasks.train",
+            "quantimage2tasks.train",
             kwargs={
                 "feature_extraction_id": self.feature_extraction_id,
                 "collection_id": self.collection_id,
