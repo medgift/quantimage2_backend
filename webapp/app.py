@@ -1,4 +1,6 @@
 # Important to monkey-patch in the beginning!
+from populate import populate_presets
+
 print("Monkey Patching!")
 import eventlet
 
@@ -106,6 +108,10 @@ def start_app():
     CORS(flask_app)
 
     print("Running the app through Socket.IO!")
+
+    @flask_app.before_first_request
+    def before_first_request():
+        populate_presets()
 
     # Run the app (through socket.io)
     flask_app.my_socketio.run(flask_app, host="0.0.0.0")

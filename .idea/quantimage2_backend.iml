@@ -6,6 +6,8 @@
       <excludeFolder url="file://$MODULE_DIR$/keycloak/quantimage2_theme" />
       <excludeFolder url="file://$MODULE_DIR$/keycloak/exports" />
       <excludeFolder url="file://$MODULE_DIR$/secrets" />
+      <excludeFolder url="file://$MODULE_DIR$/shared/quantimage2_backend_common.egg-info" />
+      <excludeFolder url="file://$MODULE_DIR$/shared/build" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

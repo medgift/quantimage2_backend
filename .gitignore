@@ -98,3 +98,7 @@ node_modules
 
 # DB Migrations
 webapp/alembic/versions/*
+
+# Shared module
+shared/build
+shared/*.egg-info
