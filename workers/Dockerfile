@@ -31,6 +31,10 @@ WORKDIR /usr/src/app
 # Install ncdu to investigate directory size
 RUN apt-get update && apt-get install ncdu && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Install shared module
+COPY ./shared /shared
+RUN pip install /shared
+
 # Copy dependency files
 COPY ./workers/requirements*.txt ./
 

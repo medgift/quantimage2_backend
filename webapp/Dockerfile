@@ -4,8 +4,12 @@ MAINTAINER Roger Schaer
 # Define app folder
 WORKDIR /usr/src/app
 
+# Install shared module
+COPY ./shared /shared
+RUN pip install /shared
+
 # Copy dependency files
-COPY requirements*.txt ./
+COPY ./webapp/requirements*.txt ./
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt

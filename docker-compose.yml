@@ -2,7 +2,9 @@ version: '3.7'
 
 services:
   backend:
-    build: webapp
+    build:
+      context: .
+      dockerfile: ./webapp/Dockerfile
     env_file:
       - env_files/common.env
       - env_files/webapp.env
@@ -10,7 +12,6 @@ services:
       - db-user-password
     volumes:
       - backend-data:/quantimage2-data
-      - ./shared/quantimage2_backend_common/:/usr/local/lib/python3.8/quantimage2_backend_common
 
   celery_extraction:
     build:
@@ -25,7 +26,6 @@ services:
       - db-user-password
     volumes:
       - backend-data:/quantimage2-data
-      - ./shared/quantimage2_backend_common/:/usr/local/lib/python3.8/quantimage2_backend_common
     command: [ "celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=prefork", "--hostname=extraction@%h", "--queues=extraction" ]
 
   celery_training:
@@ -38,7 +38,6 @@ services:
       - db-user-password
     volumes:
       - backend-data:/quantimage2-data
-      - ./shared/quantimage2_backend_common/:/usr/local/lib/python3.8/quantimage2_backend_common
     command: [ "celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=prefork", "--hostname=training@%h", "--queues=training" ]
 
 
