@@ -14,7 +14,6 @@ services:
       - env_files/debug.env
     volumes:
       - ./webapp:/usr/src/app
-      - ./venv/src/melampus:/usr/local/lib/python3.8/site-packages/melampus
       - /data/quantimage2-data:/quantimage2-data
     <<: *host-mappings
 
@@ -24,7 +23,6 @@ services:
       - env_files/debug-extraction.env
     volumes:
       - ./workers:/usr/src/app
-      - ./venv/src/melampus:/usr/local/lib/python3.8/site-packages/melampus
       - /data/quantimage2-data:/quantimage2-data
     <<: *host-mappings
     # Uncomment for debugging celery worker tasks
@@ -36,7 +34,6 @@ services:
       - env_files/debug-training.env
     volumes:
       - ./workers:/usr/src/app
-      - ./venv/src/melampus:/usr/local/lib/python3.8/site-packages/melampus
       - /data/quantimage2-data:/quantimage2-data
     <<: *host-mappings
     # Uncomment for debugging celery worker tasks

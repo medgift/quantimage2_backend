@@ -85,9 +85,11 @@ services:
     secrets:
       - keycloak-db-user-password
       - keycloak-admin-password
+      - quantimage2-admin-password
     volumes:
       - ./keycloak/quantimage2_theme:/opt/jboss/keycloak/themes/quantimage-v2
       - ./keycloak/QuantImage-v2-realm.json:/QuantImage-v2-realm.json
+      - ./keycloak/startup-scripts:/opt/jboss/startup-scripts
       - ./keycloak/exports:/tmp/export
       - ./keycloak/export-realm.sh:/opt/jboss/tools/export-realm.sh
     depends_on:
@@ -101,7 +103,7 @@ services:
     secrets:
       - keycloak-db-user-password
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - keycloak-db-data:/var/lib/postgresql/data
 
   ohif:
     image: ohif/viewer:latest
@@ -117,9 +119,11 @@ secrets:
     file: secrets/keycloak_db_user_password
   keycloak-admin-password:
     file: secrets/keycloak_admin_password
+  quantimage2-admin-password:
+    file: secrets/quantimage2_admin_password
 
 volumes:
   backend-data:
   backend-db:
   tasks-db:
-  pgdata:
+  keycloak-db-data:

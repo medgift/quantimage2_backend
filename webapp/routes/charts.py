@@ -1,5 +1,3 @@
-import os
-
 import pandas
 from flask import Blueprint, jsonify, request, g
 
