@@ -21,7 +21,7 @@ ADD https://api.github.com/repos/medgift/quantimage-melampus/git/refs/heads/dev-
 RUN pip install git+https://github.com/medgift/quantimage-melampus.git@dev-da
 
 # Copy source code
-COPY . .
+COPY ./webapp .
 
 # Start app
-CMD ["./entrypoint.sh"]
+CMD ["./webapp/entrypoint.sh"]
