@@ -60,8 +60,9 @@ services:
       - backend-db:/var/lib/mysql
     healthcheck:
       test: out=$$(mysqladmin ping -h localhost -P 3306 -u root --password=$$(cat $${MYSQL_ROOT_PASSWORD_FILE}) 2>&1); echo $$out | grep 'mysqld is alive' || { echo $$out; exit 1; }
-      timeout: 20s
-      retries: 10
+      interval: 10s
+      timeout: 10s
+      retries: 5
 
 
   phpmyadmin:
