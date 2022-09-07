@@ -60,7 +60,7 @@ services:
       - "traefik.docker.network=prod"
       - "traefik.frontend.rule=Host:${TRAEFIK_URL_FLOWER}"
       - "traefik.enable=true"
-      - "traefik.frontend.whitelistSourceRange=192.168.1.35/32"
+      - "traefik.frontend.whitelistSourceRange=${TRAEFIK_WHITELIST_FLOWER}"
     networks:
       - default
       - prod
