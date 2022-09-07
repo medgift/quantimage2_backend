@@ -1,0 +1,35 @@
+version: '3.9'
+
+# Host mappings
+x-host-mappings: &host-mappings
+  extra_hosts:
+    - host.docker.internal:host-gateway
+    - keycloak:host-gateway
+
+services:
+  backend:
+    ports:
+      - 5000:5000
+    <<: *host-mappings
+
+  celery_extraction:
+    <<: *host-mappings
+
+  celery_training:
+    <<: *host-mappings
+
+  flower:
+    ports:
+      - 3333:3333
+
+  phpmyadmin:
+    ports:
+      - 8888:80
+
+  keycloak:
+    ports:
+      - 8081:8080
+
+  ohif:
+    ports:
+      - 4567:80
