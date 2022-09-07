@@ -14,6 +14,7 @@ services:
       - env_files/debug.env
     volumes:
       - ./webapp:/usr/src/app
+      - ./shared/quantimage2_backend_common:/usr/local/lib/python3.8/site-packages/quantimage2_backend_common
       - /data/quantimage2-data:/quantimage2-data
     <<: *host-mappings
 
@@ -23,6 +24,7 @@ services:
       - env_files/debug-extraction.env
     volumes:
       - ./workers:/usr/src/app
+      - ./shared/quantimage2_backend_common:/usr/local/lib/python3.8/site-packages/quantimage2_backend_common
       - /data/quantimage2-data:/quantimage2-data
     <<: *host-mappings
     # Uncomment for debugging celery worker tasks
@@ -34,6 +36,7 @@ services:
       - env_files/debug-training.env
     volumes:
       - ./workers:/usr/src/app
+      - ./shared/quantimage2_backend_common:/usr/local/lib/python3.8/site-packages/quantimage2_backend_common
       - /data/quantimage2-data:/quantimage2-data
     <<: *host-mappings
     # Uncomment for debugging celery worker tasks
