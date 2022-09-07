@@ -2,6 +2,8 @@ version: '3.7'
 
 services:
   backend:
+    env_file:
+      - .env
     labels:
       - "traefik.backend=${TRAEFIK_BACKEND_FLASKAPP}"
       - "traefik.docker.network=prod"
@@ -11,6 +13,14 @@ services:
     networks:
       - default
       - prod
+
+  celery_extraction:
+    env_file:
+      - .env
+
+  celery_training:
+    env_file:
+      - .env
 
   phpmyadmin:
     labels:
