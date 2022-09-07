@@ -24,4 +24,4 @@ RUN pip install git+https://github.com/medgift/quantimage-melampus.git@dev-da
 COPY ./webapp .
 
 # Start app
-CMD ["./webapp/entrypoint.sh"]
+CMD ["./entrypoint.sh"]
