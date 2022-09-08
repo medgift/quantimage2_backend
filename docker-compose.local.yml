@@ -8,6 +8,8 @@ x-host-mappings: &host-mappings
 
 services:
   backend:
+    environment:
+      - DB_AUTOMIGRATE=1
     ports:
       - 5000:5000
     <<: *host-mappings
