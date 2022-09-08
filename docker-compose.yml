@@ -70,7 +70,7 @@ services:
     env_file:
       - env_files/phpmyadmin.env
     volumes:
-      - /sessions
+      - pma-sessions:/sessions
     depends_on:
       - db
 
@@ -133,5 +133,6 @@ secrets:
 volumes:
   backend-data:
   backend-db:
+  pma-sessions:
   tasks-db:
   keycloak-db-data:
