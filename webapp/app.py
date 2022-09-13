@@ -1,10 +1,10 @@
 # Important to monkey-patch in the beginning!
-from populate import populate_presets
-
 print("Monkey Patching!")
 import eventlet
 
 eventlet.monkey_patch()
+
+from populate import populate_presets
 
 # System packages
 import os
