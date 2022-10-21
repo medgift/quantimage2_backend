@@ -27,5 +27,5 @@ The project uses Docker for easy build & deployment, using the following files :
 
 ### Code Structure
 
-See the [Documentation]() for more information on the code structure.
+See the [Documentation](https://quantimage-v2-backend.readthedocs.io/en/latest/) for more information on the code structure.
 

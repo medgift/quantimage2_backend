@@ -30,17 +30,6 @@ and data flows:
 
 .. image:: _static/backend-structure.png
 
-
-Another simple header
-=====================
-
-Here is some text explaining some very complicated stuff.::
-
-   print 'hello'
-   >> hello
-
-This is a link here to `GitHub <http://github.com>`_
-
 .. toctree::
    :maxdepth: 2
    :caption: Table of Contents:
@@ -48,6 +37,7 @@ This is a link here to `GitHub <http://github.com>`_
    license
    help
 
+* :ref:`genindex`
 
 Indices and tables
 ==================
