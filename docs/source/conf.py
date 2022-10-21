@@ -14,7 +14,11 @@ import os
 import sys
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv("../../env_files/common.env")
+load_dotenv("../../env_files/webapp.env")
+load_dotenv("../../env_files/workers.env")
+load_dotenv("../../env_files/keycloak.env")
+load_dotenv("../../.env")
 
 sys.path.insert(0, os.path.abspath("."))
 sys.path.insert(0, os.path.abspath("../.."))

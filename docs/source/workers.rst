@@ -4,6 +4,14 @@ workers package
 Submodules
 ----------
 
+workers.config\_workers module
+------------------------------
+
+.. automodule:: workers.config_workers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 workers.tasks module
 --------------------
 
@@ -12,6 +20,13 @@ workers.tasks module
    :undoc-members:
    :show-inheritance:
 
+workers.utils module
+--------------------
+
+.. automodule:: workers.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 Module contents
 ---------------

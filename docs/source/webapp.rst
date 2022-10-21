@@ -5,7 +5,9 @@ Subpackages
 -----------
 
 .. toctree::
+   :maxdepth: 4
 
+   webapp.modeling
    webapp.routes
    webapp.service
 
@@ -28,6 +30,13 @@ webapp.config module
    :undoc-members:
    :show-inheritance:
 
+webapp.populate module
+----------------------
+
+.. automodule:: webapp.populate
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 Module contents
 ---------------

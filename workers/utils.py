@@ -8,7 +8,7 @@ from sklearn.metrics import get_scorer
 from sklearn.utils import resample
 from scipy import stats
 
-from config import MODELS_BASE_DIR
+from config_workers import MODELS_BASE_DIR
 from quantimage2_backend_common.utils import MessageType
 
 
