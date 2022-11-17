@@ -7,6 +7,8 @@ from service.feature_transformation import (
     OUTCOME_FIELD_CLASSIFICATION,
 )
 
+from quantimage2_backend_common.const import FEATURE_ID_SEPARATOR
+
 
 def get_features_labels(
     extraction_id,
@@ -71,7 +73,7 @@ def concatenate_modalities_rois(features_df):
     unique_pid_df = patient_id_df.drop_duplicates(subset="PatientID")
     unique_pid_df = unique_pid_df.set_index("PatientID", drop=False)
 
-    separator = "‑"  # This is a non-breaking hyphen, to differentiate with regular hyphens that can occur in ROI names
+    separator = FEATURE_ID_SEPARATOR
 
     to_concat = [unique_pid_df]
     # Groupe dataframes by Modality & ROI

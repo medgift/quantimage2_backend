@@ -40,9 +40,11 @@ PYRADIOMICS_FEATURE_PREFIXES = [
     "logarithm",
 ]
 
+FEATURE_ID_SEPARATOR = "‑"  # This is a non-breaking hyphen, to differentiate with regular hyphens that can occur in ROI names
+
 prefixes = RIESZ_FEATURE_PREFIXES + ZRAD_FEATURE_PREFIXES + PYRADIOMICS_FEATURE_PREFIXES
 featureIDMatcher = re.compile(
-    rf"(?P<modality>.*?)-(?P<roi>.*?)-(?P<feature>(?:{'|'.join(prefixes)}).*)"
+    rf"(?P<modality>.*?){FEATURE_ID_SEPARATOR}(?P<roi>.*?){FEATURE_ID_SEPARATOR}(?P<feature>(?:{'|'.join(prefixes)}).*)"
 )
 
 FAKE_SCORER_KEY = "fake"
