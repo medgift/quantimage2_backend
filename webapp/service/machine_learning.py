@@ -71,6 +71,8 @@ def concatenate_modalities_rois(features_df):
     unique_pid_df = patient_id_df.drop_duplicates(subset="PatientID")
     unique_pid_df = unique_pid_df.set_index("PatientID", drop=False)
 
+    separator = "‑"  # This is a non-breaking hyphen, to differentiate with regular hyphens that can occur in ROI names
+
     to_concat = [unique_pid_df]
     # Groupe dataframes by Modality & ROI
     for group, groupDf in features_df.groupby(["Modality", "ROI"]):
@@ -79,9 +81,9 @@ def concatenate_modalities_rois(features_df):
         without_modality_and_roi_df = without_modality_and_roi_df.set_index(
             "PatientID", drop=True
         )
-        prefix = "-".join(group)
+        prefix = separator.join(group)
         without_modality_and_roi_df = without_modality_and_roi_df.add_prefix(
-            prefix + "-"
+            prefix + separator
         )
         # Drop columns with only NaNs
         without_modality_and_roi_df.dropna(axis=1, inplace=True, how="all")
