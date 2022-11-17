@@ -2,7 +2,7 @@
 black
 
 # Debug
-pydevd-pycharm==222.3739.56
+pydevd-pycharm==222.4345.23
 
 # HTTP requests handler
 requests
