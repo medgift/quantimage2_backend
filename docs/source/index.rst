@@ -32,7 +32,7 @@ and data flows:
 
 .. toctree::
    :maxdepth: 2
-   :caption: Table of Contents:
+   :caption: Table of Contents
 
    license
    help
