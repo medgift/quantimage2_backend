@@ -114,7 +114,7 @@ services:
       - keycloak-db-data:/var/lib/postgresql/data
 
   ohif:
-    image: ohif/viewer:latest
+    image: ohif/viewer:v4.12.35.19437
     volumes:
       - ./ohif/ohif-config.js:/usr/share/nginx/html/app-config.js
 
