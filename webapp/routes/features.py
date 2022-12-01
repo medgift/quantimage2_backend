@@ -96,7 +96,7 @@ def extraction_features_by_id(extraction_id, collection_id):
     labels = []
 
     # Get labels (if current outcome is defined for this user)
-    if album_outcome:
+    if album_outcome and album_outcome.outcome_id:
         label_category = LabelCategory.find_by_id(album_outcome.outcome_id)
         labels = Label.find_by_label_category(label_category.id)
 
