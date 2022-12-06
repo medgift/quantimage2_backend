@@ -1,6 +1,12 @@
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request, g, current_app, Response
+from quantimage2_backend_common.const import (
+    FIRSTORDER_REPLACEMENT_SUV,
+    PET_MODALITY,
+    FIRSTORDER_REPLACEMENT_INTENSITY,
+    FIRSTORDER_PYRADIOMICS_PREFIX,
+)
 
 from requests_toolbelt import MultipartEncoder
 
@@ -202,6 +208,17 @@ def download_extraction_by_id(id):
     with ZipFile(zip_buffer, "a", ZIP_DEFLATED, False) as zip_file:
         for group_name, group_data in grouped_features:
             group_csv_content = group_data.to_csv(index=False)
+
+            # Replace "firstorder" with intensity or SUV (depending on the modality)
+            # TODO - This could be done more elegantly/consistently further upstream
+            replacement = (
+                FIRSTORDER_REPLACEMENT_SUV
+                if group_name[0] == PET_MODALITY
+                else FIRSTORDER_REPLACEMENT_INTENSITY
+            )
+            group_csv_content = group_csv_content.replace(
+                FIRSTORDER_PYRADIOMICS_PREFIX, replacement
+            )
 
             group_file_name = f"features_album_{album_name.replace(' ', '-')}_{'-'.join(group_name)}.csv"
             zip_file.writestr(group_file_name, group_csv_content)

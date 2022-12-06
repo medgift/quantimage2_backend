@@ -11,6 +11,7 @@ from quantimage2_backend_common.const import (
     PET_MODALITY,
     FIRSTORDER_REPLACEMENT_SUV,
     FIRSTORDER_REPLACEMENT_INTENSITY,
+    FIRSTORDER_PYRADIOMICS_PREFIX,
 )
 from service.feature_extraction import get_studies_from_album, get_album_details
 from service.feature_transformation import (
@@ -109,7 +110,9 @@ def download_collection_by_id(feature_collection_id):
                 if group_name[0] == PET_MODALITY
                 else FIRSTORDER_REPLACEMENT_INTENSITY
             )
-            group_csv_content = group_csv_content.replace("firstorder", replacement)
+            group_csv_content = group_csv_content.replace(
+                FIRSTORDER_PYRADIOMICS_PREFIX, replacement
+            )
 
             group_file_name = f"features_album_{album_name.replace(' ', '-')}_collection_{feature_collection.name.replace(' ', '-')}_{'-'.join(group_name)}.csv"
             zip_file.writestr(group_file_name, group_csv_content)
