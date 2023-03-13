@@ -573,12 +573,10 @@ def extract_all_features(
             status_message,
         )
 
-        labels = rois
-
         # Get results directly from Okapy
         converter = ExtractorConverter.from_params(config_path)
 
-        conversion_result = converter(dicom_dir, labels=labels)
+        conversion_result = converter(dicom_dir, labels=rois)
 
         print(f"!!!!!!!!!!!!Final Features!!!!!!!!!")
         print(conversion_result)

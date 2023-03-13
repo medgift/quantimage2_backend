@@ -6,8 +6,6 @@ from sqlalchemy import ForeignKey, Table, Column, Integer
 from sqlalchemy.orm import joinedload
 from ttictoc import tic, toc
 
-from sqlalchemy.dialects.mysql import LONGTEXT
-
 from quantimage2_backend_common.const import (
     featureIDMatcher,
     DATA_SPLITTING_TYPES,
@@ -129,7 +127,9 @@ class ROI(BaseModel, db.Model):
     def __init__(self, name):
         self.name = name
 
-    name = db.Column(db.String(255), nullable=False, unique=True)
+    name = db.Column(
+        db.String(255, collation="latin1_bin"), nullable=False, unique=True
+    )
 
 
 # Feature extraction preset (YAML file)
