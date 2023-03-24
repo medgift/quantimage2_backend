@@ -27,8 +27,6 @@ from service.feature_extraction import (
 
 from quantimage2_backend_common.models import (
     FeatureExtraction,
-    FeatureExtractionTask,
-    FeatureCollection,
     Label,
     Album,
     LabelCategory,
@@ -39,9 +37,6 @@ from service.feature_transformation import (
     make_album_file_name,
     MODALITY_FIELD,
     ROI_FIELD,
-    transform_studies_collection_features_to_df,
-    get_data_points_extraction,
-    get_data_points_collection,
 )
 from .charts import format_chart_data
 
@@ -49,7 +44,6 @@ from .utils import validate_decorate
 
 from zipfile import ZipFile, ZIP_DEFLATED
 
-import csv
 import io
 import os
 import pandas
@@ -84,11 +78,8 @@ def extraction_by_id(id):
 
 # Get feature details for a given extraction
 # INCLUDING the data for the chart (to improve performance)
-@bp.route(
-    "/extractions/<extraction_id>/feature-details", defaults={"collection_id": None}
-)
-@bp.route("/extractions/<extraction_id>/collections/<collection_id>/feature-details")
-def extraction_features_by_id(extraction_id, collection_id):
+@bp.route("/extractions/<extraction_id>/feature-details")
+def extraction_features_by_id(extraction_id):
     token = g.token
 
     extraction = FeatureExtraction.find_by_id(extraction_id)
@@ -96,7 +87,7 @@ def extraction_features_by_id(extraction_id, collection_id):
     album_outcome = AlbumOutcome.find_by_album_user_id(extraction.album_id, g.user)
     studies = get_studies_from_album(extraction.album_id, token)
 
-    header, features_df = get_features_cache_or_db(extraction, collection_id, studies)
+    header, features_df = get_features_cache_or_db(extraction, studies)
 
     label_category = None
     labels = []
@@ -123,12 +114,8 @@ def extraction_features_by_id(extraction_id, collection_id):
     return Response(m.to_string(), mimetype=m.content_type)
 
 
-def get_features_cache_or_db(extraction, collection_id, studies):
-    features_cache_folder = (
-        f"collection-{collection_id}"
-        if collection_id
-        else f"extraction-{extraction.id}"
-    )
+def get_features_cache_or_db(extraction, studies):
+    features_cache_folder = f"extraction-{extraction.id}"
     features_cache_path = f"{FEATURES_CACHE_BASE_DIR}/{features_cache_folder}"
     features_file_name = "features.h5"
     features_key = "features"
@@ -142,13 +129,7 @@ def get_features_cache_or_db(extraction, collection_id, studies):
         elapsed = toc()
         print("Parsing features from cached HDF5 file took", elapsed)
     else:
-        if collection_id:
-            collection = FeatureCollection.find_by_id(collection_id)
-            header, features_df = transform_studies_collection_features_to_df(
-                collection, studies
-            )
-        else:
-            header, features_df = transform_studies_features_to_df(extraction, studies)
+        header, features_df = transform_studies_features_to_df(extraction, studies)
 
         # Persist features DataFrame for caching
         tic()

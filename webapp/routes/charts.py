@@ -18,7 +18,6 @@ from service.feature_transformation import (
     transform_studies_features_to_df,
     PATIENT_ID_FIELD,
     OUTCOME_FIELD_CLASSIFICATION,
-    transform_studies_collection_features_to_df,
     OUTCOME_FIELD_SURVIVAL_EVENT,
 )
 
@@ -31,47 +30,6 @@ bp = Blueprint(__name__, "charts")
 @bp.before_request
 def before_request():
     decorate_if_possible(request)
-
-
-@bp.route("/charts/<album_id>/lasagna", defaults={"collection_id": None})
-@bp.route("/charts/<album_id>/<collection_id>/lasagna")
-def lasagna_chart(album_id, collection_id):
-    token = g.token
-    user_id = g.user
-
-    # Find latest feature extraction for this album
-    latest_extraction_of_album = FeatureExtraction.find_latest_by_user_and_album_id(
-        user_id, album_id
-    )
-
-    extraction_id = latest_extraction_of_album.id
-
-    extraction = FeatureExtraction.find_by_id(extraction_id)
-    studies = get_studies_from_album(extraction.album_id, token)
-
-    # Whole extraction or sub-collection?
-    if collection_id:
-        collection = FeatureCollection.find_by_id(collection_id)
-
-        header, features_df = transform_studies_collection_features_to_df(
-            collection, studies
-        )
-    else:
-        header, features_df = transform_studies_features_to_df(extraction, studies)
-
-    album_outcome = AlbumOutcome.find_by_album_user_id(extraction.album_id, user_id)
-
-    # Get labels (if current outcome is defined for this user)
-    labels = []
-    label_category = None
-
-    if album_outcome:
-        label_category = LabelCategory.find_by_id(album_outcome.outcome_id)
-        labels = Label.find_by_label_category(label_category.id)
-
-    formatted_chart_data = format_chart_data(features_df, label_category, labels)
-
-    return jsonify(formatted_chart_data)
 
 
 def format_chart_labels(labels):

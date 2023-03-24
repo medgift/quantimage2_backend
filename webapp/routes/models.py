@@ -1,39 +1,16 @@
-import math
 import os
-import uuid
-
-import joblib
-
 import traceback
 
-import collections
-
-from time import time
-
-import numpy as np
 from sqlalchemy.orm import joinedload
-
-from quantimage2_backend_common.const import (
-    MODEL_TYPES,
-    DATA_SPLITTING_TYPES,
-    ESTIMATOR_STEP,
-)
-
 from flask import Blueprint, jsonify, request, g, make_response
-
-from quantimage2_backend_common.models import (
-    Model,
-    FeatureExtraction,
-    FeatureCollection,
-    LabelCategory,
-)
-
-# Define blueprint
-from quantimage2_backend_common.utils import format_extraction, get_training_id, format_model
+from quantimage2_backend_common.const import MODEL_TYPES
+from quantimage2_backend_common.models import Model, LabelCategory
+from quantimage2_backend_common.utils import get_training_id, format_model
 from routes.utils import validate_decorate
 from service.classification import train_classification_model
 from service.survival import train_survival_model
 
+# Define blueprint
 bp = Blueprint(__name__, "models")
 
 

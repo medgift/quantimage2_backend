@@ -522,52 +522,27 @@ class FeatureValue(BaseModel, db.Model):
 
     @classmethod
     def fetch_feature_values(cls, feature_extraction_task_ids):
-        # Full ORM objects
-        # return FeatureValue.query.filter(
-        #     FeatureValue.feature_extraction_task_id.in_(feature_extraction_task_ids)
-        # ).all()
-
         # Low-level DBAPI fetchall()
         compiled = (
-            FeatureValue.__table__.select()
+            cls.__table__.select()
             .with_only_columns(
                 [
-                    FeatureValue.__table__.c.feature_extraction_task_id,
-                    FeatureValue.__table__.c.modality_id,
-                    FeatureValue.__table__.c.roi_id,
-                    FeatureValue.__table__.c.feature_definition_id,
-                    FeatureValue.__table__.c.value,
+                    cls.__table__.c.feature_extraction_task_id,
+                    cls.__table__.c.modality_id,
+                    cls.__table__.c.roi_id,
+                    cls.__table__.c.feature_definition_id,
+                    cls.__table__.c.value,
                 ]
             )
             .where(
-                FeatureValue.__table__.c.feature_extraction_task_id.in_(
+                cls.__table__.c.feature_extraction_task_id.in_(
                     feature_extraction_task_ids
                 )
             )
             .compile(dialect=db.engine.dialect, compile_kwargs={"literal_binds": True})
         )
 
-        sql = str(compiled)
-
-        conn = db.engine.raw_connection()
-        cursor = conn.cursor()
-        cursor.execute(sql)
-
-        feature_values = []
-        for row in cursor.fetchall():
-            # ensure that we fully fetch!
-            feature_value = cls.SimpleFeatureValue(
-                feature_extraction_task_id=row[0],
-                modality_id=row[1],
-                roi_id=row[2],
-                feature_definition_id=row[3],
-                value=row[4],
-            )
-            feature_values.append(feature_value)
-
-        conn.close()
-
-        return feature_values
+        return cls.fetch_values_compiled_query(compiled)
 
     @classmethod
     def fetch_feature_collection_values(cls, feature_collection_id):
@@ -614,27 +589,7 @@ class FeatureValue(BaseModel, db.Model):
             .compile(dialect=db.engine.dialect, compile_kwargs={"literal_binds": True})
         )
 
-        sql = str(compiled)
-
-        conn = db.engine.raw_connection()
-        cursor = conn.cursor()
-        cursor.execute(sql)
-
-        feature_values = []
-        for row in cursor.fetchall():
-            # ensure that we fully fetch!
-            feature_value = cls.SimpleFeatureValue(
-                feature_extraction_task_id=row[0],
-                modality_id=row[1],
-                roi_id=row[2],
-                feature_definition_id=row[3],
-                value=row[4],
-            )
-            feature_values.append(feature_value)
-
-        conn.close()
-
-        return feature_values
+        return cls.fetch_values_compiled_query(compiled)
 
     @classmethod
     def find_id_by_collection_criteria_new(
@@ -792,6 +747,30 @@ class FeatureValue(BaseModel, db.Model):
             "name": self.feature_definition.name,
             "value": self.value,
         }
+
+    @classmethod
+    def fetch_values_compiled_query(cls, compiled):
+        sql = str(compiled)
+
+        conn = db.engine.raw_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+
+        feature_values = []
+        for row in cursor.fetchall():
+            # ensure that we fully fetch!
+            feature_value = cls.SimpleFeatureValue(
+                feature_extraction_task_id=row[0],
+                modality_id=row[1],
+                roi_id=row[2],
+                feature_definition_id=row[3],
+                value=row[4],
+            )
+            feature_values.append(feature_value)
+
+        conn.close()
+
+        return feature_values
 
 
 # Customized Feature Collection (filtered rows & columns so far)

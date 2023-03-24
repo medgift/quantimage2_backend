@@ -187,9 +187,9 @@ def update_feature_collection(feature_collection_id):
     collection = FeatureCollection.find_by_id(feature_collection_id)
     collection.update(**request.json)
 
-    return jsonify(collection.to_dict())
+    return jsonify(collection.format_collection(with_values=True))
 
 
 def delete_feature_collection(feature_collection_id):
     deleted_collection = FeatureCollection.delete_by_id(feature_collection_id)
-    return jsonify(deleted_collection.to_dict())
+    return jsonify(deleted_collection.format_collection(with_values=True))
