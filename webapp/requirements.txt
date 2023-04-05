@@ -8,7 +8,7 @@ eventlet
 requests-toolbelt
 
 # Debug
-pydevd-pycharm==222.4345.23
+pydevd-pycharm==231.8109.197
 ptvsd
 
 # Flask
@@ -69,7 +69,7 @@ ttictoc
 # ML
 scikit-learn
 scikit-survival
-pandas
+pandas<2.0
 
 # Iteration
 more-itertools

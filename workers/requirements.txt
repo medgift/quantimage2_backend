@@ -2,7 +2,7 @@
 black
 
 # Debug
-pydevd-pycharm==222.4345.23
+pydevd-pycharm==231.8109.197
 
 # HTTP requests handler
 requests
@@ -55,7 +55,7 @@ pyyaml
 # ML
 scikit-learn
 scikit-survival
-pandas
+pandas<2.0
 
 # tictoc
 ttictoc
