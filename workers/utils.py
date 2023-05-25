@@ -1,5 +1,6 @@
 import os
 import math
+import re
 from time import time
 
 import numpy as np
@@ -24,39 +25,92 @@ def mean_confidence_interval_student(mean, std, n_samples, confidence=0.95):
     }
 
 
-def calculate_training_metrics(best_index, cv_results, n_splits, scoring):
+def calculate_training_metrics(
+    best_index, cv_results, scoring, random_seed, confidence=0.95
+):
     metrics = {}
 
     for index, metric in enumerate(scoring.keys()):
-        metrics[metric] = mean_confidence_interval_student(
-            cv_results[f"mean_test_{metric}"][best_index],
-            cv_results[f"std_test_{metric}"][best_index],
-            n_splits,
+
+        # Filter the CV results to keep only the splits for the current metric
+        metric_splits = {
+            k: v
+            for k, v in cv_results.items()
+            if re.match(rf"split\d_test_{metric}", k)
+        }
+
+        # Get the metric values for the best index
+        split_values = [v[best_index] for v in metric_splits.values()]
+
+        # Run bootstrap on the split values
+        bootstrapped_values = bootstrap_on_results(
+            split_values, random_seed, n_bootstrap=20
+        )
+
+        # Calculate mean for each of the boostrap repetitions
+        bootstrapped_means = [np.mean(values) for values in bootstrapped_values]
+
+        # Calculate confidence interval based on the bootstrapped means
+
+        metrics[metric] = get_confidence_interval_quartiles(
+            split_values, bootstrapped_means, confidence
         )
         metrics[metric]["order"] = index
 
     return metrics
 
 
-def calculate_test_metrics(scores, scoring, confidence=0.95):
+def calculate_test_metrics(scores, scoring, random_seed, confidence=0.95):
 
     metrics = {}
 
     for index, metric in enumerate(scoring.keys()):
         metric_scores = [score[metric] for score in scores]
 
-        inf_value = np.quantile(metric_scores, ((1 - confidence) / 2))
-        sup_value = np.quantile(metric_scores, 1 - ((1 - confidence) / 2))
-        mean_value = np.mean(metric_scores)
+        # Run bootstrap on the bootstrapped values
+        bootstrapped_values = bootstrap_on_results(
+            metric_scores, random_seed, n_bootstrap=50
+        )
 
-        metrics[metric] = {
-            "mean": mean_value,
-            "inf_value": inf_value if not math.isnan(inf_value) else 0,
-            "sup_value": sup_value if not math.isnan(sup_value) else 0,
-        }
+        # Calculate mean for each of the 2nd-level boostrap repetitions
+        bootstrapped_means = [np.mean(values) for values in bootstrapped_values]
+
+        metrics[metric] = get_confidence_interval_quartiles(
+            metric_scores, bootstrapped_means, confidence
+        )
         metrics[metric]["order"] = index
 
     return metrics
+
+
+def get_confidence_interval_quartiles(metric_scores, bootstrapped_means, confidence):
+    # Calculate confidence interval based on the bootstrapped means
+    inf_value = np.quantile(bootstrapped_means, ((1 - confidence) / 2))
+    sup_value = np.quantile(bootstrapped_means, 1 - ((1 - confidence) / 2))
+
+    # Report the true mean of the metric scores
+    mean_value = np.mean(metric_scores)
+
+    return {
+        "mean": mean_value,
+        "inf_value": inf_value,
+        "sup_value": sup_value,
+    }
+
+
+def bootstrap_on_results(results, random_seed, n_bootstrap=20):
+    bootstrapped_results = []
+
+    for i in range(n_bootstrap):
+        resampled_results = resample(
+            results,
+            replace=True,
+            n_samples=len(results),
+            random_state=random_seed + i,
+        )
+        bootstrapped_results.append(resampled_results)
+
+    return bootstrapped_results
 
 
 def run_bootstrap(
