@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # Generate & Run Automigrations if DB_AUTOMIGRATE is set
 if [ $DB_AUTOMIGRATE -eq 1  ]; then
