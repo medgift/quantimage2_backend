@@ -20,7 +20,7 @@ RUN rm -rf /mcr_setup
 
 # Build the Python app
 FROM python:3.8
-MAINTAINER Roger Schaer
+LABEL MAINTAINER="Roger Schaer"
 
 # Copy the MCR
 COPY --from=build-env /mcr /mcr
