@@ -25,6 +25,11 @@ The project uses Docker for easy build & deployment, using the following files :
 - `docker-compose.zrad.yml` : File to include the [ZRad](https://medical-physics-usz.github.io) feature extraction library (currently not publicly available)
 - `docker-compose.prod.yml` : Production file for use with Traefik
 
+
+### Local development
+The [debug.env](env_files/debug.env) file defines the DOCKER_MOUNT_DIRECTORY environment variable to specify which directory will be used
+to mount the different docker volumes. This defaults to `/quantimage2-data` but on Mac ensure to switch this as OSX does not have write access to `/`.
+
 ### Code Structure
 
 See the [Documentation](https://quantimage-v2-backend.readthedocs.io/en/latest/) for more information on the code structure.
