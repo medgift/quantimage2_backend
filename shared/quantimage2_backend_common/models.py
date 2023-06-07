@@ -891,8 +891,30 @@ class FeatureCollection(BaseModel, db.Model):
         return list(modalities), list(rois), list(features)
 
 
-class ClinicalFeatureFeatureDefinition(FeatureDefinition):
-    pass
+class ClinicalFeatureDefinition(BaseModel, db.Model):
+
+    __tablename__ = "clinical_feature_definition"
+
+    def __init__(self, name):
+        self.name = name
+
+    # Name of the feature
+    name = db.Column(db.String(255), nullable=False, unique=False)
+
+    @classmethod
+    def find_by_name(cls, clinical_feature_names):
+        clinical_feature_definitions = cls.query.filter(cls.name.in_(clinical_feature_names)).all()
+
+        return clinical_feature_definitions
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "name": self.name,
+        }
+
     
 
 def process_query_single_column(query):

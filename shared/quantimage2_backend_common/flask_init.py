@@ -14,6 +14,11 @@ compress = Compress()
 def create_app():
 
     # create and configure the app
+    debug = False
+
+    if "DEBUG" is os.environ:
+        debug = True
+        
     app = Flask(__name__, instance_relative_config=True)
     app.config["SQLALCHEMY_DATABASE_URI"] = (
         "mysql://"
@@ -26,6 +31,7 @@ def create_app():
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SQLALCHEMY_ECHO"] = False
     app.config["SECRET-KEY"] = "cookies are delicious!"
+    app.config["DEBUG"] = debug
 
     app.config["CELERY_BROKER_URL"] = os.environ["CELERY_BROKER_URL"]
     app.config["CELERY_RESULT_BACKEND"] = os.environ["CELERY_RESULT_BACKEND"]

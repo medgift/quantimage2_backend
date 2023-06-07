@@ -6,7 +6,7 @@ WORKDIR /usr/src/app
 
 # Install shared module
 COPY ./shared /shared
-RUN pip install /shared
+RUN pip install -e /shared
 
 # Copy dependency files
 COPY ./webapp/requirements*.txt ./

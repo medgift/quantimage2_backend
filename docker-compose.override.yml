@@ -12,6 +12,8 @@ services:
       - 5000:5000
     env_file:
       - env_files/debug.env
+    environment:
+    - DEBUG=true
     volumes:
       - ./webapp:/usr/src/app
       - ./shared/quantimage2_backend_common:/usr/local/lib/python3.8/site-packages/quantimage2_backend_common

@@ -14,9 +14,9 @@ from service.survival import train_survival_model
 bp = Blueprint(__name__, "models")
 
 
-@bp.before_request
-def before_request():
-    validate_decorate(request)
+# @bp.before_request
+# def before_request():
+#     validate_decorate(request)
 
 
 @bp.route("/models/<album_id>", methods=("GET", "POST"))
@@ -111,3 +111,15 @@ def model(id):
 def models_by_user():
     albums = Model.find_by_user(g.user)
     return jsonify(albums)
+
+
+@bp.route("/clinical_features", methods=("GET", "POST"))
+def clinical_features():
+    print("hello")
+    return {"a": "b"}
+
+
+@bp.route("/clinical_feature_values", methods=("GET", "POST"))
+def clinical_features():
+    print("hello")
+    return {"a": "b"}
