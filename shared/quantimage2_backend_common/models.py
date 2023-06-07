@@ -891,6 +891,10 @@ class FeatureCollection(BaseModel, db.Model):
         return list(modalities), list(rois), list(features)
 
 
+class ClinicalFeatureFeatureDefinition(FeatureDefinition):
+    pass
+    
+
 def process_query_single_column(query):
     compiled = query.compile(
         dialect=db.engine.dialect, compile_kwargs={"literal_binds": True}

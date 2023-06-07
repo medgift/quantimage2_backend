@@ -23,5 +23,8 @@ RUN pip install git+https://github.com/medgift/quantimage-melampus.git@dev-da
 # Copy source code
 COPY ./webapp .
 
+# Need a directory to store the migrations
+RUN mkdir -p /usr/src/app/alembic/versions
+
 # Start app
 CMD ["./entrypoint.sh"]
