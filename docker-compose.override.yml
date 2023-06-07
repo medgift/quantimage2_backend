@@ -40,7 +40,7 @@ services:
       - ${DOCKER_MOUNT_DIRECTORY}:/quantimage2-data
     <<: *host-mappings
     # Uncomment for debugging celery worker tasks
-    #command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=training@%h", "--queues=training"]
+    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=training@%h", "--queues=training"]
 
   flower:
     ports:

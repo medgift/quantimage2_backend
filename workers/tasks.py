@@ -193,8 +193,8 @@ def train_model(
         training_metrics = calculate_training_metrics(
             fitted_model.best_index_,
             fitted_model.cv_results_,
-            cv.get_n_splits(),
             scoring,
+            random_seed,
         )
         test_metrics = None
 
@@ -210,11 +210,12 @@ def train_model(
                 scoring,
                 training_id=training_id,
                 socket_io=socket_io,
+                n_bootstrap=100,
             )
             elapsed = toc()
             print(f"Running bootstrap took {elapsed}")
 
-            test_metrics = calculate_test_metrics(scores, scoring)
+            test_metrics = calculate_test_metrics(scores, scoring, random_seed)
 
         # Save model in the DB
         best_algorithm = fitted_model.best_params_[estimator_step].__class__.__name__

@@ -1,5 +1,5 @@
 FROM python:3.8
-MAINTAINER Roger Schaer
+LABEL MAINTAINER="Roger Schaer"
 
 # Define app folder
 WORKDIR /usr/src/app
