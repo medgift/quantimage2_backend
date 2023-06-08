@@ -1,6 +1,6 @@
 import pandas
 
-from quantimage2_backend_common.models import FeatureExtraction, FeatureCollection
+from quantimage2_backend_common.models import FeatureExtraction, FeatureCollection, ClinicalFeatureDefinition, ClinicalFeatureValue
 from service.feature_transformation import (
     transform_studies_collection_features_to_df,
     transform_studies_features_to_df,
@@ -95,3 +95,32 @@ def concatenate_modalities_rois(features_df):
     concatenated_df = pandas.concat(to_concat, axis=1)
 
     return concatenated_df
+
+
+def get_clinical_features(user_id: str):
+    clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id(user_id)
+
+    all_features = []
+
+    # Here we could implement the logic to transform the clinical features [one hot encoding, normalization etc..
+    for clin_feature in clin_feature_definitions:
+        clin_feature_values = ClinicalFeatureValue.find_by_clinical_feature_definition_ids([clin_feature.id])
+        clin_feature_df = pandas.DataFrame.from_dict([i.to_dict() for i in clin_feature_values])
+        clin_feature_df.rename(columns={'value': clin_feature.name}, inplace=True)
+        clin_feature_df.set_index('patient_id', inplace=True)
+        clin_feature_df.drop(columns=['clinical_feature_definition_id'], inplace=True)
+
+        if clin_feature.name == 'Gender':
+            clin_feature_df[clin_feature.name] = clin_feature_df[clin_feature.name].apply(lambda x: map_gender(x))
+
+        all_features.append(clin_feature_df)
+    
+    return pandas.concat(all_features, axis=1)
+
+
+def map_gender(gender: str):
+    map = {
+        "M": 0,
+        "F": 1,
+    }
+    return map[gender]

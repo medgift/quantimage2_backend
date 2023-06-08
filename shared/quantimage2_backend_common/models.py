@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import decimal, datetime
+from typing import List
 
 import sqlalchemy
 from flask_sqlalchemy import SQLAlchemy
@@ -910,6 +913,10 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         clinical_feature_definitions = cls.query.filter(cls.name.in_(clinical_feature_names), cls.user_id.in_([user_id])).all()
 
         return clinical_feature_definitions
+    
+    @classmethod
+    def find_by_user_id(cls, user_id) -> List[ClinicalFeatureDefinition]:
+        return cls.query.filter(cls.user_id == user_id).all()
 
     def to_dict(self):
         return {
@@ -948,9 +955,13 @@ class ClinicalFeatureValue(BaseModel, db.Model):
     )
     clinical_feature_definition = db.relationship("ClinicalFeatureDefinition")
 
-    def to_formatted_dict(self, study_uid=None):
+    @classmethod
+    def find_by_clinical_feature_definition_ids(cls, clinical_feature_definition_ids: List[str]):
+        return cls.query.filter(cls.clinical_feature_definition_id.in_(clinical_feature_definition_ids)).all()
+
+    def to_dict(self):
         return {
-            "name": self.feature_definition.name,
+            "clinical_feature_definition_id": self.clinical_feature_definition_id,
             "value": self.value,
             "patient_id": self.patient_id,
         }

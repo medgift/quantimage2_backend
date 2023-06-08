@@ -35,6 +35,7 @@ def models_by_album(album_id):
         body = request.json
 
         label_category = LabelCategory.find_by_id(body["label-category-id"])
+        user_id = g.user
 
         feature_extraction_id = body["extraction-id"]
         collection_id = body["collection-id"]
@@ -61,6 +62,7 @@ def models_by_album(album_id):
                     training_patients,
                     test_patients,
                     gt,
+                    user_id,
                 )
             elif MODEL_TYPES(label_category.label_type) == MODEL_TYPES.SURVIVAL:
                 n_steps = train_survival_model(
@@ -75,6 +77,7 @@ def models_by_album(album_id):
                     training_patients,
                     test_patients,
                     gt,
+                    user_id,
                 )
             else:
                 raise NotImplementedError

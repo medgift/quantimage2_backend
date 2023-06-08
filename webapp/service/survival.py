@@ -24,6 +24,7 @@ def train_survival_model(
     training_patients,
     test_patients,
     gt,
+    user_id,
 ):
     features_df, labels_df_indexed = get_features_labels(
         extraction_id,
