@@ -42,8 +42,6 @@ def clinical_features():
 
         saved_features: List[ClinicalFeatureDefinition] = []
 
-        print(ClinicalFeatureDefinition.query.filter(ClinicalFeatureDefinition.name.in_(["Age"]), ClinicalFeatureDefinition.user_id.in_([g.user])).all())
-
         # Save clinical feature definitions to database if they don't already exist
         for feature in feature_names:
             already_in_db = ClinicalFeatureDefinition.find_by_name([feature], user_id=g.user)
@@ -56,23 +54,14 @@ def clinical_features():
 
             saved_features.append(feature_model)
 
-        print("Saved Features", saved_features)
-
         # Save clinical feature values to database
         for idx, row in clinical_features_df.iterrows():
             for feature in saved_features:
                 feature_name = feature.name
                 patient_id = row["Patient ID"]
 
-                print(row[feature_name])
 
                 clinical_feature = ClinicalFeatureValue(value=row[feature_name], clinical_feature_definition_id=feature.id, patient_id=row["Patient ID"])
                 clinical_feature.save_to_db()
 
         return jsonify([i.to_dict() for i in saved_features])
-
-
-@bp.route("/clinical_feature_values", methods=("GET", "POST"))
-def clinical_feature_values():
-    print("hello")
-    return {"a": "b"}
