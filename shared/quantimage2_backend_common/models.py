@@ -895,15 +895,19 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
 
     __tablename__ = "clinical_feature_definition"
 
-    def __init__(self, name):
+    def __init__(self, name, user_id):
         self.name = name
+        self.user_id = user_id
 
     # Name of the feature
     name = db.Column(db.String(255), nullable=False, unique=False)
 
+    # User who created the clinical feature category
+    user_id = db.Column(db.String(255), nullable=False, unique=False)
+
     @classmethod
-    def find_by_name(cls, clinical_feature_names):
-        clinical_feature_definitions = cls.query.filter(cls.name.in_(clinical_feature_names)).all()
+    def find_by_name(cls, clinical_feature_names, user_id):
+        clinical_feature_definitions = cls.query.filter(cls.name.in_(clinical_feature_names), cls.user_id.in_([user_id])).all()
 
         return clinical_feature_definitions
 
@@ -913,10 +917,45 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "name": self.name,
+            "user_id": self.user_id,
         }
 
     
+# The value of a given feature
+class ClinicalFeatureValue(BaseModel, db.Model):
 
+    __tablenane__ = "clinical_feature_value"
+
+    def __init__(
+        self,
+        value,
+        clinical_feature_definition_id,
+        patient_id,
+    ):
+        self.value = value
+        self.clinical_feature_definition_id = clinical_feature_definition_id
+        self.patient_id = patient_id
+
+    # Value of the feature
+    value = db.Column(db.String(255), nullable=False, unique=False)
+
+    patient_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Relationships
+    clinical_feature_definition_id = db.Column(
+        db.Integer,
+        ForeignKey("clinical_feature_definition.id", ondelete="CASCADE", onupdate="CASCADE"),
+    )
+    clinical_feature_definition = db.relationship("ClinicalFeatureDefinition")
+
+    def to_formatted_dict(self, study_uid=None):
+        return {
+            "name": self.feature_definition.name,
+            "value": self.value,
+            "patient_id": self.patient_id,
+        }
+    
+    
 def process_query_single_column(query):
     compiled = query.compile(
         dialect=db.engine.dialect, compile_kwargs={"literal_binds": True}
