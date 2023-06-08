@@ -16,7 +16,7 @@ def create_app():
     # create and configure the app
     debug = False
 
-    if "DEBUG" is os.environ:
+    if "DEBUG" in os.environ:
         debug = True
         
     app = Flask(__name__, instance_relative_config=True)
