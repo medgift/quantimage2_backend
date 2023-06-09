@@ -65,7 +65,7 @@ def clinical_features():
         return jsonify([i.to_dict() for i in saved_features])
 
     if request.method == "GET":
-        patient_id = request.args.get("patient_id")
-        clinical_feature_name = request.args.get("clinical_feature_name")
-        print(clinical_feature_name, patient_id)
-        return ClinicalFeatureValue.find_by_patient_id_and_name(patient_id, clinical_feature_name, g.user).to_dict()
+        patient_ids = request.args.get("patient_ids").split(",")
+        all_features_values = ClinicalFeatureValue.find_by_patient_ids(patient_ids, g.user)
+        print(all_features_values)
+        return jsonify([i.to_dict() for i in all_features_values])

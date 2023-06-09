@@ -971,12 +971,11 @@ class ClinicalFeatureValue(BaseModel, db.Model):
             db.session.commit()
 
     @classmethod
-    def find_by_patient_id_and_name(cls, patient_id, clinical_feature_name, user_id):
+    def find_by_patient_ids(cls, patient_ids, user_id):
         return cls.query.join(ClinicalFeatureDefinition).filter(
-            ClinicalFeatureDefinition.name == clinical_feature_name,
-            cls.patient_id == patient_id,
-            ClinicalFeatureDefinition.user_id == user_id
-        ).first()
+            cls.patient_id.in_(patient_ids),
+            ClinicalFeatureDefinition.user_id == user_id,
+        ).all()
             
 
     def to_dict(self):
