@@ -10,7 +10,7 @@ from service.feature_transformation import (
     OUTCOME_FIELD_CLASSIFICATION,
 )
 from modeling.utils import get_random_seed
-from service.machine_learning import concatenate_modalities_rois, get_features_labels, get_clinical_features
+from service.machine_learning import concatenate_modalities_rois, get_features_labels, get_clinical_features, check_if_patients_in_dataframe
 import pandas
 
 
@@ -36,12 +36,12 @@ def train_classification_model(
         outcome_columns=[OUTCOME_FIELD_CLASSIFICATION],
     )
 
-    print("//////////////////////")
-    print(features_df)
-    print(labels_df_indexed)
+    check_if_patients_in_dataframe(features_df, training_patients)
+    check_if_patients_in_dataframe(features_df, test_patients)
 
     clin_features = get_clinical_features(user_id)
-    print(clin_features)
+
+    features_df = pandas.merge(features_df, clin_features, left_index=True, right_index=True, how="inner")
 
     random_seed = get_random_seed(
         extraction_id=extraction_id, collection_id=collection_id

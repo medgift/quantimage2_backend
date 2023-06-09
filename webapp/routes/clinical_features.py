@@ -60,8 +60,12 @@ def clinical_features():
                 feature_name = feature.name
                 patient_id = row["Patient ID"]
 
-
-                clinical_feature = ClinicalFeatureValue(value=row[feature_name], clinical_feature_definition_id=feature.id, patient_id=row["Patient ID"])
-                clinical_feature.save_to_db()
+                ClinicalFeatureValue.insert_value(value=row[feature_name], clinical_feature_definition_id=feature.id, patient_id=row["Patient ID"])
 
         return jsonify([i.to_dict() for i in saved_features])
+
+    if request.method == "GET":
+        patient_id = request.args.get("patient_id")
+        clinical_feature_name = request.args.get("clinical_feature_name")
+        print(clinical_feature_name, patient_id)
+        return ClinicalFeatureValue.find_by_patient_id_and_name(patient_id, clinical_feature_name, g.user).to_dict()

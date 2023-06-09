@@ -124,3 +124,10 @@ def map_gender(gender: str):
         "F": 1,
     }
     return map[gender]
+
+
+def check_if_patients_in_dataframe(features_df, patient_ids):
+    """Given a features_df that has patient ids as index, check if all patient ids are in the dataframe"""
+    for patient_id in patient_ids: 
+        if patient_id not in features_df.index:
+            raise ValueError(f"Patient {patient_id} not found in the dataframe")

@@ -958,6 +958,26 @@ class ClinicalFeatureValue(BaseModel, db.Model):
     @classmethod
     def find_by_clinical_feature_definition_ids(cls, clinical_feature_definition_ids: List[str]):
         return cls.query.filter(cls.clinical_feature_definition_id.in_(clinical_feature_definition_ids)).all()
+    
+    @classmethod
+    def insert_value(cls, value, clinical_feature_definition_id, patient_id):
+        clinical_feature_value = cls.query.filter(cls.clinical_feature_definition_id == clinical_feature_definition_id, cls.patient_id == patient_id, cls.value == value).first()
+        
+        if not clinical_feature_value:
+            value = cls(value, clinical_feature_definition_id, patient_id)
+            value.save_to_db()
+        else:
+            clinical_feature_value.update(value=value)
+            db.session.commit()
+
+    @classmethod
+    def find_by_patient_id_and_name(cls, patient_id, clinical_feature_name, user_id):
+        return cls.query.join(ClinicalFeatureDefinition).filter(
+            ClinicalFeatureDefinition.name == clinical_feature_name,
+            cls.patient_id == patient_id,
+            ClinicalFeatureDefinition.user_id == user_id
+        ).first()
+            
 
     def to_dict(self):
         return {
