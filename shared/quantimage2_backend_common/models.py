@@ -972,7 +972,7 @@ class ClinicalFeatureValue(BaseModel, db.Model):
 
     @classmethod
     def find_by_patient_ids(cls, patient_ids, user_id):
-        return cls.query.join(ClinicalFeatureDefinition).filter(
+        return db.session.query(ClinicalFeatureValue, ClinicalFeatureDefinition).join(ClinicalFeatureDefinition).filter(
             cls.patient_id.in_(patient_ids),
             ClinicalFeatureDefinition.user_id == user_id,
         ).all()

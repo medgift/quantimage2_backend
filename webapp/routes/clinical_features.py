@@ -4,6 +4,7 @@ import json
 from typing import List
 
 from sqlalchemy.orm import joinedload
+from collections import defaultdict
 from flask import Blueprint, jsonify, request, g, make_response
 from quantimage2_backend_common.models import ClinicalFeatureDefinition, ClinicalFeatureValue
 import pandas as pd
@@ -67,5 +68,12 @@ def clinical_features():
     if request.method == "GET":
         patient_ids = request.args.get("patient_ids").split(",")
         all_features_values = ClinicalFeatureValue.find_by_patient_ids(patient_ids, g.user)
-        print(all_features_values)
-        return jsonify([i.to_dict() for i in all_features_values])
+
+        output = defaultdict(lambda: {})
+        for feat_value in all_features_values:
+            out_dict = feat_value[0].to_dict()
+            out_dict.update(feat_value[1].to_dict())
+
+            output[out_dict["patient_id"]][out_dict["name"]] = out_dict["value"]
+
+        return jsonify(output)
