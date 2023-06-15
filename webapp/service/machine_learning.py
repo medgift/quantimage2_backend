@@ -121,9 +121,11 @@ def train_model(
     if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
         outcome_columns = [OUTCOME_FIELD_CLASSIFICATION]
         ModelClass = Classification
+        estimator_step = ESTIMATOR_STEP.CLASSIFICATION.value
     elif MODEL_TYPES(label_category.label_type) == MODEL_TYPES.SURVIVAL:
         outcome_columns = [OUTCOME_FIELD_SURVIVAL_TIME, OUTCOME_FIELD_SURVIVAL_EVENT]
         ModelClass = Survival
+        estimator_step = ESTIMATOR_STEP.SURVIVAL.value
     else:
         raise NotImplementedError()
 
@@ -150,7 +152,7 @@ def train_model(
         album=album,
         feature_selection=feature_selection,
         feature_names=features_df.columns,  # TODO - This might change with feature selection
-        estimator_step=ESTIMATOR_STEP.CLASSIFICATION.value,
+        estimator_step=estimator_step,
         label_category=label_category,
         features_df=features_df,
         labels_df=labels_df_indexed,
