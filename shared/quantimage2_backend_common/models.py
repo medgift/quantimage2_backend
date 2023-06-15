@@ -927,6 +927,10 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
             "user_id": self.user_id,
         }
 
+    @classmethod
+    def delete_by_user_id(cls, user_id: str):
+        cls.query.filter(cls.user_id == user_id).delete()
+        db.session.commit()
     
 # The value of a given feature
 class ClinicalFeatureValue(BaseModel, db.Model):

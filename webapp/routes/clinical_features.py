@@ -77,3 +77,6 @@ def clinical_features():
             output[out_dict["patient_id"]][out_dict["name"]] = out_dict["value"]
 
         return jsonify(output)
+
+    if request.method == "DELETE":
+        ClinicalFeatureDefinition.delete_by_user_id(g.user)
