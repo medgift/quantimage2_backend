@@ -7,8 +7,7 @@ from quantimage2_backend_common.const import MODEL_TYPES
 from quantimage2_backend_common.models import Model, LabelCategory
 from quantimage2_backend_common.utils import get_training_id, format_model
 from routes.utils import validate_decorate
-from service.classification import train_classification_model
-from service.survival import train_survival_model
+from service.machine_learning import train_model
 
 # Define blueprint
 bp = Blueprint(__name__, "models")
@@ -49,38 +48,19 @@ def models_by_album(album_id):
         feature_selection = None
 
         try:
-            if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
-                n_steps = train_classification_model(
-                    feature_extraction_id,
-                    collection_id,
-                    album,
-                    studies,
-                    feature_selection,
-                    label_category,
-                    data_splitting_type,
-                    train_test_split_type,
-                    training_patients,
-                    test_patients,
-                    gt,
-                    user_id,
-                )
-            elif MODEL_TYPES(label_category.label_type) == MODEL_TYPES.SURVIVAL:
-                n_steps = train_survival_model(
-                    feature_extraction_id,
-                    collection_id,
-                    album,
-                    studies,
-                    feature_selection,
-                    label_category,
-                    data_splitting_type,
-                    train_test_split_type,
-                    training_patients,
-                    test_patients,
-                    gt,
-                    user_id,
-                )
-            else:
-                raise NotImplementedError
+            n_steps = train_model(
+                feature_extraction_id,
+                collection_id,
+                album,
+                studies,
+                feature_selection,
+                label_category,
+                data_splitting_type,
+                train_test_split_type,
+                training_patients,
+                test_patients,
+                gt,
+            )
 
             training_id = get_training_id(feature_extraction_id, collection_id)
 
