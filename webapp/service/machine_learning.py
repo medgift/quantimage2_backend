@@ -1,13 +1,19 @@
+import traceback
+import os
+
 import pandas
-
-from quantimage2_backend_common.models import FeatureExtraction, FeatureCollection
+from flask import jsonify, make_response
+from modeling.classification import Classification
+from modeling.survival import Survival
+from modeling.utils import get_random_seed
+from quantimage2_backend_common.const import FEATURE_ID_SEPARATOR, MODEL_TYPES, ESTIMATOR_STEP
+from quantimage2_backend_common.models import (FeatureCollection,
+                                               FeatureExtraction)
+from quantimage2_backend_common.utils import get_training_id
 from service.feature_transformation import (
-    transform_studies_collection_features_to_df,
-    transform_studies_features_to_df,
-    OUTCOME_FIELD_CLASSIFICATION,
-)
-
-from quantimage2_backend_common.const import FEATURE_ID_SEPARATOR
+    OUTCOME_FIELD_CLASSIFICATION, OUTCOME_FIELD_SURVIVAL_EVENT,
+    OUTCOME_FIELD_SURVIVAL_TIME, transform_studies_collection_features_to_df,
+    transform_studies_features_to_df)
 
 
 def get_features_labels(
@@ -29,6 +35,7 @@ def get_features_labels(
 
     # Get Labels DataFrame
     # TODO - Allow choosing a mode (Patient only or Patient + ROI)
+    print(gt)
     labels_df = pandas.DataFrame(gt, columns=["PatientID", *outcome_columns])
 
     labels_df_indexed = labels_df.set_index("PatientID", drop=True)
@@ -95,3 +102,68 @@ def concatenate_modalities_rois(features_df):
     concatenated_df = pandas.concat(to_concat, axis=1)
 
     return concatenated_df
+
+
+def train_model(
+    extraction_id,
+    collection_id,
+    album,
+    studies,
+    feature_selection,
+    label_category,
+    data_splitting_type,
+    train_test_splitting_type,
+    training_patients,
+    test_patients,
+    gt,
+):
+
+    if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
+        outcome_columns = [OUTCOME_FIELD_CLASSIFICATION]
+        ModelClass = Classification
+        estimator_step = ESTIMATOR_STEP.CLASSIFICATION.value
+    elif MODEL_TYPES(label_category.label_type) == MODEL_TYPES.SURVIVAL:
+        outcome_columns = [OUTCOME_FIELD_SURVIVAL_TIME, OUTCOME_FIELD_SURVIVAL_EVENT]
+        ModelClass = Survival
+        estimator_step = ESTIMATOR_STEP.SURVIVAL.value
+    else:
+        raise NotImplementedError()
+
+    features_df, labels_df_indexed = get_features_labels(
+        extraction_id,
+        collection_id,
+        studies,
+        gt,
+        outcome_columns=outcome_columns,
+    )
+
+    # Convert to numeric values
+    labels_df_indexed = labels_df_indexed.apply(pandas.to_numeric)
+
+    random_seed = get_random_seed(
+        extraction_id=extraction_id, collection_id=collection_id
+    )
+
+    training_id = get_training_id(extraction_id, collection_id)
+
+    model = ModelClass(
+        feature_extraction_id=extraction_id,
+        collection_id=collection_id,
+        album=album,
+        feature_selection=feature_selection,
+        feature_names=features_df.columns,  # TODO - This might change with feature selection
+        estimator_step=estimator_step,
+        label_category=label_category,
+        features_df=features_df,
+        labels_df=labels_df_indexed,
+        data_splitting_type=data_splitting_type,
+        train_test_splitting_type=train_test_splitting_type,
+        training_patients=training_patients,
+        test_patients=test_patients,
+        random_seed=random_seed,
+        refit_metric="auc",
+        n_jobs=int(os.environ["GRID_SEARCH_CONCURRENCY"]),
+        training_id=training_id,
+    )
+
+    return model.classify()
