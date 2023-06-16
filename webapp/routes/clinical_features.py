@@ -75,3 +75,11 @@ def clinical_feature_definitions():
             created_features.append(feature_model)
 
         return jsonify([i.to_dict() for i in created_features])
+
+    if request.method == "GET":
+        clinical_feature_definitions = ClinicalFeatureDefinition.find_by_user_id(user_id=g.user)
+        output = {}
+        for feature in clinical_feature_definitions:
+            output[feature.name] = feature.to_dict()
+
+        return jsonify(output)
