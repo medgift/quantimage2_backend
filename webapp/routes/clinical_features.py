@@ -19,10 +19,8 @@ def before_request():
     validate_decorate(request)
 
 
-@bp.route("/clinical_features", methods=("GET", "POST"))
+@bp.route("/clinical_features", methods=("GET", "POST", "DELETE"))
 def clinical_features():
-
-    print(request.method)
 
     if request.method == "POST":
         response = {}
@@ -35,30 +33,18 @@ def clinical_features():
 
         clinical_features_df = pd.DataFrame.from_dict(clinical_features_list)
 
-        feature_names = [i for i in clinical_features_df.columns if i != "Patient ID"]
-        response["feature_names"] = feature_names
+        clinical_feature_definitions = ClinicalFeatureDefinition.find_by_user_id(user_id=g.user)
 
-        saved_features: List[ClinicalFeatureDefinition] = []
-
-        # Save clinical feature definitions to database if they don't already exist
-        for feature in feature_names:
-            already_in_db = ClinicalFeatureDefinition.find_by_name([feature], user_id=g.user)
-            
-            if len(already_in_db) > 0:
-                saved_features.append(already_in_db[0])
-                continue
-            feature_model = ClinicalFeatureDefinition(name=feature, user_id=g.user)
-            feature_model.save_to_db()
-
-            saved_features.append(feature_model)
+        saved_features = []
 
         # Save clinical feature values to database
         for idx, row in clinical_features_df.iterrows():
-            for feature in saved_features:
+            for feature in clinical_feature_definitions:
                 feature_name = feature.name
                 patient_id = row["Patient ID"]
 
-                ClinicalFeatureValue.insert_value(value=row[feature_name], clinical_feature_definition_id=feature.id, patient_id=row["Patient ID"])
+                val = ClinicalFeatureValue.insert_value(value=row[feature_name], clinical_feature_definition_id=feature.id, patient_id=row["Patient ID"])
+                saved_features.append(val)
 
         return jsonify([i.to_dict() for i in saved_features])
 
@@ -77,3 +63,15 @@ def clinical_features():
 
     if request.method == "DELETE":
         ClinicalFeatureDefinition.delete_by_user_id(g.user)
+
+@bp.route("/clinical_feature_definitions", methods=("GET", "POST", "DELETE"))
+def clinical_feature_definitions():
+    
+    if request.method == "POST":
+        created_features = []
+        for feature_name, feature in request.json["clinical_feature_definitions"].items():
+            print(feature_name, feature)
+            feature_model = ClinicalFeatureDefinition.insert(name=feature_name, feat_type=feature["Type"], encoding=feature["Encoding"], user_id=g.user)
+            created_features.append(feature_model)
+
+        return jsonify([i.to_dict() for i in created_features])

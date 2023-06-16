@@ -898,12 +898,19 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
 
     __tablename__ = "clinical_feature_definition"
 
-    def __init__(self, name, user_id):
+    def __init__(self, name, feat_type, encoding, user_id):
         self.name = name
         self.user_id = user_id
+        self.feat_type = feat_type
+        self.encoding = encoding
+
 
     # Name of the feature
     name = db.Column(db.String(255), nullable=False, unique=False)
+
+    feat_type = db.Column(db.String(255), nullable=False, unique=False)
+
+    encoding = db.Column(db.String(255), nullable=False, unique=False)
 
     # User who created the clinical feature category
     user_id = db.Column(db.String(255), nullable=False, unique=False)
@@ -918,12 +925,26 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
     def find_by_user_id(cls, user_id) -> List[ClinicalFeatureDefinition]:
         return cls.query.filter(cls.user_id == user_id).all()
 
+    @classmethod
+    def insert(cls, name, feat_type, encoding, user_id):
+        exisiting_definitions = cls.query.filter(cls.name == name, cls.feat_type == feat_type, cls.encoding == encoding, cls.user_id == user_id).all()
+        if len(exisiting_definitions) > 0:
+            return exisiting_definitions[0]
+        else:
+            clin_feat_def = ClinicalFeatureDefinition(name, feat_type, encoding, user_id)
+            clin_feat_def.save_to_db()
+            db.session.commit()
+            return clin_feat_def
+
+
     def to_dict(self):
         return {
             "id": self.id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "name": self.name,
+            "type": self.feat_type,
+            "encoding": self.encoding,
             "user_id": self.user_id,
         }
 
@@ -966,13 +987,13 @@ class ClinicalFeatureValue(BaseModel, db.Model):
     @classmethod
     def insert_value(cls, value, clinical_feature_definition_id, patient_id):
         clinical_feature_value = cls.query.filter(cls.clinical_feature_definition_id == clinical_feature_definition_id, cls.patient_id == patient_id, cls.value == value).first()
-        
+        value = cls(value, clinical_feature_definition_id, patient_id)
         if not clinical_feature_value:
-            value = cls(value, clinical_feature_definition_id, patient_id)
             value.save_to_db()
         else:
             clinical_feature_value.update(value=value)
-            db.session.commit()
+        db.session.commit()
+        return value
 
     @classmethod
     def find_by_patient_ids(cls, patient_ids, user_id):
