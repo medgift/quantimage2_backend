@@ -3,14 +3,11 @@ import traceback
 import json
 from typing import List
 
-from sqlalchemy.orm import joinedload
 from collections import defaultdict
-from flask import Blueprint, jsonify, request, g, make_response
+from flask import Blueprint, jsonify, request, g
 from quantimage2_backend_common.models import ClinicalFeatureDefinition, ClinicalFeatureValue
 import pandas as pd
 from routes.utils import validate_decorate
-from service.classification import train_classification_model
-from service.survival import train_survival_model
 
 
 # Define blueprint
