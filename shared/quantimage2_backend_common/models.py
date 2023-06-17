@@ -945,15 +945,14 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
     @classmethod
     def insert(cls, name, feat_type, encoding, user_id):
         exisiting_definitions = cls.query.filter(cls.name == name, cls.user_id == user_id).all() # we enable updating the values of the feature
+        clin_feat_def = ClinicalFeatureDefinition(name, feat_type, encoding, user_id)
         if len(exisiting_definitions) > 0:
-            new_definition = exisiting_definitions[0].update(feature_type=feat_type, encoding=encoding)
+            _ = exisiting_definitions[0].update(feature_type=feat_type, encoding=encoding)
             db.session.commit()
-            return new_definition
         else:
-            clin_feat_def = ClinicalFeatureDefinition(name, feat_type, encoding, user_id)
             clin_feat_def.save_to_db()
             db.session.commit()
-            return clin_feat_def
+        return clin_feat_def
 
 
     def to_dict(self):

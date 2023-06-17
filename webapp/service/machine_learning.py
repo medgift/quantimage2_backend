@@ -145,6 +145,8 @@ def train_model(
 
     #clinical features
     clinical_features = get_clinical_features(user_id)
+    print(clinical_features.dtypes)
+    raise ValueError("Printing stuff")
 
     if len(clinical_features) > 0:
         features_df = pandas.merge(features_df, clinical_features, left_index=True, right_index=True, how='left')

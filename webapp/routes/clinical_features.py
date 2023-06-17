@@ -57,8 +57,11 @@ def clinical_features():
             out_dict = feat_value[0].to_dict()
             out_dict.update(feat_value[1].to_dict())
 
+            print(feat_value[0].to_dict())
+
             output[out_dict["patient_id"]][out_dict["Name"]] = out_dict["value"]
 
+        print(output)
         return jsonify(output)
 
     if request.method == "DELETE":
