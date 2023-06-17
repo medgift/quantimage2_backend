@@ -60,6 +60,7 @@ def models_by_album(album_id):
                 training_patients,
                 test_patients,
                 gt,
+                g.user,
             )
 
             training_id = get_training_id(feature_extraction_id, collection_id)

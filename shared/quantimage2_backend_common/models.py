@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import decimal, datetime
 from typing import List
+from enum import Enum
 
 import sqlalchemy
 from flask_sqlalchemy import SQLAlchemy
@@ -892,6 +893,22 @@ class FeatureCollection(BaseModel, db.Model):
             features.add(feature_name)
 
         return list(modalities), list(rois), list(features)
+
+
+class ClinicalFeatureEncodings(Enum):
+    # The values here need to match the values that the front end can sned (defined src/config/constants.js)
+    # export const CLINCAL_FEATURE_TYPES = ["Integer", "Float", "String", "Categorical"];
+    # export const CLINICAL_FEATURE_ENCODING = ["None", "One-Hot Encoding", "Normalization", "Ordered Categories"];
+    NONE = "None"
+    ONE_HOT_ENCODING = "One-Hot Encoding"
+    NORMALIZATION = "Normalization"
+    ORDERED_CATEGORIES = "Ordered Categories"
+
+class ClinicalFeatureTypes(Enum):
+    Integer = "Integer"
+    FLOAT = "Float"
+    STRING = "String"
+    CATEGORICAL = "Categorical"
 
 
 class ClinicalFeatureDefinition(BaseModel, db.Model):
