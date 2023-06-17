@@ -62,7 +62,7 @@ def clinical_features():
         return jsonify(output)
 
     if request.method == "DELETE":
-        ClinicalFeatureDefinition.delete_by_user_id(g.user)
+        ClinicalFeatureValue.delete_by_user_id(g.user)
 
 @bp.route("/clinical_feature_definitions", methods=("GET", "POST", "DELETE"))
 def clinical_feature_definitions():
@@ -83,3 +83,6 @@ def clinical_feature_definitions():
             output[feature.name] = feature.to_dict()
 
         return jsonify(output)
+    
+    if request.method == "DELETE":
+        ClinicalFeatureDefinition.delete_by_user_id(g.user)
