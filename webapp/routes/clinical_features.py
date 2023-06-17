@@ -57,7 +57,7 @@ def clinical_features():
             out_dict = feat_value[0].to_dict()
             out_dict.update(feat_value[1].to_dict())
 
-            output[out_dict["patient_id"]][out_dict["name"]] = out_dict["value"]
+            output[out_dict["patient_id"]][out_dict["Name"]] = out_dict["value"]
 
         return jsonify(output)
 
@@ -69,8 +69,9 @@ def clinical_feature_definitions():
     
     if request.method == "POST":
         created_features = []
+        print("Json content of the request", request.json["clinical_feature_definitions"])
         for feature_name, feature in request.json["clinical_feature_definitions"].items():
-            print(feature_name, feature)
+            print("Creating the features", feature_name, feature)
             feature_model = ClinicalFeatureDefinition.insert(name=feature_name, feat_type=feature["Type"], encoding=feature["Encoding"], user_id=g.user)
             created_features.append(feature_model)
 

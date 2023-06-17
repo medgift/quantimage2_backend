@@ -927,9 +927,11 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
 
     @classmethod
     def insert(cls, name, feat_type, encoding, user_id):
-        exisiting_definitions = cls.query.filter(cls.name == name, cls.feat_type == feat_type, cls.encoding == encoding, cls.user_id == user_id).all()
+        exisiting_definitions = cls.query.filter(cls.name == name, cls.user_id == user_id).all() # we enable updating the values of the feature
         if len(exisiting_definitions) > 0:
-            return exisiting_definitions[0]
+            new_definition = exisiting_definitions[0].update(feature_type=feat_type, encoding=encoding)
+            db.session.commit()
+            return new_definition
         else:
             clin_feat_def = ClinicalFeatureDefinition(name, feat_type, encoding, user_id)
             clin_feat_def.save_to_db()
@@ -942,9 +944,9 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
             "id": self.id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "name": self.name,
-            "type": self.feat_type,
-            "encoding": self.encoding,
+            "Name": self.name,
+            "Type": self.feat_type,
+            "Encoding": self.encoding,
             "user_id": self.user_id,
         }
 
