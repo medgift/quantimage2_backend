@@ -27,8 +27,10 @@ The project uses Docker for easy build & deployment, using the following files :
 
 
 ### Local development
-The [debug.env](env_files/debug.env) file defines the DOCKER_MOUNT_DIRECTORY environment variable to specify which directory will be used
-to mount the different docker volumes. This defaults to `/quantimage2-data` but on Mac ensure to switch this as OSX does not have write access to `/`.
+The [.env.env](.env) file defines the DOCKER_MOUNT_DIRECTORY environment variable to specify which directory will be used
+to mount the different docker volumes. This is not part of git - please set the mounting directory at setup.
+
+*Note:* On MACOSX you cannot mount on / as it's not writeable on the newest versions of mac.
 
 ### Code Structure
 
