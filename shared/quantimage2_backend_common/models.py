@@ -1004,12 +1004,12 @@ class ClinicalFeatureValue(BaseModel, db.Model):
     
     @classmethod
     def insert_value(cls, value, clinical_feature_definition_id, patient_id):
-        clinical_feature_value = cls.query.filter(cls.clinical_feature_definition_id == clinical_feature_definition_id, cls.patient_id == patient_id, cls.value == value).first()
-        value = cls(value, clinical_feature_definition_id, patient_id)
-        if not clinical_feature_value:
-            value.save_to_db()
+        queried_clinical_feature_value = cls.query.filter(cls.clinical_feature_definition_id == clinical_feature_definition_id, cls.patient_id == patient_id, cls.value == value).first()
+        clinical_feature_value = cls(value, clinical_feature_definition_id, patient_id)
+        if not queried_clinical_feature_value:
+            clinical_feature_value.save_to_db()
         else:
-            clinical_feature_value.update(value=value)
+            queried_clinical_feature_value.update(value=value)
         db.session.commit()
         return value
 

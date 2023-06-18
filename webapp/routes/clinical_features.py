@@ -66,6 +66,7 @@ def clinical_features():
 
     if request.method == "DELETE":
         ClinicalFeatureValue.delete_by_user_id(g.user)
+        return '', 200
 
 @bp.route("/clinical_feature_definitions", methods=("GET", "POST", "DELETE"))
 def clinical_feature_definitions():
@@ -90,3 +91,4 @@ def clinical_feature_definitions():
     
     if request.method == "DELETE":
         ClinicalFeatureDefinition.delete_by_user_id(g.user)
+        return '', 200
