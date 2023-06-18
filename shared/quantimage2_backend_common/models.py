@@ -1011,7 +1011,7 @@ class ClinicalFeatureValue(BaseModel, db.Model):
         else:
             queried_clinical_feature_value.update(value=value)
         db.session.commit()
-        return value
+        return clinical_feature_value
 
     @classmethod
     def find_by_patient_ids(cls, patient_ids, user_id):

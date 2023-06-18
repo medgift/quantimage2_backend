@@ -146,7 +146,6 @@ def train_model(
     #clinical features
     clinical_features = get_clinical_features(user_id)
     print(clinical_features.dtypes)
-    raise ValueError("Printing stuff")
 
     if len(clinical_features) > 0:
         features_df = pandas.merge(features_df, clinical_features, left_index=True, right_index=True, how='left')
@@ -198,6 +197,7 @@ def get_clinical_features(user_id: str):
         clin_feature_df.drop(columns=['clinical_feature_definition_id'], inplace=True)
 
         clin_feature_encoding = ClinicalFeatureEncodings(clin_feature.encoding)
+        clin_feature_type = ClinicalFeatureTypes(clin_feature.feat_type)
 
         if clin_feature_encoding == ClinicalFeatureEncodings.ONE_HOT_ENCODING:
             enc = OneHotEncoder(handle_unknown='ignore')
@@ -209,7 +209,9 @@ def get_clinical_features(user_id: str):
             scaler = MinMaxScaler()
             transformed = scaler.fit_transform(clin_feature_df[[clin_feature.name]])
             clin_feature_df = pandas.DataFrame(data=transformed, index=index)
-            
+        
+        if clin_feature_type == ClinicalFeatureTypes.Integer and not clin_feature_encoding == ClinicalFeatureEncodings.ONE_HOT_ENCODING:
+            clin_feature_df[[clin_feature.name]] = clin_feature_df[[clin_feature.name]].astype(int)
 
         all_features.append(clin_feature_df)
 

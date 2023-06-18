@@ -46,6 +46,8 @@ def clinical_features():
                 val = ClinicalFeatureValue.insert_value(value=row[feature_name], clinical_feature_definition_id=feature.id, patient_id=row["Patient ID"])
                 saved_features.append(val)
 
+        print("saved features 0", saved_features[0])
+        print("saved features 0 type", (saved_features[0]))
         return jsonify([i.to_dict() for i in saved_features])
 
     if request.method == "GET":
@@ -75,7 +77,6 @@ def clinical_feature_definitions():
         created_features = []
         print("Json content of the request", request.json["clinical_feature_definitions"])
         for feature_name, feature in request.json["clinical_feature_definitions"].items():
-            print("Creating the features", feature_name, feature)
             feature_model = ClinicalFeatureDefinition.insert(name=feature_name, feat_type=feature["Type"], encoding=feature["Encoding"], user_id=g.user)
             created_features.append(feature_model)
 
