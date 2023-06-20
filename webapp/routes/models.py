@@ -20,7 +20,7 @@ def before_request():
 
 @bp.route("/models/<album_id>", methods=("GET", "POST"))
 def models_by_album(album_id):
-
+    
     if request.method == "GET":
         models = Model.find_by_album(album_id, g.user)
         formatted_models = list(map(lambda model: format_model(model), models))

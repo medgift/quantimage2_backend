@@ -29,6 +29,21 @@ def load_df_from_request_dict(request_dict: Dict) -> pd.core.frame.DataFrame:
     return pd.DataFrame.from_dict(clinical_features_list)
 
 
+@bp.route("/clinical_features/get_unique_values", methods=["POST"])
+def clinical_features_get_unique_values():
+    if request.method == "POST":
+        clinical_features_df = load_df_from_request_dict(request.json["clinical_feature_map"])
+
+        response = {"frequency_of_occurence": {}}
+
+        #Computing features with no data at all (using strings because we are not guarantee to get nulls from the request)
+        for column in clinical_features_df.columns:
+            frequency_of_occurence = (clinical_features_df[column].value_counts() / clinical_features_df[column].value_counts().sum()) * 100
+            response["frequency_of_occurence"][column] = [f"{idx}-{round(i, 2)}%" for idx, i in frequency_of_occurence.iteritems()]
+
+        return response
+    
+
 @bp.route("/clinical_features/filter", methods=["POST"])
 def clinical_features_filter():
     if request.method == "POST":
@@ -36,15 +51,22 @@ def clinical_features_filter():
         nulls_df = pd.DataFrame()
 
         response = {}
+        response["only_one_value"] = []
 
-        #Computing rows with no data at all (using strings because we are not guarantee to get nulls from the request)
+        #Computing features with no data at all (using strings because we are not guarantee to get nulls from the request)
         for column in clinical_features_df.columns:
             nulls_df[column] = clinical_features_df[column].astype(str).apply(lambda x: len(x)) # we first create a dataframe with the same shape as the clinical features - but with the length of the string in each cell - len == 0 -> no data.
+
+            # Number of unique values per feature
+            n_unique = clinical_features_df[column].unique()
+            if len(n_unique) == 1:
+                response["only_one_value"].append(column)
+
 
         columns_with_only_nulls = (nulls_df == 0).sum() == len(clinical_features_df)
         response["only_nulls"] = columns_with_only_nulls[columns_with_only_nulls].index.tolist()
 
-        # Dropping rows with too little data
+        # Dropping features with too little data
         percent_nulls = ((nulls_df == 0).sum() / len(clinical_features_df)) >= 0.9
         response["too_little_data"] = percent_nulls[percent_nulls].index.tolist()
 
@@ -89,10 +111,6 @@ def clinical_features():
 
         return jsonify(output)
 
-    if request.method == "DELETE":
-        ClinicalFeatureValue.delete_by_user_id(g.user)
-        return '', 200
-
 @bp.route("/clinical_feature_definitions", methods=("GET", "POST", "DELETE"))
 def clinical_feature_definitions():
     
@@ -126,7 +144,7 @@ def guess_clinical_feature_definitions():
         for column_name in clinical_features_df.columns:
             if column_name == "PatientID":
                 continue
-            if clinical_features_df[column_name].unique().size < 5:
+            if clinical_features_df[column_name].unique().size <= 10:
                 response[column_name] = {"Type": "Categorical", "Encoding": "One-Hot Encoding"} # The strings here should be the same as the ones used by the frontend (src/config/constants.js - line 79 as of 20th june 2023)
             try:
                 _ = clinical_features_df[column_name].unique().astype(float)
