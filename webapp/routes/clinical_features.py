@@ -55,6 +55,8 @@ def clinical_features_filter():
 
         #Computing features with no data at all (using strings because we are not guarantee to get nulls from the request)
         for column in clinical_features_df.columns:
+            if column == "__parsed_extra": # This happens when papa parse encounters some funkyness in the CSV
+                continue
             nulls_df[column] = clinical_features_df[column].astype(str).apply(lambda x: len(x)) # we first create a dataframe with the same shape as the clinical features - but with the length of the string in each cell - len == 0 -> no data.
 
             # Number of unique values per feature
@@ -142,7 +144,7 @@ def guess_clinical_feature_definitions():
         response = {}
         clinical_features_df = load_df_from_request_dict(request.json["clinical_feature_map"])
         for column_name in clinical_features_df.columns:
-            if column_name == "PatientID":
+            if column_name == "PatientID" or column_name == "__parsed_extra":
                 continue
             if clinical_features_df[column_name].unique().size <= 10:
                 response[column_name] = {"Type": "Categorical", "Encoding": "One-Hot Encoding"} # The strings here should be the same as the ones used by the frontend (src/config/constants.js - line 79 as of 20th june 2023)
