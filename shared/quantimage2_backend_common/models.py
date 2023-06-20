@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 import decimal, datetime
+from typing import List
+from enum import Enum
 
 import sqlalchemy
 from flask_sqlalchemy import SQLAlchemy
@@ -891,6 +895,145 @@ class FeatureCollection(BaseModel, db.Model):
         return list(modalities), list(rois), list(features)
 
 
+class ClinicalFeatureEncodings(Enum):
+    # The values here need to match the values that the front end can sned (defined src/config/constants.js)
+    # export const CLINCAL_FEATURE_TYPES = ["Integer", "Float", "String", "Categorical"];
+    # export const CLINICAL_FEATURE_ENCODING = ["None", "One-Hot Encoding", "Normalization", "Ordered Categories"];
+    NONE = "None"
+    ONE_HOT_ENCODING = "One-Hot Encoding"
+    NORMALIZATION = "Normalization"
+    ORDERED_CATEGORIES = "Ordered Categories"
+
+class ClinicalFeatureTypes(Enum):
+    Integer = "Integer"
+    FLOAT = "Float"
+    STRING = "String"
+    CATEGORICAL = "Categorical"
+
+
+class ClinicalFeatureDefinition(BaseModel, db.Model):
+
+    __tablename__ = "clinical_feature_definition"
+
+    def __init__(self, name, feat_type, encoding, user_id):
+        self.name = name
+        self.user_id = user_id
+        self.feat_type = feat_type
+        self.encoding = encoding
+
+
+    # Name of the feature
+    name = db.Column(db.String(255), nullable=False, unique=False)
+
+    feat_type = db.Column(db.String(255), nullable=False, unique=False)
+
+    encoding = db.Column(db.String(255), nullable=False, unique=False)
+
+    # User who created the clinical feature category
+    user_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    @classmethod
+    def find_by_name(cls, clinical_feature_names, user_id):
+        clinical_feature_definitions = cls.query.filter(cls.name.in_(clinical_feature_names), cls.user_id.in_([user_id])).all()
+
+        return clinical_feature_definitions
+    
+    @classmethod
+    def find_by_user_id(cls, user_id) -> List[ClinicalFeatureDefinition]:
+        return cls.query.filter(cls.user_id == user_id).all()
+
+    @classmethod
+    def insert(cls, name, feat_type, encoding, user_id):
+        exisiting_definitions = cls.query.filter(cls.name == name, cls.user_id == user_id).all() # we enable updating the values of the feature
+        clin_feat_def = ClinicalFeatureDefinition(name, feat_type, encoding, user_id)
+        if len(exisiting_definitions) > 0:
+            _ = exisiting_definitions[0].update(feature_type=feat_type, encoding=encoding)
+            db.session.commit()
+        else:
+            clin_feat_def.save_to_db()
+            db.session.commit()
+        return clin_feat_def
+
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "Name": self.name,
+            "Type": self.feat_type,
+            "Encoding": self.encoding,
+            "user_id": self.user_id,
+        }
+
+    @classmethod
+    def delete_by_user_id(cls, user_id: str):
+        cls.query.filter(cls.user_id == user_id).delete()
+        db.session.commit()
+    
+# The value of a given feature
+class ClinicalFeatureValue(BaseModel, db.Model):
+
+    __tablenane__ = "clinical_feature_value"
+
+    def __init__(
+        self,
+        value,
+        clinical_feature_definition_id,
+        patient_id,
+    ):
+        self.value = value
+        self.clinical_feature_definition_id = clinical_feature_definition_id
+        self.patient_id = patient_id
+
+    # Value of the feature
+    value = db.Column(db.String(255), nullable=False, unique=False)
+
+    patient_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    # Relationships
+    clinical_feature_definition_id = db.Column(
+        db.Integer,
+        ForeignKey("clinical_feature_definition.id", ondelete="CASCADE", onupdate="CASCADE"),
+    )
+    clinical_feature_definition = db.relationship("ClinicalFeatureDefinition")
+
+    @classmethod
+    def find_by_clinical_feature_definition_ids(cls, clinical_feature_definition_ids: List[str]):
+        return cls.query.filter(cls.clinical_feature_definition_id.in_(clinical_feature_definition_ids)).all()
+    
+    @classmethod
+    def insert_value(cls, value, clinical_feature_definition_id, patient_id):
+        queried_clinical_feature_value = cls.query.filter(cls.clinical_feature_definition_id == clinical_feature_definition_id, cls.patient_id == patient_id, cls.value == value).first()
+        clinical_feature_value = cls(value, clinical_feature_definition_id, patient_id)
+        if not queried_clinical_feature_value:
+            clinical_feature_value.save_to_db()
+        else:
+            queried_clinical_feature_value.update(value=value)
+        db.session.commit()
+        return clinical_feature_value
+
+    @classmethod
+    def find_by_patient_ids(cls, patient_ids, user_id):
+        return db.session.query(ClinicalFeatureValue, ClinicalFeatureDefinition).join(ClinicalFeatureDefinition).filter(
+            cls.patient_id.in_(patient_ids),
+            ClinicalFeatureDefinition.user_id == user_id,
+        ).all()
+            
+
+    @classmethod
+    def delete_by_user_id(cls, user_id: str):
+        cls.query.join(ClinicalFeatureDefinition).filter(ClinicalFeatureDefinition.user_id == user_id).delete()
+        db.session.commit()
+
+    def to_dict(self):
+        return {
+            "clinical_feature_definition_id": self.clinical_feature_definition_id,
+            "value": self.value,
+            "patient_id": self.patient_id,
+        }
+    
+    
 def process_query_single_column(query):
     compiled = query.compile(
         dialect=db.engine.dialect, compile_kwargs={"literal_binds": True}

@@ -12,10 +12,13 @@ services:
       - 5000:5000
     env_file:
       - env_files/debug.env
+      - .env
+    environment:
+    - DEBUG=true
     volumes:
       - ./webapp:/usr/src/app
       - ./shared/quantimage2_backend_common:/usr/local/lib/python3.8/site-packages/quantimage2_backend_common
-      - /data/quantimage2-data:/quantimage2-data
+      - ${DOCKER_MOUNT_DIRECTORY}:/quantimage2-data
     <<: *host-mappings
 
   celery_extraction:
@@ -25,7 +28,7 @@ services:
     volumes:
       - ./workers:/usr/src/app
       - ./shared/quantimage2_backend_common:/usr/local/lib/python3.8/site-packages/quantimage2_backend_common
-      - /data/quantimage2-data:/quantimage2-data
+      - ${DOCKER_MOUNT_DIRECTORY}:/quantimage2-data
     <<: *host-mappings
     # Uncomment for debugging celery worker tasks
     #command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=extraction@%h", "--queues=extraction"]
@@ -37,7 +40,7 @@ services:
     volumes:
       - ./workers:/usr/src/app
       - ./shared/quantimage2_backend_common:/usr/local/lib/python3.8/site-packages/quantimage2_backend_common
-      - /data/quantimage2-data:/quantimage2-data
+      - ${DOCKER_MOUNT_DIRECTORY}:/quantimage2-data
     <<: *host-mappings
     # Uncomment for debugging celery worker tasks
     command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=training@%h", "--queues=training"]

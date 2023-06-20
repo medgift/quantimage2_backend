@@ -34,6 +34,7 @@ def models_by_album(album_id):
         body = request.json
 
         label_category = LabelCategory.find_by_id(body["label-category-id"])
+        user_id = g.user
 
         feature_extraction_id = body["extraction-id"]
         collection_id = body["collection-id"]
@@ -59,6 +60,7 @@ def models_by_album(album_id):
                 training_patients,
                 test_patients,
                 gt,
+                g.user,
             )
 
             training_id = get_training_id(feature_extraction_id, collection_id)
