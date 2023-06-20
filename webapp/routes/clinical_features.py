@@ -126,7 +126,7 @@ def guess_clinical_feature_definitions():
         for column_name in clinical_features_df.columns:
             if column_name == "PatientID":
                 continue
-            if clinical_features_df[column_name].unique().size() < 5:
+            if clinical_features_df[column_name].unique().size < 5:
                 response[column_name] = {"Type": "Categorical", "Encoding": "One-Hot Encoding"} # The strings here should be the same as the ones used by the frontend (src/config/constants.js - line 79 as of 20th june 2023)
             try:
                 _ = clinical_features_df[column_name].unique().astype(float)
