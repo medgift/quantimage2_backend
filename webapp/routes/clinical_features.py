@@ -51,6 +51,7 @@ def clinical_features_filter():
 
         response = {}
         response["only_one_value"] = []
+        date_columns = []
 
         #Computing features with no data at all (using strings because we are not guarantee to get nulls from the request)
         for column in clinical_features_df.columns:
@@ -63,6 +64,9 @@ def clinical_features_filter():
             if len(n_unique) == 1:
                 response["only_one_value"].append(column)
 
+            if "date" in column.lower():
+                date_columns.append(column)
+
 
         columns_with_only_nulls = (nulls_df == 0).sum() == len(clinical_features_df)
         response["only_nulls"] = columns_with_only_nulls[columns_with_only_nulls].index.tolist()
@@ -71,6 +75,9 @@ def clinical_features_filter():
         percent_nulls = ((nulls_df == 0).sum() / len(clinical_features_df)) >= 0.9
         response["too_little_data"] = percent_nulls[percent_nulls].index.tolist()
 
+        # Columns that have date in the name
+        response["date_columns"] = date_columns
+        
         return response
 
 
