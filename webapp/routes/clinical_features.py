@@ -16,7 +16,6 @@ bp = Blueprint(__name__, "clinical_features")
 
 @bp.before_request
 def before_request():
-    print("in the validation")
     validate_decorate(request)
 
 def load_df_from_request_dict(request_dict: Dict) -> pd.core.frame.DataFrame:
@@ -94,8 +93,6 @@ def clinical_features():
                 val = ClinicalFeatureValue.insert_value(value=row[feature_name], clinical_feature_definition_id=feature.id, patient_id=patient_id)
                 saved_features.append(val)
 
-        print("saved features 0", saved_features[0])
-        print("saved features 0 type", (saved_features[0]))
         return jsonify([i.to_dict() for i in saved_features])
 
     if request.method == "GET":
@@ -107,8 +104,6 @@ def clinical_features():
             out_dict = feat_value[0].to_dict()
             out_dict.update(feat_value[1].to_dict())
 
-            print(feat_value[0].to_dict())
-
             output[out_dict["patient_id"]][out_dict["Name"]] = out_dict["value"]
 
         return jsonify(output)
@@ -118,7 +113,7 @@ def clinical_feature_definitions():
     
     if request.method == "POST":
         created_features = []
-        print("Json content of the request", request.json["clinical_feature_definitions"])
+        
         for feature_name, feature in request.json["clinical_feature_definitions"].items():
             feature_model = ClinicalFeatureDefinition.insert(name=feature_name, feat_type=feature["Type"], encoding=feature["Encoding"], user_id=g.user)
             created_features.append(feature_model)
