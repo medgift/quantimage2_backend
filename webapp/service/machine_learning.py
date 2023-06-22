@@ -145,7 +145,8 @@ def train_model(
 
     #clinical features
     clinical_features = get_clinical_features(user_id)
-    print(clinical_features.dtypes)
+    print(clinical_features.head())
+    print(clinical_features.columns)
 
     if len(clinical_features) > 0:
         features_df = pandas.merge(features_df, clinical_features, left_index=True, right_index=True, how='left')
@@ -188,6 +189,9 @@ def get_clinical_features(user_id: str):
     all_features = []
 
     # Here we could implement the logic to transform the clinical features [one hot encoding, normalization etc..
+    print("Number of clin feature definitions", len(clin_feature_definitions))
+    print("names of clin feat def", [i.name for i in clin_feature_definitions])
+    print(user_id)
     for clin_feature in clin_feature_definitions:
         clin_feature_values = ClinicalFeatureValue.find_by_clinical_feature_definition_ids([clin_feature.id])
         clin_feature_df = pandas.DataFrame.from_dict([i.to_dict() for i in clin_feature_values])
@@ -208,11 +212,11 @@ def get_clinical_features(user_id: str):
         if clin_feature_encoding == ClinicalFeatureEncodings.NORMALIZATION:
             scaler = MinMaxScaler()
             transformed = scaler.fit_transform(clin_feature_df[[clin_feature.name]])
-            clin_feature_df = pandas.DataFrame(data=transformed, index=index)
+            clin_feature_df = pandas.DataFrame(data=transformed, index=index, columns=[clin_feature.name])
         
         if clin_feature_type == ClinicalFeatureTypes.Integer and not clin_feature_encoding == ClinicalFeatureEncodings.ONE_HOT_ENCODING:
             clin_feature_df[[clin_feature.name]] = clin_feature_df[[clin_feature.name]].astype(int)
-
+        print(clin_feature.name, clin_feature_df.columns)
         all_features.append(clin_feature_df)
 
     return pandas.concat(all_features, axis=1)

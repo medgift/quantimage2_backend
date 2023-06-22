@@ -1019,12 +1019,6 @@ class ClinicalFeatureValue(BaseModel, db.Model):
             cls.patient_id.in_(patient_ids),
             ClinicalFeatureDefinition.user_id == user_id,
         ).all()
-            
-
-    @classmethod
-    def delete_by_user_id(cls, user_id: str):
-        cls.query.join(ClinicalFeatureDefinition).filter(ClinicalFeatureDefinition.user_id == user_id).delete()
-        db.session.commit()
 
     def to_dict(self):
         return {
