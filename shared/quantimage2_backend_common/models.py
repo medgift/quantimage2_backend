@@ -916,11 +916,12 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
 
     __tablename__ = "clinical_feature_definition"
 
-    def __init__(self, name, feat_type, encoding, user_id):
+    def __init__(self, name, feat_type, encoding, user_id, album_id):
         self.name = name
         self.user_id = user_id
         self.feat_type = feat_type
         self.encoding = encoding
+        self.album_id = album_id
 
 
     # Name of the feature
@@ -933,6 +934,9 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
     # User who created the clinical feature category
     user_id = db.Column(db.String(255), nullable=False, unique=False)
 
+    # Album on which the model was created
+    album_id = db.Column(db.String(255), nullable=False, unique=False)
+
     @classmethod
     def find_by_name(cls, clinical_feature_names, user_id):
         clinical_feature_definitions = cls.query.filter(cls.name.in_(clinical_feature_names), cls.user_id.in_([user_id])).all()
@@ -940,13 +944,13 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         return clinical_feature_definitions
     
     @classmethod
-    def find_by_user_id(cls, user_id) -> List[ClinicalFeatureDefinition]:
-        return cls.query.filter(cls.user_id == user_id).all()
+    def find_by_user_id_and_album_id(cls, user_id, album_id) -> List[ClinicalFeatureDefinition]:
+        return cls.query.filter(cls.user_id == user_id, cls.album_id == album_id).all()
 
     @classmethod
-    def insert(cls, name, feat_type, encoding, user_id):
-        exisiting_definitions = cls.query.filter(cls.name == name, cls.user_id == user_id).all() # we enable updating the values of the feature
-        clin_feat_def = ClinicalFeatureDefinition(name, feat_type, encoding, user_id)
+    def insert(cls, name, feat_type, encoding, user_id, album_id):
+        exisiting_definitions = cls.query.filter(cls.name == name, cls.user_id == user_id, cls.album_id == album_id).all() # we enable updating the values of the feature
+        clin_feat_def = ClinicalFeatureDefinition(name, feat_type, encoding, user_id, album_id)
         if len(exisiting_definitions) > 0:
             _ = exisiting_definitions[0].update(feature_type=feat_type, encoding=encoding)
             db.session.commit()
@@ -968,8 +972,8 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         }
 
     @classmethod
-    def delete_by_user_id(cls, user_id: str):
-        cls.query.filter(cls.user_id == user_id).delete()
+    def delete_by_user_id_and_album_id(cls, user_id: str, album_id: str):
+        cls.query.filter(cls.user_id == user_id, cls.album_id == album_id).delete()
         db.session.commit()
     
 # The value of a given feature
@@ -1033,10 +1037,11 @@ class ClinicalFeatureValue(BaseModel, db.Model):
         return [ClinicalFeatureValue(**i) for i in features_to_create + features_to_update] 
 
     @classmethod
-    def find_by_patient_ids(cls, patient_ids, user_id):
+    def find_by_patient_ids(cls, patient_ids, album_id, user_id):
         return db.session.query(ClinicalFeatureValue, ClinicalFeatureDefinition).join(ClinicalFeatureDefinition).filter(
             cls.patient_id.in_(patient_ids),
             ClinicalFeatureDefinition.user_id == user_id,
+            ClinicalFeatureDefinition.album_id == album_id,
         ).all()
 
     def to_dict(self):
