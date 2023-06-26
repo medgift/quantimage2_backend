@@ -38,7 +38,7 @@ def clinical_features_get_unique_values():
         #Computing features with no data at all (using strings because we are not guarantee to get nulls from the request)
         for column in clinical_features_df.columns:
             frequency_of_occurence = (clinical_features_df[column].value_counts() / clinical_features_df[column].value_counts().sum()) * 100
-            response["frequency_of_occurence"][column] = [f"{idx}-{round(i, 2)}%" for idx, i in frequency_of_occurence.iteritems()]
+            response["frequency_of_occurence"][column] = [f"{idx}-{round(i, 2)}%" for idx, i in frequency_of_occurence.items()]
 
         return response
     
@@ -92,13 +92,13 @@ def clinical_features():
         saved_features = []
 
         # Save clinical feature values to database
+        values_to_insert_or_update = []
+
         for idx, row in clinical_features_df.iterrows():
             for feature in clinical_feature_definitions:
-                feature_name = feature.name
-                patient_id = row["Patient ID"]
-
-                val = ClinicalFeatureValue.insert_value(value=row[feature_name], clinical_feature_definition_id=feature.id, patient_id=patient_id)
-                saved_features.append(val)
+                values_to_insert_or_update.append({"value": row[feature.name], "clinical_feature_definition_id": feature.id, "patient_id": row["Patient ID"]})
+    
+        ClinicalFeatureValue.insert_values(values_to_insert_or_update)
 
         return jsonify([i.to_dict() for i in saved_features])
 

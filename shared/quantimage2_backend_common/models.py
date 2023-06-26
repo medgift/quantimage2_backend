@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import decimal, datetime
-from typing import List
+from typing import List, Dict, Any
 from enum import Enum
 
 import sqlalchemy
+from sqlalchemy import update, insert
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import ForeignKey, Table, Column, Integer
 from sqlalchemy.orm import joinedload
@@ -1003,15 +1004,33 @@ class ClinicalFeatureValue(BaseModel, db.Model):
         return cls.query.filter(cls.clinical_feature_definition_id.in_(clinical_feature_definition_ids)).all()
     
     @classmethod
-    def insert_value(cls, value, clinical_feature_definition_id, patient_id):
-        queried_clinical_feature_value = cls.query.filter(cls.clinical_feature_definition_id == clinical_feature_definition_id, cls.patient_id == patient_id, cls.value == value).first()
-        clinical_feature_value = cls(value, clinical_feature_definition_id, patient_id)
-        if not queried_clinical_feature_value:
-            clinical_feature_value.save_to_db()
-        else:
-            queried_clinical_feature_value.update(value=value)
+    def insert_values(cls, values_to_insert_or_update: List[Dict[str, Any]]):
+        features_to_update = []
+        features_to_create = []
+
+        for value_to_insert_or_update in values_to_insert_or_update:
+            queried_clinical_feature_value = cls.query.filter(
+                cls.clinical_feature_definition_id == value_to_insert_or_update["clinical_feature_definition_id"], 
+                cls.patient_id == value_to_insert_or_update["patient_id"],
+                cls.value == value_to_insert_or_update["value"]
+            ).first()
+
+            if not queried_clinical_feature_value:
+                features_to_create.append(value_to_insert_or_update)
+            else:
+                features_to_update.append(value_to_insert_or_update)
+
+
+        _ = db.session.execute(
+            insert(ClinicalFeatureValue),
+            features_to_create
+        )
+        _ = db.session.execute(
+            update(ClinicalFeatureValue),
+            features_to_update
+        )
         db.session.commit()
-        return clinical_feature_value
+        return [ClinicalFeatureValue(**i) for i in features_to_create + features_to_update] 
 
     @classmethod
     def find_by_patient_ids(cls, patient_ids, user_id):
