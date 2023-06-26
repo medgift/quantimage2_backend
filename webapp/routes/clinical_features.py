@@ -105,7 +105,7 @@ def clinical_features():
         for idx, row in clinical_features_df.iterrows():
             for feature in clinical_feature_definitions:
                 values_to_insert_or_update.append({"value": row[feature.name], "clinical_feature_definition_id": feature.id, "patient_id": row["Patient ID"]})
-    
+
         ClinicalFeatureValue.insert_values(values_to_insert_or_update)
 
         return jsonify([i.to_dict() for i in saved_features])
@@ -132,9 +132,13 @@ def clinical_feature_definitions():
         created_features = []
         album_id = get_album_id_from_request(request)
         
+        clinical_feature_definitions_to_insert_or_update = []
         for feature_name, feature in request.json["clinical_feature_definitions"].items():
-            feature_model = ClinicalFeatureDefinition.insert(name=feature_name, feat_type=feature["Type"], encoding=feature["Encoding"], user_id=g.user, album_id=album_id)
-            created_features.append(feature_model)
+            clinical_feature_definitions_to_insert_or_update.append(
+                {"name": feature_name, "feat_type": feature["Type"], "encoding": feature["Encoding"], "user_id": g.user, "album_id": album_id}
+            )
+        
+        feature_model = ClinicalFeatureDefinition.insert_values(clinical_feature_definitions_to_insert_or_update)
 
         return jsonify([i.to_dict() for i in created_features])
 

@@ -948,16 +948,35 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         return cls.query.filter(cls.user_id == user_id, cls.album_id == album_id).all()
 
     @classmethod
-    def insert(cls, name, feat_type, encoding, user_id, album_id):
-        exisiting_definitions = cls.query.filter(cls.name == name, cls.user_id == user_id, cls.album_id == album_id).all() # we enable updating the values of the feature
-        clin_feat_def = ClinicalFeatureDefinition(name, feat_type, encoding, user_id, album_id)
-        if len(exisiting_definitions) > 0:
-            _ = exisiting_definitions[0].update(feature_type=feat_type, encoding=encoding)
-            db.session.commit()
-        else:
-            clin_feat_def.save_to_db()
-            db.session.commit()
-        return clin_feat_def
+    def insert_values(cls, definitions_to_insert_or_update):
+        definitions_to_update = []
+        definitions_to_create = []
+        for definition_to_insert_or_update in definitions_to_insert_or_update:
+            exisiting_definitions = cls.query.filter(
+                cls.name == definition_to_insert_or_update["name"], 
+                cls.user_id == definition_to_insert_or_update["user_id"], 
+                cls.album_id == definition_to_insert_or_update["album_id"]
+            ).all() # we enable updating the values of the feature
+
+            if len(exisiting_definitions) > 0:
+                definitions_to_update.append(definition_to_insert_or_update)
+            else:
+                definitions_to_create.append(definition_to_insert_or_update)
+        
+        if len(definitions_to_create) > 0:
+            _ = db.session.execute(
+                insert(ClinicalFeatureValue),
+                definitions_to_create
+            )
+        
+        if len(definitions_to_update) > 0:
+            _ = db.session.execute(
+                update(ClinicalFeatureValue),
+                definitions_to_update
+            )
+
+        db.session.commit()
+        return [ClinicalFeatureDefinition(**i) for i in definitions_to_create + definitions_to_update] 
 
 
     def to_dict(self):
@@ -1024,15 +1043,18 @@ class ClinicalFeatureValue(BaseModel, db.Model):
             else:
                 features_to_update.append(value_to_insert_or_update)
 
+        if len(features_to_create) > 0:
+            _ = db.session.execute(
+                insert(ClinicalFeatureValue),
+                features_to_create
+            )
+        
+        if len(features_to_update) > 0:
+            _ = db.session.execute(
+                update(ClinicalFeatureValue),
+                features_to_update
+            )
 
-        _ = db.session.execute(
-            insert(ClinicalFeatureValue),
-            features_to_create
-        )
-        _ = db.session.execute(
-            update(ClinicalFeatureValue),
-            features_to_update
-        )
         db.session.commit()
         return [ClinicalFeatureValue(**i) for i in features_to_create + features_to_update] 
 
