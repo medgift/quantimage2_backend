@@ -965,13 +965,13 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         
         if len(definitions_to_create) > 0:
             _ = db.session.execute(
-                insert(ClinicalFeatureValue),
+                insert(ClinicalFeatureDefinition),
                 definitions_to_create
             )
         
         if len(definitions_to_update) > 0:
             _ = db.session.execute(
-                update(ClinicalFeatureValue),
+                update(ClinicalFeatureDefinition),
                 definitions_to_update
             )
 
@@ -992,7 +992,8 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
 
     @classmethod
     def delete_by_user_id_and_album_id(cls, user_id: str, album_id: str):
-        cls.query.filter(cls.user_id == user_id, cls.album_id == album_id).delete()
+        results = cls.query.filter(cls.user_id == user_id, cls.album_id == album_id)
+        results.delete()
         db.session.commit()
     
 # The value of a given feature
@@ -1031,17 +1032,25 @@ class ClinicalFeatureValue(BaseModel, db.Model):
         features_to_update = []
         features_to_create = []
 
+        print("values_to_insert_or_update", values_to_insert_or_update)
         for value_to_insert_or_update in values_to_insert_or_update:
             queried_clinical_feature_value = cls.query.filter(
                 cls.clinical_feature_definition_id == value_to_insert_or_update["clinical_feature_definition_id"], 
                 cls.patient_id == value_to_insert_or_update["patient_id"],
                 cls.value == value_to_insert_or_update["value"]
-            ).first()
+            ).all()
 
-            if not queried_clinical_feature_value:
+            # assert len(queried_clinical_feature_value) <= 1, "There should be at most one clinical feature value with the same definition id, patient id and value"
+
+            if len(queried_clinical_feature_value) == 0:
                 features_to_create.append(value_to_insert_or_update)
             else:
-                features_to_update.append(value_to_insert_or_update)
+                if value_to_insert_or_update["value"] != queried_clinical_feature_value[0].value:
+                    value_to_insert_or_update["id"] = queried_clinical_feature_value[0].id
+                    features_to_update.append(value_to_insert_or_update)
+
+        print("features_to_create", features_to_create)
+        print("features_to_update", features_to_update)
 
         if len(features_to_create) > 0:
             _ = db.session.execute(
