@@ -885,9 +885,11 @@ class FeatureCollection(BaseModel, db.Model):
         features = set()
 
         for feature_id in feature_ids:
-            modality_name, roi_name, feature_name = featureIDMatcher.match(
-                feature_id
-            ).groups()
+            feature_id_match = featureIDMatcher.match(feature_id)
+            if feature_id_match:
+                modality_name, roi_name, feature_name = feature_id_match.groups()
+            else: # for clinical features there will not be any modalities or ROIs
+                modality_name, roi_name, feature_name = "", "", feature_id
 
             modalities.add(modality_name)
             rois.add(roi_name)
