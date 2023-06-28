@@ -1055,8 +1055,8 @@ class ClinicalFeatureValue(BaseModel, db.Model):
                     value_to_insert_or_update["id"] = queried_clinical_feature_value[0].id
                     features_to_update.append(value_to_insert_or_update)
 
-        print("features_to_create", features_to_create)
-        print("features_to_update", features_to_update)
+        # print("features_to_create", features_to_create)
+        # print("features_to_update", features_to_update)
 
         if len(features_to_create) > 0:
             _ = db.session.execute(

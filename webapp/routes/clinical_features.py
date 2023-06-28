@@ -45,7 +45,16 @@ def clinical_features_get_unique_values():
         #Computing features with no data at all (using strings because we are not guarantee to get nulls from the request)
         for column in clinical_features_df.columns:
             frequency_of_occurence = (clinical_features_df[column].value_counts() / clinical_features_df[column].value_counts().sum()) * 100
-            response["frequency_of_occurence"][column] = [f"{idx}-{round(i, 2)}%" for idx, i in frequency_of_occurence.items()]
+            if len(frequency_of_occurence) < 10:
+                response["frequency_of_occurence"][column] = [f"{idx}-{round(i, 2)}%" for idx, i in frequency_of_occurence.items()]
+            else:
+                try:
+                    min_value = clinical_features_df[column].astype(float).min()
+                    max_value = clinical_features_df[column].astype(float).max()
+                    response["frequency_of_occurence"][column] = [f"min-{round(min_value, 2)}", f"max-{round(max_value, 2)}"]
+                except:
+                    print(f"Could not convert {column} to float")
+                    continue
 
         return response
     
@@ -105,6 +114,8 @@ def clinical_features():
         for idx, row in clinical_features_df.iterrows():
             for feature in clinical_feature_definitions:
                 values_to_insert_or_update.append({"value": row[feature.name], "clinical_feature_definition_id": feature.id, "patient_id": row["Patient ID"]})
+
+        print("Number of feature values to create", len(values_to_insert_or_update))
 
         ClinicalFeatureValue.insert_values(values_to_insert_or_update)
 
