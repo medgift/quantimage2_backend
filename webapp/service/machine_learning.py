@@ -248,7 +248,7 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
         if clin_feature_encoding == ClinicalFeatureEncodings.ORDERED_CATEGORIES:
             ordered_categories_encoder = OrdinalEncoder()
             ordered_categories_encoder.fit(clin_feature_df[[clin_feature.name]])
-            transformed = ordered_categories_encoder.transform(clin_feature_df[[clin_feature.name]]).toarray()
+            transformed = ordered_categories_encoder.transform(clin_feature_df[[clin_feature.name]])
             clin_feature_df = pandas.DataFrame(data=transformed, index=index, columns=[clin_feature.name])
 
         print(clin_feature.name, clin_feature_df.columns)
