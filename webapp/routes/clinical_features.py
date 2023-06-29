@@ -149,6 +149,8 @@ def clinical_feature_definitions():
                 {"name": feature_name, "feat_type": feature["Type"], "encoding": feature["Encoding"], "user_id": g.user, "album_id": album_id}
             )
         
+        print("Number of clinical feature definitions to insrt or update", len(clinical_feature_definitions_to_insert_or_update))
+        print("clinical_feature_definitions_to_insert_or_update", clinical_feature_definitions_to_insert_or_update)
         feature_model = ClinicalFeatureDefinition.insert_values(clinical_feature_definitions_to_insert_or_update)
 
         return jsonify([i.to_dict() for i in created_features])

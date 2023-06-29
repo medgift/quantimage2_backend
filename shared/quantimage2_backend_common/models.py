@@ -965,25 +965,35 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
             ).all() # we enable updating the values of the feature
 
             if len(exisiting_definitions) > 0:
-                definitions_to_update.append(definition_to_insert_or_update)
+                existing_definition = exisiting_definitions[0]
+                definitions_to_update.append({"id": existing_definition.id, "encoding": definition_to_insert_or_update["encoding"], "feat_type": definition_to_insert_or_update["feat_type"]})
             else:
                 definitions_to_create.append(definition_to_insert_or_update)
         
+        print("number of definitions_to_create", len(definitions_to_create))
+        print("definitions_to_create", definitions_to_create)
+        print("number of definitions_to_update", len(definitions_to_update))
+        print("Definitions to update", definitions_to_update)
+
         if len(definitions_to_create) > 0:
-            _ = db.session.execute(
-                insert(ClinicalFeatureDefinition),
-                definitions_to_create
-            )
+            insert_statement = db.session.bulk_save_objects([ClinicalFeatureDefinition(**i) for i in definitions_to_create])
+            # insert_statement = db.session.execute(
+            #     insert(ClinicalFeatureDefinition),
+            #     definitions_to_create
+            # )
+            # print(insert_statement.fetchall())
+            db.session.commit()
         
         if len(definitions_to_update) > 0:
-            _ = db.session.execute(
-                update(ClinicalFeatureDefinition),
-                definitions_to_update
-            )
+            update_statement = db.session.bulk_update_mappings(ClinicalFeatureDefinition, definitions_to_update)
+            # update_statement = db.session.execute(
+            #     update(ClinicalFeatureDefinition),
+            #     definitions_to_update
+            # )
+            # print(update_statement.fetchall())
+            db.session.commit()
 
-        db.session.commit()
-        return [ClinicalFeatureDefinition(**i) for i in definitions_to_create + definitions_to_update] 
-
+        return []
 
     def to_dict(self):
         return {
@@ -1055,8 +1065,8 @@ class ClinicalFeatureValue(BaseModel, db.Model):
                     value_to_insert_or_update["id"] = queried_clinical_feature_value[0].id
                     features_to_update.append(value_to_insert_or_update)
 
-        # print("features_to_create", features_to_create)
-        # print("features_to_update", features_to_update)
+        print("features_to_create", features_to_create, "number of features to create", len(features_to_create))
+        print("features_to_update", features_to_update, "number of features to update", len(features_to_update))
 
         if len(features_to_create) > 0:
             _ = db.session.execute(
