@@ -976,21 +976,11 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         print("Definitions to update", definitions_to_update)
 
         if len(definitions_to_create) > 0:
-            insert_statement = db.session.bulk_save_objects([ClinicalFeatureDefinition(**i) for i in definitions_to_create])
-            # insert_statement = db.session.execute(
-            #     insert(ClinicalFeatureDefinition),
-            #     definitions_to_create
-            # )
-            # print(insert_statement.fetchall())
+            _ = db.session.bulk_save_objects([ClinicalFeatureDefinition(**i) for i in definitions_to_create])
             db.session.commit()
         
         if len(definitions_to_update) > 0:
-            update_statement = db.session.bulk_update_mappings(ClinicalFeatureDefinition, definitions_to_update)
-            # update_statement = db.session.execute(
-            #     update(ClinicalFeatureDefinition),
-            #     definitions_to_update
-            # )
-            # print(update_statement.fetchall())
+            _ = db.session.bulk_update_mappings(ClinicalFeatureDefinition, definitions_to_update)
             db.session.commit()
 
         return []
@@ -1058,29 +1048,26 @@ class ClinicalFeatureValue(BaseModel, db.Model):
 
             # assert len(queried_clinical_feature_value) <= 1, "There should be at most one clinical feature value with the same definition id, patient id and value"
 
-            if len(queried_clinical_feature_value) == 0:
-                features_to_create.append(value_to_insert_or_update)
-            else:
-                if value_to_insert_or_update["value"] != queried_clinical_feature_value[0].value:
-                    value_to_insert_or_update["id"] = queried_clinical_feature_value[0].id
+            if len(queried_clinical_feature_value) > 0:
+                queried_clinical_feature_value = queried_clinical_feature_value[0]
+                if value_to_insert_or_update["value"] != queried_clinical_feature_value.value:
+                    value_to_insert_or_update["id"] = queried_clinical_feature_value.id
                     features_to_update.append(value_to_insert_or_update)
+            else:
+                features_to_create.append(value_to_insert_or_update)
+
 
         print("features_to_create", features_to_create, "number of features to create", len(features_to_create))
         print("features_to_update", features_to_update, "number of features to update", len(features_to_update))
 
         if len(features_to_create) > 0:
-            _ = db.session.execute(
-                insert(ClinicalFeatureValue),
-                features_to_create
-            )
-        
-        if len(features_to_update) > 0:
-            _ = db.session.execute(
-                update(ClinicalFeatureValue),
-                features_to_update
-            )
+            _ = db.session.bulk_save_objects([ClinicalFeatureValue(**i) for i in features_to_create], return_defaults=True)
+            db.session.commit()
 
-        db.session.commit()
+        if len(features_to_update) > 0:
+            _ = db.session.bulk_update_mappings(ClinicalFeatureValue, features_to_update)
+            db.session.commit()
+            
         return [ClinicalFeatureValue(**i) for i in features_to_create + features_to_update] 
 
     @classmethod
