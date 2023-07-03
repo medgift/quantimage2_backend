@@ -214,6 +214,9 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
     clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(user_id, album["album_id"])
     clin_feature_definitions = [i for i in clin_feature_definitions if i.name in selected_clinical_features]
 
+    if len(clin_feature_definitions) == 0:
+        return pandas.DataFrame()
+    
     all_features = []
 
     # Here we could implement the logic to transform the clinical features [one hot encoding, normalization etc..
