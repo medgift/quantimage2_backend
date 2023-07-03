@@ -560,9 +560,9 @@ class FeatureValue(BaseModel, db.Model):
         conditions = []
 
         for feature_id in collection.feature_ids:
-            featureIDmatcher = featureIDMatcher.match(feature_id)
-            if featureIDmatcher:
-                modality_name, roi_name, feature_name = featureIDMatcher.groups()
+            feautre_id_match = featureIDMatcher.match(feature_id)
+            if feautre_id_match:
+                modality_name, roi_name, feature_name = feautre_id_match.groups()
             else:
                 # This is a clinical feature we don't deal with it in the Feature table
                 continue
