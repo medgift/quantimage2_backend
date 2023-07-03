@@ -560,9 +560,9 @@ class FeatureValue(BaseModel, db.Model):
         conditions = []
 
         for feature_id in collection.feature_ids:
-            feautre_id_match = featureIDMatcher.match(feature_id)
-            if feautre_id_match:
-                modality_name, roi_name, feature_name = feautre_id_match.groups()
+            feature_id_match = featureIDMatcher.match(feature_id)
+            if feature_id_match:
+                modality_name, roi_name, feature_name = feature_id_match.groups()
             else:
                 # This is a clinical feature we don't deal with it in the Feature table
                 continue
@@ -892,7 +892,7 @@ class FeatureCollection(BaseModel, db.Model):
             feature_id_match = featureIDMatcher.match(feature_id)
             if feature_id_match:
                 modality_name, roi_name, feature_name = feature_id_match.groups()
-            else: # for clinical features there will not be any modalities or ROIs
+            else:  # for clinical features there will not be any modalities or ROIs
                 modality_name, roi_name, feature_name = "", "", feature_id
 
             modalities.add(modality_name)
@@ -910,6 +910,7 @@ class ClinicalFeatureEncodings(Enum):
     ONE_HOT_ENCODING = "One-Hot Encoding"
     NORMALIZATION = "Normalization"
     ORDERED_CATEGORIES = "Ordered Categories"
+
 
 class ClinicalFeatureTypes(Enum):
     Integer = "Integer"
@@ -929,7 +930,6 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         self.encoding = encoding
         self.album_id = album_id
 
-
     # Name of the feature
     name = db.Column(db.String(255), nullable=False, unique=False)
 
@@ -945,12 +945,16 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
 
     @classmethod
     def find_by_name(cls, clinical_feature_names, user_id):
-        clinical_feature_definitions = cls.query.filter(cls.name.in_(clinical_feature_names), cls.user_id.in_([user_id])).all()
+        clinical_feature_definitions = cls.query.filter(
+            cls.name.in_(clinical_feature_names), cls.user_id.in_([user_id])
+        ).all()
 
         return clinical_feature_definitions
-    
+
     @classmethod
-    def find_by_user_id_and_album_id(cls, user_id, album_id) -> List[ClinicalFeatureDefinition]:
+    def find_by_user_id_and_album_id(
+        cls, user_id, album_id
+    ) -> List[ClinicalFeatureDefinition]:
         return cls.query.filter(cls.user_id == user_id, cls.album_id == album_id).all()
 
     @classmethod
@@ -959,28 +963,38 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         definitions_to_create = []
         for definition_to_insert_or_update in definitions_to_insert_or_update:
             exisiting_definitions = cls.query.filter(
-                cls.name == definition_to_insert_or_update["name"], 
-                cls.user_id == definition_to_insert_or_update["user_id"], 
-                cls.album_id == definition_to_insert_or_update["album_id"]
-            ).all() # we enable updating the values of the feature
+                cls.name == definition_to_insert_or_update["name"],
+                cls.user_id == definition_to_insert_or_update["user_id"],
+                cls.album_id == definition_to_insert_or_update["album_id"],
+            ).all()  # we enable updating the values of the feature
 
             if len(exisiting_definitions) > 0:
                 existing_definition = exisiting_definitions[0]
-                definitions_to_update.append({"id": existing_definition.id, "encoding": definition_to_insert_or_update["encoding"], "feat_type": definition_to_insert_or_update["feat_type"]})
+                definitions_to_update.append(
+                    {
+                        "id": existing_definition.id,
+                        "encoding": definition_to_insert_or_update["encoding"],
+                        "feat_type": definition_to_insert_or_update["feat_type"],
+                    }
+                )
             else:
                 definitions_to_create.append(definition_to_insert_or_update)
-        
+
         print("number of definitions_to_create", len(definitions_to_create))
         print("definitions_to_create", definitions_to_create)
         print("number of definitions_to_update", len(definitions_to_update))
         print("Definitions to update", definitions_to_update)
 
         if len(definitions_to_create) > 0:
-            _ = db.session.bulk_save_objects([ClinicalFeatureDefinition(**i) for i in definitions_to_create])
+            _ = db.session.bulk_save_objects(
+                [ClinicalFeatureDefinition(**i) for i in definitions_to_create]
+            )
             db.session.commit()
-        
+
         if len(definitions_to_update) > 0:
-            _ = db.session.bulk_update_mappings(ClinicalFeatureDefinition, definitions_to_update)
+            _ = db.session.bulk_update_mappings(
+                ClinicalFeatureDefinition, definitions_to_update
+            )
             db.session.commit()
 
         return []
@@ -1001,7 +1015,8 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         results = cls.query.filter(cls.user_id == user_id, cls.album_id == album_id)
         results.delete()
         db.session.commit()
-    
+
+
 # The value of a given feature
 class ClinicalFeatureValue(BaseModel, db.Model):
 
@@ -1025,14 +1040,20 @@ class ClinicalFeatureValue(BaseModel, db.Model):
     # Relationships
     clinical_feature_definition_id = db.Column(
         db.Integer,
-        ForeignKey("clinical_feature_definition.id", ondelete="CASCADE", onupdate="CASCADE"),
+        ForeignKey(
+            "clinical_feature_definition.id", ondelete="CASCADE", onupdate="CASCADE"
+        ),
     )
     clinical_feature_definition = db.relationship("ClinicalFeatureDefinition")
 
     @classmethod
-    def find_by_clinical_feature_definition_ids(cls, clinical_feature_definition_ids: List[str]):
-        return cls.query.filter(cls.clinical_feature_definition_id.in_(clinical_feature_definition_ids)).all()
-    
+    def find_by_clinical_feature_definition_ids(
+        cls, clinical_feature_definition_ids: List[str]
+    ):
+        return cls.query.filter(
+            cls.clinical_feature_definition_id.in_(clinical_feature_definition_ids)
+        ).all()
+
     @classmethod
     def insert_values(cls, values_to_insert_or_update: List[Dict[str, Any]]):
         features_to_update = []
@@ -1041,42 +1062,67 @@ class ClinicalFeatureValue(BaseModel, db.Model):
         print("values_to_insert_or_update", values_to_insert_or_update)
         for value_to_insert_or_update in values_to_insert_or_update:
             queried_clinical_feature_value = cls.query.filter(
-                cls.clinical_feature_definition_id == value_to_insert_or_update["clinical_feature_definition_id"], 
+                cls.clinical_feature_definition_id
+                == value_to_insert_or_update["clinical_feature_definition_id"],
                 cls.patient_id == value_to_insert_or_update["patient_id"],
-                cls.value == value_to_insert_or_update["value"]
+                cls.value == value_to_insert_or_update["value"],
             ).all()
 
             # assert len(queried_clinical_feature_value) <= 1, "There should be at most one clinical feature value with the same definition id, patient id and value"
 
             if len(queried_clinical_feature_value) > 0:
                 queried_clinical_feature_value = queried_clinical_feature_value[0]
-                if value_to_insert_or_update["value"] != queried_clinical_feature_value.value:
+                if (
+                    value_to_insert_or_update["value"]
+                    != queried_clinical_feature_value.value
+                ):
                     value_to_insert_or_update["id"] = queried_clinical_feature_value.id
                     features_to_update.append(value_to_insert_or_update)
             else:
                 features_to_create.append(value_to_insert_or_update)
 
-
-        print("features_to_create", features_to_create, "number of features to create", len(features_to_create))
-        print("features_to_update", features_to_update, "number of features to update", len(features_to_update))
+        print(
+            "features_to_create",
+            features_to_create,
+            "number of features to create",
+            len(features_to_create),
+        )
+        print(
+            "features_to_update",
+            features_to_update,
+            "number of features to update",
+            len(features_to_update),
+        )
 
         if len(features_to_create) > 0:
-            _ = db.session.bulk_save_objects([ClinicalFeatureValue(**i) for i in features_to_create], return_defaults=True)
+            _ = db.session.bulk_save_objects(
+                [ClinicalFeatureValue(**i) for i in features_to_create],
+                return_defaults=True,
+            )
             db.session.commit()
 
         if len(features_to_update) > 0:
-            _ = db.session.bulk_update_mappings(ClinicalFeatureValue, features_to_update)
+            _ = db.session.bulk_update_mappings(
+                ClinicalFeatureValue, features_to_update
+            )
             db.session.commit()
-            
-        return [ClinicalFeatureValue(**i) for i in features_to_create + features_to_update] 
+
+        return [
+            ClinicalFeatureValue(**i) for i in features_to_create + features_to_update
+        ]
 
     @classmethod
     def find_by_patient_ids(cls, patient_ids, album_id, user_id):
-        return db.session.query(ClinicalFeatureValue, ClinicalFeatureDefinition).join(ClinicalFeatureDefinition).filter(
-            cls.patient_id.in_(patient_ids),
-            ClinicalFeatureDefinition.user_id == user_id,
-            ClinicalFeatureDefinition.album_id == album_id,
-        ).all()
+        return (
+            db.session.query(ClinicalFeatureValue, ClinicalFeatureDefinition)
+            .join(ClinicalFeatureDefinition)
+            .filter(
+                cls.patient_id.in_(patient_ids),
+                ClinicalFeatureDefinition.user_id == user_id,
+                ClinicalFeatureDefinition.album_id == album_id,
+            )
+            .all()
+        )
 
     def to_dict(self):
         return {
@@ -1084,8 +1130,8 @@ class ClinicalFeatureValue(BaseModel, db.Model):
             "value": self.value,
             "patient_id": self.patient_id,
         }
-    
-    
+
+
 def process_query_single_column(query):
     compiled = query.compile(
         dialect=db.engine.dialect, compile_kwargs={"literal_binds": True}
