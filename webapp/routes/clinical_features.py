@@ -27,6 +27,13 @@ def load_df_from_request_dict(request_dict: Dict) -> pd.core.frame.DataFrame:
 
     return pd.DataFrame.from_dict(clinical_features_list)
 
+def get_album_id_from_request(request):
+    album_id = request.args.get("album_id")
+
+    if not album_id:
+        raise ValueError("album_id is required for this request")
+
+    return album_id
 
 @bp.route("/clinical_features/get_unique_values", methods=["POST"])
 def clinical_features_get_unique_values():
@@ -38,7 +45,7 @@ def clinical_features_get_unique_values():
         #Computing features with no data at all (using strings because we are not guarantee to get nulls from the request)
         for column in clinical_features_df.columns:
             frequency_of_occurence = (clinical_features_df[column].value_counts() / clinical_features_df[column].value_counts().sum()) * 100
-            response["frequency_of_occurence"][column] = [f"{idx}-{round(i, 2)}%" for idx, i in frequency_of_occurence.iteritems()]
+            response["frequency_of_occurence"][column] = [f"{idx}-{round(i, 2)}%" for idx, i in frequency_of_occurence.items()]
 
         return response
     
@@ -86,25 +93,28 @@ def clinical_features():
 
     if request.method == "POST":
         clinical_features_df = load_df_from_request_dict(request.json["clinical_feature_map"])
+        album_id = get_album_id_from_request(request)
 
-        clinical_feature_definitions = ClinicalFeatureDefinition.find_by_user_id(user_id=g.user)
+        clinical_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(user_id=g.user, album_id=album_id)
 
         saved_features = []
 
         # Save clinical feature values to database
+        values_to_insert_or_update = []
+
         for idx, row in clinical_features_df.iterrows():
             for feature in clinical_feature_definitions:
-                feature_name = feature.name
-                patient_id = row["Patient ID"]
+                values_to_insert_or_update.append({"value": row[feature.name], "clinical_feature_definition_id": feature.id, "patient_id": row["Patient ID"]})
 
-                val = ClinicalFeatureValue.insert_value(value=row[feature_name], clinical_feature_definition_id=feature.id, patient_id=patient_id)
-                saved_features.append(val)
+        ClinicalFeatureValue.insert_values(values_to_insert_or_update)
 
         return jsonify([i.to_dict() for i in saved_features])
 
     if request.method == "GET":
         patient_ids = request.args.get("patient_ids").split(",")
-        all_features_values = ClinicalFeatureValue.find_by_patient_ids(patient_ids, g.user)
+        album_id = get_album_id_from_request(request)
+
+        all_features_values = ClinicalFeatureValue.find_by_patient_ids(patient_ids, album_id, g.user)
 
         output = defaultdict(lambda: {})
         for feat_value in all_features_values:
@@ -120,15 +130,21 @@ def clinical_feature_definitions():
     
     if request.method == "POST":
         created_features = []
+        album_id = get_album_id_from_request(request)
         
+        clinical_feature_definitions_to_insert_or_update = []
         for feature_name, feature in request.json["clinical_feature_definitions"].items():
-            feature_model = ClinicalFeatureDefinition.insert(name=feature_name, feat_type=feature["Type"], encoding=feature["Encoding"], user_id=g.user)
-            created_features.append(feature_model)
+            clinical_feature_definitions_to_insert_or_update.append(
+                {"name": feature_name, "feat_type": feature["Type"], "encoding": feature["Encoding"], "user_id": g.user, "album_id": album_id}
+            )
+        
+        feature_model = ClinicalFeatureDefinition.insert_values(clinical_feature_definitions_to_insert_or_update)
 
         return jsonify([i.to_dict() for i in created_features])
 
     if request.method == "GET":
-        clinical_feature_definitions = ClinicalFeatureDefinition.find_by_user_id(user_id=g.user)
+        album_id = get_album_id_from_request(request)
+        clinical_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(user_id=g.user, album_id=album_id)
         output = {}
         for feature in clinical_feature_definitions:
             output[feature.name] = feature.to_dict()
@@ -136,7 +152,8 @@ def clinical_feature_definitions():
         return jsonify(output)
     
     if request.method == "DELETE":
-        ClinicalFeatureDefinition.delete_by_user_id(g.user)
+        album_id = get_album_id_from_request(request)
+        ClinicalFeatureDefinition.delete_by_user_id_and_album_id(g.user, album_id=album_id)
         return '', 200
 
 
