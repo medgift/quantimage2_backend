@@ -2,7 +2,7 @@ import traceback
 import os
 
 import pandas
-from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
+from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, OrdinalEncoder
 from flask import jsonify, make_response
 from modeling.classification import Classification
 from modeling.survival import Survival
@@ -32,6 +32,7 @@ def get_features_labels(
 
     if collection_id:
         collection = FeatureCollection.find_by_id(collection_id)
+        print("Collection", collection)
         header, features_df = transform_studies_collection_features_to_df(
             collection, studies
         )
@@ -135,6 +136,7 @@ def train_model(
     else:
         raise NotImplementedError()
 
+
     features_df, labels_df_indexed = get_features_labels(
         extraction_id,
         collection_id,
@@ -144,12 +146,20 @@ def train_model(
     )
 
     #clinical features
-    clinical_features = get_clinical_features(user_id)
+    clinical_features = get_clinical_features(user_id, collection_id, album)
+
     print(clinical_features.head())
     print(clinical_features.columns)
 
-    if len(clinical_features) > 0:
+    if len(clinical_features) > 0 and len(features_df) > 0:
         features_df = pandas.merge(features_df, clinical_features, left_index=True, right_index=True, how='left')
+    elif len(features_df) > 0:
+        features_df = features_df
+    elif len(clinical_features) > 0:
+        features_df = clinical_features
+        features_df["PatientID"] = features_df.index
+    else:
+        raise ValueError("Neither clinical nore imaging features where selected")
 
     # Convert to numeric values
     labels_df_indexed = labels_df_indexed.apply(pandas.to_numeric)
@@ -183,8 +193,26 @@ def train_model(
     return model.classify()
 
 
-def get_clinical_features(user_id: str):
-    clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id(user_id)
+def get_clinical_features(user_id: str, collection_id: str, album: str):
+    feature_collection = FeatureCollection.find_by_id(collection_id)
+    
+    selected_clinical_features = []
+    for feature_id in feature_collection.feature_ids:
+        if "‑" in feature_id:
+            # In the front end - clinical features are saved with no nesting - and the FEATURE_ID_SEPARATOR is used
+            # to save nesting levels from the radiomics feature - https://github.com/medgift/quantimage2-frontend/blob/34e393867c2ecd364409a4aabaac5fe42dcd4172/src/Visualisation.js#L66
+            # if not present it means it's a clinical feature.
+            continue
+        else:
+            selected_clinical_features.append(feature_id)
+
+    print("selected clinical features", selected_clinical_features)
+
+    print("feature collection", feature_collection)
+
+    print("user id", user_id, "album", album)
+    clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(user_id, album["album_id"])
+    clin_feature_definitions = [i for i in clin_feature_definitions if i.name in selected_clinical_features]
 
     all_features = []
 
@@ -195,8 +223,8 @@ def get_clinical_features(user_id: str):
     for clin_feature in clin_feature_definitions:
         clin_feature_values = ClinicalFeatureValue.find_by_clinical_feature_definition_ids([clin_feature.id])
         clin_feature_df = pandas.DataFrame.from_dict([i.to_dict() for i in clin_feature_values])
-        clin_feature_df.rename(columns={'value': clin_feature.name}, inplace=True)
-        clin_feature_df.set_index('patient_id', inplace=True)
+        clin_feature_df.rename(columns={'value': clin_feature.name, "patient_id": "PatientID"}, inplace=True)
+        clin_feature_df.set_index('PatientID', inplace=True)
         index = clin_feature_df.index
         clin_feature_df.drop(columns=['clinical_feature_definition_id'], inplace=True)
 
@@ -216,6 +244,13 @@ def get_clinical_features(user_id: str):
         
         if clin_feature_type == ClinicalFeatureTypes.Integer and not clin_feature_encoding == ClinicalFeatureEncodings.ONE_HOT_ENCODING:
             clin_feature_df[[clin_feature.name]] = clin_feature_df[[clin_feature.name]].astype(int)
+
+        if clin_feature_encoding == ClinicalFeatureEncodings.ORDERED_CATEGORIES:
+            ordered_categories_encoder = OrdinalEncoder()
+            ordered_categories_encoder.fit(clin_feature_df[[clin_feature.name]])
+            transformed = ordered_categories_encoder.transform(clin_feature_df[[clin_feature.name]])
+            clin_feature_df = pandas.DataFrame(data=transformed, index=index, columns=[clin_feature.name])
+
         print(clin_feature.name, clin_feature_df.columns)
         all_features.append(clin_feature_df)
 
