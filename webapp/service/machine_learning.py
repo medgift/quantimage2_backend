@@ -7,18 +7,27 @@ from flask import jsonify, make_response
 from modeling.classification import Classification
 from modeling.survival import Survival
 from modeling.utils import get_random_seed
-from quantimage2_backend_common.const import FEATURE_ID_SEPARATOR, MODEL_TYPES, ESTIMATOR_STEP
-from quantimage2_backend_common.models import (FeatureCollection,
-                                               FeatureExtraction, 
-                                               ClinicalFeatureDefinition,
-                                               ClinicalFeatureValue,
-                                               ClinicalFeatureEncodings,
-                                               ClinicalFeatureTypes)
+from quantimage2_backend_common.const import (
+    FEATURE_ID_SEPARATOR,
+    MODEL_TYPES,
+    ESTIMATOR_STEP,
+)
+from quantimage2_backend_common.models import (
+    FeatureCollection,
+    FeatureExtraction,
+    ClinicalFeatureDefinition,
+    ClinicalFeatureValue,
+    ClinicalFeatureEncodings,
+    ClinicalFeatureTypes,
+)
 from quantimage2_backend_common.utils import get_training_id
 from service.feature_transformation import (
-    OUTCOME_FIELD_CLASSIFICATION, OUTCOME_FIELD_SURVIVAL_EVENT,
-    OUTCOME_FIELD_SURVIVAL_TIME, transform_studies_collection_features_to_df,
-    transform_studies_features_to_df)
+    OUTCOME_FIELD_CLASSIFICATION,
+    OUTCOME_FIELD_SURVIVAL_EVENT,
+    OUTCOME_FIELD_SURVIVAL_TIME,
+    transform_studies_collection_features_to_df,
+    transform_studies_features_to_df,
+)
 
 
 def get_features_labels(
@@ -136,7 +145,6 @@ def train_model(
     else:
         raise NotImplementedError()
 
-
     features_df, labels_df_indexed = get_features_labels(
         extraction_id,
         collection_id,
@@ -145,14 +153,20 @@ def train_model(
         outcome_columns=outcome_columns,
     )
 
-    #clinical features
+    # clinical features
     clinical_features = get_clinical_features(user_id, collection_id, album)
 
     print(clinical_features.head())
     print(clinical_features.columns)
 
     if len(clinical_features) > 0 and len(features_df) > 0:
-        features_df = pandas.merge(features_df, clinical_features, left_index=True, right_index=True, how='left')
+        features_df = pandas.merge(
+            features_df,
+            clinical_features,
+            left_index=True,
+            right_index=True,
+            how="left",
+        )
     elif len(features_df) > 0:
         features_df = features_df
     elif len(clinical_features) > 0:
@@ -190,12 +204,12 @@ def train_model(
         training_id=training_id,
     )
 
-    return model.classify()
+    return model.create_model()
 
 
 def get_clinical_features(user_id: str, collection_id: str, album: str):
     feature_collection = FeatureCollection.find_by_id(collection_id)
-    
+
     selected_clinical_features = []
     for feature_id in feature_collection.feature_ids:
         if "‑" in feature_id:
@@ -211,12 +225,16 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
     print("feature collection", feature_collection)
 
     print("user id", user_id, "album", album)
-    clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(user_id, album["album_id"])
-    clin_feature_definitions = [i for i in clin_feature_definitions if i.name in selected_clinical_features]
+    clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(
+        user_id, album["album_id"]
+    )
+    clin_feature_definitions = [
+        i for i in clin_feature_definitions if i.name in selected_clinical_features
+    ]
 
     if len(clin_feature_definitions) == 0:
         return pandas.DataFrame()
-    
+
     all_features = []
 
     # Here we could implement the logic to transform the clinical features [one hot encoding, normalization etc..
@@ -224,35 +242,59 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
     print("names of clin feat def", [i.name for i in clin_feature_definitions])
     print(user_id)
     for clin_feature in clin_feature_definitions:
-        clin_feature_values = ClinicalFeatureValue.find_by_clinical_feature_definition_ids([clin_feature.id])
-        clin_feature_df = pandas.DataFrame.from_dict([i.to_dict() for i in clin_feature_values])
-        clin_feature_df.rename(columns={'value': clin_feature.name, "patient_id": "PatientID"}, inplace=True)
-        clin_feature_df.set_index('PatientID', inplace=True)
+        clin_feature_values = (
+            ClinicalFeatureValue.find_by_clinical_feature_definition_ids(
+                [clin_feature.id]
+            )
+        )
+        clin_feature_df = pandas.DataFrame.from_dict(
+            [i.to_dict() for i in clin_feature_values]
+        )
+        clin_feature_df.rename(
+            columns={"value": clin_feature.name, "patient_id": "PatientID"},
+            inplace=True,
+        )
+        clin_feature_df.set_index("PatientID", inplace=True)
         index = clin_feature_df.index
-        clin_feature_df.drop(columns=['clinical_feature_definition_id'], inplace=True)
+        clin_feature_df.drop(columns=["clinical_feature_definition_id"], inplace=True)
 
         clin_feature_encoding = ClinicalFeatureEncodings(clin_feature.encoding)
         clin_feature_type = ClinicalFeatureTypes(clin_feature.feat_type)
 
         if clin_feature_encoding == ClinicalFeatureEncodings.ONE_HOT_ENCODING:
-            enc = OneHotEncoder(handle_unknown='ignore')
+            enc = OneHotEncoder(handle_unknown="ignore")
             enc.fit(clin_feature_df[[clin_feature.name]])
             transformed = enc.transform(clin_feature_df[[clin_feature.name]]).toarray()
-            clin_feature_df = pandas.DataFrame(data=transformed, index=index, columns=enc.get_feature_names_out([clin_feature.name]))
-        
+            clin_feature_df = pandas.DataFrame(
+                data=transformed,
+                index=index,
+                columns=enc.get_feature_names_out([clin_feature.name]),
+            )
+
         if clin_feature_encoding == ClinicalFeatureEncodings.NORMALIZATION:
             scaler = MinMaxScaler()
             transformed = scaler.fit_transform(clin_feature_df[[clin_feature.name]])
-            clin_feature_df = pandas.DataFrame(data=transformed, index=index, columns=[clin_feature.name])
-        
-        if clin_feature_type == ClinicalFeatureTypes.Integer and not clin_feature_encoding == ClinicalFeatureEncodings.ONE_HOT_ENCODING:
-            clin_feature_df[[clin_feature.name]] = clin_feature_df[[clin_feature.name]].astype(int)
+            clin_feature_df = pandas.DataFrame(
+                data=transformed, index=index, columns=[clin_feature.name]
+            )
+
+        if (
+            clin_feature_type == ClinicalFeatureTypes.Integer
+            and not clin_feature_encoding == ClinicalFeatureEncodings.ONE_HOT_ENCODING
+        ):
+            clin_feature_df[[clin_feature.name]] = clin_feature_df[
+                [clin_feature.name]
+            ].astype(int)
 
         if clin_feature_encoding == ClinicalFeatureEncodings.ORDERED_CATEGORIES:
             ordered_categories_encoder = OrdinalEncoder()
             ordered_categories_encoder.fit(clin_feature_df[[clin_feature.name]])
-            transformed = ordered_categories_encoder.transform(clin_feature_df[[clin_feature.name]])
-            clin_feature_df = pandas.DataFrame(data=transformed, index=index, columns=[clin_feature.name])
+            transformed = ordered_categories_encoder.transform(
+                clin_feature_df[[clin_feature.name]]
+            )
+            clin_feature_df = pandas.DataFrame(
+                data=transformed, index=index, columns=[clin_feature.name]
+            )
 
         print(clin_feature.name, clin_feature_df.columns)
         all_features.append(clin_feature_df)
@@ -262,6 +304,6 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
 
 def check_if_patients_in_dataframe(features_df, patient_ids):
     """Given a features_df that has patient ids as index, check if all patient ids are in the dataframe"""
-    for patient_id in patient_ids: 
+    for patient_id in patient_ids:
         if patient_id not in features_df.index:
             raise ValueError(f"Patient {patient_id} not found in the dataframe")

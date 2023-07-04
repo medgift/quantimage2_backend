@@ -65,9 +65,6 @@ class Classification(Modeling):
         else:
             self.classes = None
 
-    def classify(self):
-        return self.create_model()
-
     def select_classifier(self, classifier_name):
         if classifier_name.startswith("logistic_regression"):
             options = {

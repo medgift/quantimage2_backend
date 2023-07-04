@@ -28,9 +28,6 @@ class Survival(Modeling):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def analyze(self):
-        return self.create_model()
-
     def select_survival_analyzer(self, analyzer_name):
         if analyzer_name == "coxnet":
             options = {"analyzer": [CoxPHSurvivalAnalysis()]}
