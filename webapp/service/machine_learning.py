@@ -138,10 +138,12 @@ def train_model(
         outcome_columns = [OUTCOME_FIELD_CLASSIFICATION]
         ModelClass = Classification
         estimator_step = ESTIMATOR_STEP.CLASSIFICATION.value
+        refit_metric = "auc"
     elif MODEL_TYPES(label_category.label_type) == MODEL_TYPES.SURVIVAL:
         outcome_columns = [OUTCOME_FIELD_SURVIVAL_TIME, OUTCOME_FIELD_SURVIVAL_EVENT]
         ModelClass = Survival
         estimator_step = ESTIMATOR_STEP.SURVIVAL.value
+        refit_metric="c-index"
     else:
         raise NotImplementedError()
 
@@ -199,7 +201,7 @@ def train_model(
         training_patients=training_patients,
         test_patients=test_patients,
         random_seed=random_seed,
-        refit_metric="auc",
+        refit_metric=refit_metric,
         n_jobs=int(os.environ["GRID_SEARCH_CONCURRENCY"]),
         training_id=training_id,
     )
