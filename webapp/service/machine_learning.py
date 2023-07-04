@@ -155,6 +155,9 @@ def train_model(
         outcome_columns=outcome_columns,
     )
 
+    # Convert to numeric values
+    labels_df_indexed = labels_df_indexed.apply(pandas.to_numeric)
+
     # clinical features
     clinical_features = get_clinical_features(user_id, collection_id, album)
 
