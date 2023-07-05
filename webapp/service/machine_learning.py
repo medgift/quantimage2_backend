@@ -19,6 +19,7 @@ from quantimage2_backend_common.models import (
     ClinicalFeatureValue,
     ClinicalFeatureEncodings,
     ClinicalFeatureTypes,
+    ClinicalFeatureMissingValues,
 )
 from quantimage2_backend_common.utils import get_training_id
 from service.feature_transformation import (
@@ -161,9 +162,6 @@ def train_model(
     # clinical features
     clinical_features = get_clinical_features(user_id, collection_id, album)
 
-    print(clinical_features.head())
-    print(clinical_features.columns)
-
     if len(clinical_features) > 0 and len(features_df) > 0:
         features_df = pandas.merge(
             features_df,
@@ -265,46 +263,78 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
 
         clin_feature_encoding = ClinicalFeatureEncodings(clin_feature.encoding)
         clin_feature_type = ClinicalFeatureTypes(clin_feature.feat_type)
+        clin_missing_values = ClinicalFeatureMissingValues(clin_feature.missing_values)
 
-        if clin_feature_encoding == ClinicalFeatureEncodings.ONE_HOT_ENCODING:
-            enc = OneHotEncoder(handle_unknown="ignore")
-            enc.fit(clin_feature_df[[clin_feature.name]])
-            transformed = enc.transform(clin_feature_df[[clin_feature.name]]).toarray()
-            clin_feature_df = pandas.DataFrame(
-                data=transformed,
-                index=index,
-                columns=enc.get_feature_names_out([clin_feature.name]),
-            )
+        missing_values_idx = clin_feature_df[clin_feature.name].apply(lambda x: len(str(x)) == 0)
+        non_missing_values = clin_feature_df.loc[~missing_values_idx][[clin_feature.name]]
 
-        if clin_feature_encoding == ClinicalFeatureEncodings.NORMALIZATION:
-            scaler = MinMaxScaler()
-            transformed = scaler.fit_transform(clin_feature_df[[clin_feature.name]])
-            clin_feature_df = pandas.DataFrame(
-                data=transformed, index=index, columns=[clin_feature.name]
-            )
+        if missing_values_idx.sum() > 0: # only apply missing values logic if there are actually missing values
+            if clin_missing_values != ClinicalFeatureMissingValues.DROP:
+                if clin_missing_values == ClinicalFeatureMissingValues.NONE:
+                    pass
+                elif clin_missing_values == ClinicalFeatureMissingValues.MEDIAN:
+                    try:
+                        value = non_missing_values.astype(float).median()
+                    except:
+                        raise ValueError(f"Tried to compute the median of {clin_feature.name} but failed")
+                    
+                elif clin_missing_values == ClinicalFeatureMissingValues.MEAN:
+                    try:
+                        value = non_missing_values.astype(float).mean()
+                    except:
+                        raise ValueError(f"Tried to compute the mean of {clin_feature.name} but failed")
+                elif clin_missing_values == ClinicalFeatureMissingValues.MODE:
+                    try:
+                        value = non_missing_values.mode().values[0]
+                    except:
+                        raise ValueError(f"Tried to compute the mode of {clin_feature.name} but failed")
+                
+                clin_feature_df.loc[missing_values_idx, clin_feature.name] = value
+            else: # If we drop the missing values we need to get rid of them before the encoding.
+                clin_feature_df = clin_feature_df.loc[~missing_values_idx]
 
-        if (
-            clin_feature_type == ClinicalFeatureTypes.Integer
-            and not clin_feature_encoding == ClinicalFeatureEncodings.ONE_HOT_ENCODING
-        ):
-            clin_feature_df[[clin_feature.name]] = clin_feature_df[
-                [clin_feature.name]
-            ].astype(int)
+        if clin_feature_type == ClinicalFeatureTypes.CATEGORICAL:
+            if clin_feature_encoding == ClinicalFeatureEncodings.ONE_HOT_ENCODING:
+                enc = OneHotEncoder(handle_unknown="ignore")
+                enc.fit(clin_feature_df[[clin_feature.name]])
+                transformed = enc.transform(clin_feature_df[[clin_feature.name]]).toarray()
+                clin_feature_df = pandas.DataFrame(
+                    data=transformed,
+                    index=index,
+                    columns=enc.get_feature_names_out([clin_feature.name]),
+            )
+            elif clin_feature_encoding == ClinicalFeatureEncodings.ORDERED_CATEGORIES:
+                ordered_categories_encoder = OrdinalEncoder()
+                ordered_categories_encoder.fit(clin_feature_df[[clin_feature.name]])
+                transformed = ordered_categories_encoder.transform(
+                    clin_feature_df[[clin_feature.name]]
+                )
+                clin_feature_df = pandas.DataFrame(
+                    data=transformed, index=index, columns=[clin_feature.name]
+                )
+            else:
+                raise ValueError(f"We do not support this feature type / encoding combination yet - got {clin_feature_type} and {clin_feature_encoding}")
+        elif clin_feature_type == ClinicalFeatureTypes.NUMBER:
+            if clin_feature_encoding == ClinicalFeatureEncodings.NORMALIZATION:
+                scaler = MinMaxScaler()
+                transformed = scaler.fit_transform(clin_feature_df[[clin_feature.name]])
+                clin_feature_df = pandas.DataFrame(
+                    data=transformed, index=index, columns=[clin_feature.name]
+                )
 
-        if clin_feature_encoding == ClinicalFeatureEncodings.ORDERED_CATEGORIES:
-            ordered_categories_encoder = OrdinalEncoder()
-            ordered_categories_encoder.fit(clin_feature_df[[clin_feature.name]])
-            transformed = ordered_categories_encoder.transform(
-                clin_feature_df[[clin_feature.name]]
-            )
-            clin_feature_df = pandas.DataFrame(
-                data=transformed, index=index, columns=[clin_feature.name]
-            )
+            elif clin_feature_encoding == ClinicalFeatureEncodings.NONE:
+                clin_feature_df[[clin_feature.name]] = clin_feature_df[
+                    [clin_feature.name]
+                ].astype(float)
+            else:
+                raise ValueError(f"We do not support this feature type / encoding combination yet - got {clin_feature_type} and {clin_feature_encoding}")
+        else:
+            raise ValueError("Feature type not supported yet.")
 
         print(clin_feature.name, clin_feature_df.columns)
         all_features.append(clin_feature_df)
 
-    return pandas.concat(all_features, axis=1)
+    return pandas.concat(all_features, axis=1, join="outer")
 
 
 def check_if_patients_in_dataframe(features_df, patient_ids):

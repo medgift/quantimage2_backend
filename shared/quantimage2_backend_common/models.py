@@ -913,22 +913,28 @@ class ClinicalFeatureEncodings(Enum):
 
 
 class ClinicalFeatureTypes(Enum):
-    Integer = "Integer"
-    FLOAT = "Float"
-    STRING = "String"
+    NUMBER = "Number"
     CATEGORICAL = "Categorical"
 
+
+class ClinicalFeatureMissingValues(Enum):
+    DROP = "Drop"
+    MODE = "Mode"
+    MEDIAN = "Median"
+    MEAN = "Mean"
+    NONE = "None"
 
 class ClinicalFeatureDefinition(BaseModel, db.Model):
 
     __tablename__ = "clinical_feature_definition"
 
-    def __init__(self, name, feat_type, encoding, user_id, album_id):
+    def __init__(self, name, feat_type, encoding, user_id, album_id, missing_values):
         self.name = name
         self.user_id = user_id
         self.feat_type = feat_type
         self.encoding = encoding
         self.album_id = album_id
+        self.missing_values = missing_values
 
     # Name of the feature
     name = db.Column(db.String(255), nullable=False, unique=False)
@@ -940,8 +946,10 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
     # User who created the clinical feature category
     user_id = db.Column(db.String(255), nullable=False, unique=False)
 
-    # Album on which the model was created
+    # Album on which the clinical feature was uploaded
     album_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    missing_values = db.Column(db.String(255), nullable=False, unique=False)
 
     @classmethod
     def find_by_name(cls, clinical_feature_names, user_id):
@@ -1004,10 +1012,11 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
             "id": self.id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "Name": self.name,
+            "Name": self.name, # these keys are used in the UI to map to the dropdowns that's why the spelling is not camel_case
             "Type": self.feat_type,
             "Encoding": self.encoding,
             "user_id": self.user_id,
+            "Missing Values" : self.missing_values,
         }
 
     @classmethod
