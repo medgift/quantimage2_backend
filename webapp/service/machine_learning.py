@@ -162,9 +162,6 @@ def train_model(
     # clinical features
     clinical_features = get_clinical_features(user_id, collection_id, album)
 
-    print(clinical_features.head())
-    print(clinical_features.columns)
-
     if len(clinical_features) > 0 and len(features_df) > 0:
         features_df = pandas.merge(
             features_df,
@@ -268,10 +265,10 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
         clin_feature_type = ClinicalFeatureTypes(clin_feature.feat_type)
         clin_missing_values = ClinicalFeatureMissingValues(clin_feature.missing_values)
 
-        missing_values_idx = clin_feature_df[[clin_feature.name]].apply(lambda x: len(str(x)) == 0)
+        missing_values_idx = clin_feature_df[clin_feature.name].apply(lambda x: len(str(x)) == 0)
         non_missing_values = clin_feature_df.loc[~missing_values_idx][[clin_feature.name]]
 
-        if non_missing_values.sum() > 0: # only apply missing values logic if there are actually missing values
+        if missing_values_idx.sum() > 0: # only apply missing values logic if there are actually missing values
             if clin_missing_values != ClinicalFeatureMissingValues.DROP:
                 if clin_missing_values == ClinicalFeatureMissingValues.NONE:
                     pass

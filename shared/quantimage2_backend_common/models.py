@@ -1012,11 +1012,11 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
             "id": self.id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "Name": self.name,
+            "Name": self.name, # these keys are used in the UI to map to the dropdowns that's why the spelling is not camel_case
             "Type": self.feat_type,
             "Encoding": self.encoding,
             "user_id": self.user_id,
-            "missing_values" : self.missing_values,
+            "Missing Values" : self.missing_values,
         }
 
     @classmethod

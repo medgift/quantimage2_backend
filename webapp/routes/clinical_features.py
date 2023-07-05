@@ -182,7 +182,7 @@ def guess_clinical_feature_definitions():
                 response[column_name] = {"Type": "Categorical", "Encoding": "One-Hot Encoding", "Missing Values": "Mode"} # The strings here should be the same as the ones used by the frontend (src/config/constants.js - line 79 as of 20th june 2023)
             try:
                 _ = clinical_features_df[column_name].unique().astype(float)
-                response[column_name] = {"Type": "Float", "Encoding": "Normalization", "Missing Values": "Median"}
+                response[column_name] = {"Type": "Number", "Encoding": "Normalization", "Missing Values": "Median"}
             except:
                 pass
     
