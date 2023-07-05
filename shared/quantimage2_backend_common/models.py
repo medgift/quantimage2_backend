@@ -913,9 +913,7 @@ class ClinicalFeatureEncodings(Enum):
 
 
 class ClinicalFeatureTypes(Enum):
-    Integer = "Integer"
-    FLOAT = "Float"
-    STRING = "String"
+    NUMBER = "Number"
     CATEGORICAL = "Categorical"
 
 
