@@ -922,6 +922,7 @@ class ClinicalFeatureMissingValues(Enum):
     MODE = "Mode"
     MEDIAN = "Median"
     MEAN = "Mean"
+    NONE = "None"
 
 class ClinicalFeatureDefinition(BaseModel, db.Model):
 

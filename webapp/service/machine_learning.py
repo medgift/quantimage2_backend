@@ -19,6 +19,7 @@ from quantimage2_backend_common.models import (
     ClinicalFeatureValue,
     ClinicalFeatureEncodings,
     ClinicalFeatureTypes,
+    ClinicalFeatureMissingValues,
 )
 from quantimage2_backend_common.utils import get_training_id
 from service.feature_transformation import (
@@ -265,6 +266,35 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
 
         clin_feature_encoding = ClinicalFeatureEncodings(clin_feature.encoding)
         clin_feature_type = ClinicalFeatureTypes(clin_feature.feat_type)
+        clin_missing_values = ClinicalFeatureMissingValues(clin_feature.missing_values)
+
+        missing_values_idx = clin_feature_df[[clin_feature.name]].apply(lambda x: len(str(x)) == 0)
+        non_missing_values = clin_feature_df.loc[~missing_values_idx][[clin_feature.name]]
+
+        if non_missing_values.sum() > 0: # only apply missing values logic if there are actually missing values
+            if clin_missing_values != ClinicalFeatureMissingValues.DROP:
+                if clin_missing_values == ClinicalFeatureMissingValues.NONE:
+                    pass
+                elif clin_missing_values == ClinicalFeatureMissingValues.MEDIAN:
+                    try:
+                        value = non_missing_values.astype(float).median()
+                    except:
+                        raise ValueError(f"Tried to compute the median of {clin_feature.name} but failed")
+                    
+                elif clin_missing_values == ClinicalFeatureMissingValues.MEAN:
+                    try:
+                        value = non_missing_values.astype(float).mean()
+                    except:
+                        raise ValueError(f"Tried to compute the mean of {clin_feature.name} but failed")
+                elif clin_missing_values == ClinicalFeatureMissingValues.MODE:
+                    try:
+                        value = non_missing_values.mode().values[0]
+                    except:
+                        raise ValueError(f"Tried to compute the mode of {clin_feature.name} but failed")
+                
+                clin_feature_df.loc[missing_values_idx, clin_feature.name] = value
+            else: # If we drop the missing values we need to get rid of them before the encoding.
+                clin_feature_df = clin_feature_df.loc[~missing_values_idx]
 
         if clin_feature_type == ClinicalFeatureTypes.CATEGORICAL:
             if clin_feature_encoding == ClinicalFeatureEncodings.ONE_HOT_ENCODING:
@@ -307,7 +337,7 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
         print(clin_feature.name, clin_feature_df.columns)
         all_features.append(clin_feature_df)
 
-    return pandas.concat(all_features, axis=1)
+    return pandas.concat(all_features, axis=1, join="outer")
 
 
 def check_if_patients_in_dataframe(features_df, patient_ids):
