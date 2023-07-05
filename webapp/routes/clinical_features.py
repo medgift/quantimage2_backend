@@ -146,7 +146,7 @@ def clinical_feature_definitions():
         clinical_feature_definitions_to_insert_or_update = []
         for feature_name, feature in request.json["clinical_feature_definitions"].items():
             clinical_feature_definitions_to_insert_or_update.append(
-                {"name": feature_name, "feat_type": feature["Type"], "encoding": feature["Encoding"], "user_id": g.user, "album_id": album_id}
+                {"name": feature_name, "feat_type": feature["Type"], "encoding": feature["Encoding"], "user_id": g.user, "album_id": album_id, "missing_values": feature["Missing Values"]}
             )
         
         print("Number of clinical feature definitions to insrt or update", len(clinical_feature_definitions_to_insert_or_update))
@@ -179,10 +179,10 @@ def guess_clinical_feature_definitions():
             if column_name == "PatientID" or column_name == "__parsed_extra":
                 continue
             if clinical_features_df[column_name].unique().size <= 10:
-                response[column_name] = {"Type": "Categorical", "Encoding": "One-Hot Encoding"} # The strings here should be the same as the ones used by the frontend (src/config/constants.js - line 79 as of 20th june 2023)
+                response[column_name] = {"Type": "Categorical", "Encoding": "One-Hot Encoding", "Missing Values": "Mode"} # The strings here should be the same as the ones used by the frontend (src/config/constants.js - line 79 as of 20th june 2023)
             try:
                 _ = clinical_features_df[column_name].unique().astype(float)
-                response[column_name] = {"Type": "Float", "Encoding": "Normalization"}
+                response[column_name] = {"Type": "Float", "Encoding": "Normalization", "Missing Values": "Median"}
             except:
                 pass
     

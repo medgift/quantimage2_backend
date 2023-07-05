@@ -948,7 +948,7 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
     # Album on which the clinical feature was uploaded
     album_id = db.Column(db.String(255), nullable=False, unique=False)
 
-    missing_value = db.Column(db.String(255), nullable=False, unique=False)
+    missing_values = db.Column(db.String(255), nullable=False, unique=False)
 
     @classmethod
     def find_by_name(cls, clinical_feature_names, user_id):
