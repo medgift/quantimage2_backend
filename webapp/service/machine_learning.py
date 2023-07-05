@@ -306,11 +306,13 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
             elif clin_feature_encoding == ClinicalFeatureEncodings.ORDERED_CATEGORIES:
                 ordered_categories_encoder = OrdinalEncoder()
                 ordered_categories_encoder.fit(clin_feature_df[[clin_feature.name]])
+                ordered_categories_order = "_".join(ordered_categories_encoder.categories_[0])
+
                 transformed = ordered_categories_encoder.transform(
                     clin_feature_df[[clin_feature.name]]
                 )
                 clin_feature_df = pandas.DataFrame(
-                    data=transformed, index=index, columns=[clin_feature.name]
+                    data=transformed, index=index, columns=[f"{clin_feature.name}_{ordered_categories_order}"]
                 )
             else:
                 raise ValueError(f"We do not support this feature type / encoding combination yet - got {clin_feature_type} and {clin_feature_encoding}")
