@@ -286,7 +286,7 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
                     data=transformed, index=index, columns=[clin_feature.name]
                 )
             else:
-                raise ValueError("We do not support this feature type / encoding combination yet")
+                raise ValueError(f"We do not support this feature type / encoding combination yet - got {clin_feature_type} and {clin_feature_encoding}")
         elif clin_feature_type == ClinicalFeatureTypes.NUMBER:
             if clin_feature_encoding == ClinicalFeatureEncodings.NORMALIZATION:
                 scaler = MinMaxScaler()
@@ -300,7 +300,7 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
                     [clin_feature.name]
                 ].astype(float)
             else:
-                raise ValueError("We do not support this feature type / encoding combination yet")
+                raise ValueError(f"We do not support this feature type / encoding combination yet - got {clin_feature_type} and {clin_feature_encoding}")
         else:
             raise ValueError("Feature type not supported yet.")
 

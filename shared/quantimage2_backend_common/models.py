@@ -917,16 +917,23 @@ class ClinicalFeatureTypes(Enum):
     CATEGORICAL = "Categorical"
 
 
+class ClinicalFeatureMissingValues(Enum):
+    DROP = "Drop"
+    MODE = "Mode"
+    MEDIAN = "Median"
+    MEAN = "Mean"
+
 class ClinicalFeatureDefinition(BaseModel, db.Model):
 
     __tablename__ = "clinical_feature_definition"
 
-    def __init__(self, name, feat_type, encoding, user_id, album_id):
+    def __init__(self, name, feat_type, encoding, user_id, album_id, missing_values):
         self.name = name
         self.user_id = user_id
         self.feat_type = feat_type
         self.encoding = encoding
         self.album_id = album_id
+        self.missing_values = missing_values
 
     # Name of the feature
     name = db.Column(db.String(255), nullable=False, unique=False)
@@ -938,8 +945,10 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
     # User who created the clinical feature category
     user_id = db.Column(db.String(255), nullable=False, unique=False)
 
-    # Album on which the model was created
+    # Album on which the clinical feature was uploaded
     album_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    missing_value = db.Column(db.String(255), nullable=False, unique=False)
 
     @classmethod
     def find_by_name(cls, clinical_feature_names, user_id):
@@ -1006,6 +1015,7 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
             "Type": self.feat_type,
             "Encoding": self.encoding,
             "user_id": self.user_id,
+            "missing_values" : self.missing_values,
         }
 
     @classmethod
