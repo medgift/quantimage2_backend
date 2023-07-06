@@ -1,6 +1,8 @@
 import os
+from typing import List
 
 import pandas
+import pandas as pd
 from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, OrdinalEncoder
 from modeling.classification import Classification
 from modeling.survival import Survival
@@ -158,7 +160,7 @@ def train_model(
     labels_df_indexed = labels_df_indexed.apply(pandas.to_numeric)
 
     # clinical features
-    clinical_features = get_clinical_features(user_id, collection_id, album)
+    clinical_features = get_clinical_features(user_id, collection_id, features_df["PatientID"].values, album)
 
     if len(clinical_features) > 0 and len(features_df) > 0:
         features_df = pandas.merge(
@@ -208,7 +210,7 @@ def train_model(
     return model.create_model()
 
 
-def get_clinical_features(user_id: str, collection_id: str, album: str):
+def get_clinical_features(user_id: str, collection_id: str, radiomics_patient_ids: List[str], album: str):
     clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(
         user_id, album["album_id"]
     )
@@ -253,6 +255,9 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
             inplace=True,
         )
         clin_feature_df.set_index("PatientID", inplace=True)
+        radiomics_patient_ids_df = pd.DataFrame(index=radiomics_patient_ids)
+        clin_feature_df = pd.merge(clin_feature_df, radiomics_patient_ids_df, left_index=True, right_index=True, how="outer")
+        
         index = clin_feature_df.index
         clin_feature_df.drop(columns=["clinical_feature_definition_id"], inplace=True)
 
@@ -262,7 +267,8 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
 
         missing_values_idx = clin_feature_df[clin_feature.name].apply(
             lambda x: len(str(x)) == 0
-        )
+        ) | clin_feature_df[clin_feature.name].isnull()
+        
         non_missing_values = clin_feature_df.loc[~missing_values_idx][
             [clin_feature.name]
         ]
@@ -270,12 +276,13 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
         if (
             missing_values_idx.sum() > 0
         ):  # only apply missing values logic if there are actually missing values
+            print("missing values for", clin_feature.name, clin_missing_values)
             if clin_missing_values != ClinicalFeatureMissingValues.DROP:
                 if clin_missing_values == ClinicalFeatureMissingValues.NONE:
                     pass
                 elif clin_missing_values == ClinicalFeatureMissingValues.MEDIAN:
                     try:
-                        value = non_missing_values.astype(float).median()
+                        value = non_missing_values.astype(float).median().values[0]
                     except:
                         raise ValueError(
                             f"Tried to compute the median of {clin_feature.name} but failed"
@@ -283,7 +290,7 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
 
                 elif clin_missing_values == ClinicalFeatureMissingValues.MEAN:
                     try:
-                        value = non_missing_values.astype(float).mean()
+                        value = non_missing_values.astype(float).mean().values[0]
                     except:
                         raise ValueError(
                             f"Tried to compute the mean of {clin_feature.name} but failed"
@@ -297,6 +304,7 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
                         )
 
                 clin_feature_df.loc[missing_values_idx, clin_feature.name] = value
+                
             else:  # If we drop the missing values we need to get rid of them before the encoding.
                 clin_feature_df = clin_feature_df.loc[~missing_values_idx]
 
