@@ -159,8 +159,9 @@ def train_model(
     # Convert to numeric values
     labels_df_indexed = labels_df_indexed.apply(pandas.to_numeric)
 
-    # clinical features
-    clinical_features = get_clinical_features(user_id, collection_id, features_df["PatientID"].values, album)
+    # clinical features - we use the training_patients + test_patients concatenation to keep track of all patients in the systesm - this may lead to features becoming null values if the train and test patients have more patients
+    # than the clinical features
+    clinical_features = get_clinical_features(user_id, collection_id, training_patients + test_patients, album)
 
     if len(clinical_features) > 0 and len(features_df) > 0:
         features_df = pandas.merge(
