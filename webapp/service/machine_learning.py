@@ -211,29 +211,27 @@ def train_model(
 
 
 def get_clinical_features(user_id: str, collection_id: str, album: str):
-    feature_collection = FeatureCollection.find_by_id(collection_id)
-
-    selected_clinical_features = []
-    for feature_id in feature_collection.feature_ids:
-        if "‑" in feature_id:
-            # In the front end - clinical features are saved with no nesting - and the FEATURE_ID_SEPARATOR is used
-            # to save nesting levels from the radiomics feature - https://github.com/medgift/quantimage2-frontend/blob/34e393867c2ecd364409a4aabaac5fe42dcd4172/src/Visualisation.js#L66
-            # if not present it means it's a clinical feature.
-            continue
-        else:
-            selected_clinical_features.append(feature_id)
-
-    print("selected clinical features", selected_clinical_features)
-
-    print("feature collection", feature_collection)
-
-    print("user id", user_id, "album", album)
     clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(
         user_id, album["album_id"]
     )
-    clin_feature_definitions = [
-        i for i in clin_feature_definitions if i.name in selected_clinical_features
-    ]
+
+    if collection_id:
+        feature_collection = FeatureCollection.find_by_id(collection_id)
+
+        
+        selected_clinical_features = []
+        for feature_id in feature_collection.feature_ids:
+            if "‑" in feature_id:
+                # In the front end - clinical features are saved with no nesting - and the FEATURE_ID_SEPARATOR is used
+                # to save nesting levels from the radiomics feature - https://github.com/medgift/quantimage2-frontend/blob/34e393867c2ecd364409a4aabaac5fe42dcd4172/src/Visualisation.js#L66
+                # if not present it means it's a clinical feature.
+                continue
+            else:
+                selected_clinical_features.append(feature_id)
+
+        clin_feature_definitions = [
+            i for i in clin_feature_definitions if i.name in selected_clinical_features
+        ]
 
     if len(clin_feature_definitions) == 0:
         return pandas.DataFrame()
