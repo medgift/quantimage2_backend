@@ -1,9 +1,7 @@
-import traceback
 import os
 
 import pandas
 from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, OrdinalEncoder
-from flask import jsonify, make_response
 from modeling.classification import Classification
 from modeling.survival import Survival
 from modeling.utils import get_random_seed
@@ -144,7 +142,7 @@ def train_model(
         outcome_columns = [OUTCOME_FIELD_SURVIVAL_TIME, OUTCOME_FIELD_SURVIVAL_EVENT]
         ModelClass = Survival
         estimator_step = ESTIMATOR_STEP.SURVIVAL.value
-        refit_metric="c-index"
+        refit_metric = "c-index"
     else:
         raise NotImplementedError()
 
@@ -218,10 +216,9 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
     if collection_id:
         feature_collection = FeatureCollection.find_by_id(collection_id)
 
-        
         selected_clinical_features = []
         for feature_id in feature_collection.feature_ids:
-            if "‑" in feature_id:
+            if FEATURE_ID_SEPARATOR in feature_id:
                 # In the front end - clinical features are saved with no nesting - and the FEATURE_ID_SEPARATOR is used
                 # to save nesting levels from the radiomics feature - https://github.com/medgift/quantimage2-frontend/blob/34e393867c2ecd364409a4aabaac5fe42dcd4172/src/Visualisation.js#L66
                 # if not present it means it's a clinical feature.
@@ -263,10 +260,16 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
         clin_feature_type = ClinicalFeatureTypes(clin_feature.feat_type)
         clin_missing_values = ClinicalFeatureMissingValues(clin_feature.missing_values)
 
-        missing_values_idx = clin_feature_df[clin_feature.name].apply(lambda x: len(str(x)) == 0)
-        non_missing_values = clin_feature_df.loc[~missing_values_idx][[clin_feature.name]]
+        missing_values_idx = clin_feature_df[clin_feature.name].apply(
+            lambda x: len(str(x)) == 0
+        )
+        non_missing_values = clin_feature_df.loc[~missing_values_idx][
+            [clin_feature.name]
+        ]
 
-        if missing_values_idx.sum() > 0: # only apply missing values logic if there are actually missing values
+        if (
+            missing_values_idx.sum() > 0
+        ):  # only apply missing values logic if there are actually missing values
             if clin_missing_values != ClinicalFeatureMissingValues.DROP:
                 if clin_missing_values == ClinicalFeatureMissingValues.NONE:
                     pass
@@ -274,46 +277,60 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
                     try:
                         value = non_missing_values.astype(float).median()
                     except:
-                        raise ValueError(f"Tried to compute the median of {clin_feature.name} but failed")
-                    
+                        raise ValueError(
+                            f"Tried to compute the median of {clin_feature.name} but failed"
+                        )
+
                 elif clin_missing_values == ClinicalFeatureMissingValues.MEAN:
                     try:
                         value = non_missing_values.astype(float).mean()
                     except:
-                        raise ValueError(f"Tried to compute the mean of {clin_feature.name} but failed")
+                        raise ValueError(
+                            f"Tried to compute the mean of {clin_feature.name} but failed"
+                        )
                 elif clin_missing_values == ClinicalFeatureMissingValues.MODE:
                     try:
                         value = non_missing_values.mode().values[0]
                     except:
-                        raise ValueError(f"Tried to compute the mode of {clin_feature.name} but failed")
-                
+                        raise ValueError(
+                            f"Tried to compute the mode of {clin_feature.name} but failed"
+                        )
+
                 clin_feature_df.loc[missing_values_idx, clin_feature.name] = value
-            else: # If we drop the missing values we need to get rid of them before the encoding.
+            else:  # If we drop the missing values we need to get rid of them before the encoding.
                 clin_feature_df = clin_feature_df.loc[~missing_values_idx]
 
         if clin_feature_type == ClinicalFeatureTypes.CATEGORICAL:
             if clin_feature_encoding == ClinicalFeatureEncodings.ONE_HOT_ENCODING:
                 enc = OneHotEncoder(handle_unknown="ignore")
                 enc.fit(clin_feature_df[[clin_feature.name]])
-                transformed = enc.transform(clin_feature_df[[clin_feature.name]]).toarray()
+                transformed = enc.transform(
+                    clin_feature_df[[clin_feature.name]]
+                ).toarray()
                 clin_feature_df = pandas.DataFrame(
                     data=transformed,
                     index=index,
                     columns=enc.get_feature_names_out([clin_feature.name]),
-            )
+                )
             elif clin_feature_encoding == ClinicalFeatureEncodings.ORDERED_CATEGORIES:
                 ordered_categories_encoder = OrdinalEncoder()
                 ordered_categories_encoder.fit(clin_feature_df[[clin_feature.name]])
-                ordered_categories_order = "_".join(ordered_categories_encoder.categories_[0])
+                ordered_categories_order = "_".join(
+                    ordered_categories_encoder.categories_[0]
+                )
 
                 transformed = ordered_categories_encoder.transform(
                     clin_feature_df[[clin_feature.name]]
                 )
                 clin_feature_df = pandas.DataFrame(
-                    data=transformed, index=index, columns=[f"{clin_feature.name}_{ordered_categories_order}"]
+                    data=transformed,
+                    index=index,
+                    columns=[f"{clin_feature.name}_{ordered_categories_order}"],
                 )
             else:
-                raise ValueError(f"We do not support this feature type / encoding combination yet - got {clin_feature_type} and {clin_feature_encoding}")
+                raise ValueError(
+                    f"We do not support this feature type / encoding combination yet - got {clin_feature_type} and {clin_feature_encoding}"
+                )
         elif clin_feature_type == ClinicalFeatureTypes.NUMBER:
             if clin_feature_encoding == ClinicalFeatureEncodings.NORMALIZATION:
                 scaler = MinMaxScaler()
@@ -327,7 +344,9 @@ def get_clinical_features(user_id: str, collection_id: str, album: str):
                     [clin_feature.name]
                 ].astype(float)
             else:
-                raise ValueError(f"We do not support this feature type / encoding combination yet - got {clin_feature_type} and {clin_feature_encoding}")
+                raise ValueError(
+                    f"We do not support this feature type / encoding combination yet - got {clin_feature_type} and {clin_feature_encoding}"
+                )
         else:
             raise ValueError("Feature type not supported yet.")
 
