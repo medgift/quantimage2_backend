@@ -40,9 +40,13 @@ class Survival(Modeling):
             return {"analyzer": [IPCRidge()]}
 
     def encode_labels(self, labels):
+        # Transform Event column to boolean
+        labels_copy = labels.copy()
+        labels_copy["Event"] = labels_copy["Event"].astype(bool)
+
         # Transform to structured array
         encoded_labels = Surv.from_dataframe(
-            OUTCOME_FIELD_SURVIVAL_EVENT, OUTCOME_FIELD_SURVIVAL_TIME, labels
+            OUTCOME_FIELD_SURVIVAL_EVENT, OUTCOME_FIELD_SURVIVAL_TIME, labels_copy
         )
 
         return encoded_labels
