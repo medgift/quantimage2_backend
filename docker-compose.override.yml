@@ -13,8 +13,6 @@ services:
     env_file:
       - env_files/debug.env
       - .env
-    environment:
-    - DEBUG=true
     volumes:
       - ./webapp:/usr/src/app
       - ./shared/quantimage2_backend_common:/usr/local/lib/python3.8/site-packages/quantimage2_backend_common
