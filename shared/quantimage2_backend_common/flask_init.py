@@ -16,9 +16,9 @@ def create_app():
     # create and configure the app
     debug = False
 
-    if "DEBUG" in os.environ:
+    if "DEBUG" in os.environ and os.environ["DEBUG"] == "true":
         debug = True
-        
+
     app = Flask(__name__, instance_relative_config=True)
     app.config["SQLALCHEMY_DATABASE_URI"] = (
         "mysql://"
