@@ -25,7 +25,11 @@ def load_df_from_request_dict(request_dict: Dict) -> pd.core.frame.DataFrame:
         features["Patient ID"] = patient_id
         clinical_features_list.append(features)
 
-    return pd.DataFrame.from_dict(clinical_features_list)
+    clinical_features_df = pd.DataFrame.from_dict(clinical_features_list)
+    # Replace N/A or empty strings by Nones
+    clinical_features_df.replace("N/A", -1000, inplace=True) # The easiest way to handle nans across multiple column types is to use a very negatvie number that we can check for afterwards
+    clinical_features_df.replace("", -1000, inplace=True)
+    return clinical_features_df
 
 def get_album_id_from_request(request):
     album_id = request.args.get("album_id")
@@ -48,9 +52,10 @@ def clinical_features_get_unique_values():
             if len(frequency_of_occurence) < 10:
                 response["frequency_of_occurence"][column] = [f"{idx}-{round(i, 2)}%" for idx, i in frequency_of_occurence.items()]
             else:
+                cin_feature_df_col = clinical_features_df[column][clinical_features_df[column].notnull()]
                 try:
-                    min_value = clinical_features_df[column].astype(float).min()
-                    max_value = clinical_features_df[column].astype(float).max()
+                    min_value = cin_feature_df_col.astype(float).min()
+                    max_value = cin_feature_df_col.astype(float).max()
                     response["frequency_of_occurence"][column] = [f"min-{round(min_value, 2)}", f"max-{round(max_value, 2)}"]
                 except:
                     print(f"Could not convert {column} to float")
@@ -180,10 +185,11 @@ def guess_clinical_feature_definitions():
                 continue
             if clinical_features_df[column_name].unique().size <= 10:
                 response[column_name] = {"Type": "Categorical", "Encoding": "One-Hot Encoding", "Missing Values": "Mode"} # The strings here should be the same as the ones used by the frontend (src/config/constants.js - line 79 as of 20th june 2023)
+                continue
             try:
                 _ = clinical_features_df[column_name].unique().astype(float)
                 response[column_name] = {"Type": "Number", "Encoding": "Normalization", "Missing Values": "Median"}
             except:
-                pass
+                continue
     
         return response
