@@ -1,3 +1,4 @@
+import sys
 from typing import Dict
 
 from collections import defaultdict
@@ -28,8 +29,8 @@ def load_df_from_request_dict(request_dict: Dict) -> pd.core.frame.DataFrame:
 
     clinical_features_df = pd.DataFrame.from_dict(clinical_features_list)
     # Replace N/A or empty strings by Nones
-    clinical_features_df.replace("N/A", -1000, inplace=True) # The easiest way to handle nans across multiple column types is to use a very negatvie number that we can check for afterwards
-    clinical_features_df.replace("", -1000, inplace=True)
+    clinical_features_df.replace("N/A", -sys.maxsize, inplace=True) # The easiest way to handle nans across multiple column types is to use a very negatvie number that we can check for afterwards
+    clinical_features_df.replace("", -sys.maxsize, inplace=True)
     return clinical_features_df
 
 
