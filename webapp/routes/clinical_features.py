@@ -1,3 +1,4 @@
+import sys
 from typing import Dict
 
 from collections import defaultdict
@@ -26,7 +27,11 @@ def load_df_from_request_dict(request_dict: Dict) -> pd.core.frame.DataFrame:
         features["Patient ID"] = patient_id
         clinical_features_list.append(features)
 
-    return pd.DataFrame.from_dict(clinical_features_list)
+    clinical_features_df = pd.DataFrame.from_dict(clinical_features_list)
+    # Replace N/A or empty strings by Nones
+    clinical_features_df.replace("N/A", -sys.maxsize, inplace=True) # The easiest way to handle nans across multiple column types is to use a very negatvie number that we can check for afterwards
+    clinical_features_df.replace("", -sys.maxsize, inplace=True)
+    return clinical_features_df
 
 
 def get_album_id_from_request(request):
@@ -58,6 +63,7 @@ def clinical_features_get_unique_values():
                     f"{idx}-{round(i, 2)}%" for idx, i in frequency_of_occurence.items()
                 ]
             else:
+                cin_feature_df_col = clinical_features_df[column][clinical_features_df[column].notnull()]
                 try:
                     min_value = clinical_features_df[column].astype(float).min()
                     max_value = clinical_features_df[column].astype(float).max()
