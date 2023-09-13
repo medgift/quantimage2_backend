@@ -160,9 +160,15 @@ def train_model(
     # Convert to numeric values
     labels_df_indexed = labels_df_indexed.apply(pandas.to_numeric)
 
-    # clinical features - we use the training_patients + test_patients concatenation to keep track of all patients in the systesm - this may lead to features becoming null values if the train and test patients have more patients
+    # clinical features - we use the training_patients + test_patients concatenation to keep track of all patients
+    # in the system - this may lead to features becoming null values if the train and test patients have more patients
     # than the clinical features
-    clinical_features = get_clinical_features(user_id, collection_id, training_patients + test_patients, album)
+    all_patients = (
+        training_patients + test_patients if test_patients else training_patients
+    )
+    clinical_features = get_clinical_features(
+        user_id, collection_id, all_patients, album
+    )
 
     if len(clinical_features) > 0 and len(features_df) > 0:
         features_df = pandas.merge(
@@ -212,7 +218,9 @@ def train_model(
     return model.create_model()
 
 
-def get_clinical_features(user_id: str, collection_id: str, radiomics_patient_ids: List[str], album: str):
+def get_clinical_features(
+    user_id: str, collection_id: str, radiomics_patient_ids: List[str], album: str
+):
     clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(
         user_id, album["album_id"]
     )
@@ -258,8 +266,14 @@ def get_clinical_features(user_id: str, collection_id: str, radiomics_patient_id
         )
         clin_feature_df.set_index("PatientID", inplace=True)
         radiomics_patient_ids_df = pd.DataFrame(index=radiomics_patient_ids)
-        clin_feature_df = pd.merge(clin_feature_df, radiomics_patient_ids_df, left_index=True, right_index=True, how="outer")
-        
+        clin_feature_df = pd.merge(
+            clin_feature_df,
+            radiomics_patient_ids_df,
+            left_index=True,
+            right_index=True,
+            how="outer",
+        )
+
         index = clin_feature_df.index
         clin_feature_df.drop(columns=["clinical_feature_definition_id"], inplace=True)
 
@@ -267,10 +281,13 @@ def get_clinical_features(user_id: str, collection_id: str, radiomics_patient_id
         clin_feature_type = ClinicalFeatureTypes(clin_feature.feat_type)
         clin_missing_values = ClinicalFeatureMissingValues(clin_feature.missing_values)
 
-        missing_values_idx = clin_feature_df[clin_feature.name].apply(
-            lambda x: len(str(x)) == f"-{str(int(sys.maxsize))}"
-        ) | clin_feature_df[clin_feature.name].isnull()
-        
+        missing_values_idx = (
+            clin_feature_df[clin_feature.name].apply(
+                lambda x: len(str(x)) == f"-{str(int(sys.maxsize))}"
+            )
+            | clin_feature_df[clin_feature.name].isnull()
+        )
+
         non_missing_values = clin_feature_df.loc[~missing_values_idx][
             [clin_feature.name]
         ]
@@ -306,7 +323,7 @@ def get_clinical_features(user_id: str, collection_id: str, radiomics_patient_id
                         )
 
                 clin_feature_df.loc[missing_values_idx, clin_feature.name] = value
-                
+
             else:  # If we drop the missing values we need to get rid of them before the encoding.
                 clin_feature_df = clin_feature_df.loc[~missing_values_idx]
 
