@@ -140,6 +140,10 @@ def setup_app(app):
     app.my_celery = my_celery
     app.my_socketio = my_socketio
 
+    @app.route("/")
+    def entrypoint():
+        return {"status": "QuantImage v2 Backend is running"}
+
     with app.app_context():
         app.register_blueprint(features_bp)
         app.register_blueprint(feature_presets_bp)
