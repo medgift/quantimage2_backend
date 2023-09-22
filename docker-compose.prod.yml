@@ -5,11 +5,10 @@ services:
     env_file:
       - .env
     labels:
-      - "traefik.backend=${TRAEFIK_BACKEND_FLASKAPP}"
-      - "traefik.docker.network=prod"
-      - "traefik.frontend.rule=Host:${TRAEFIK_URL_FLASKAPP}"
-      - "traefik.port=5000"
       - "traefik.enable=true"
+      - "traefik.docker.network=prod"
+      - "traefik.http.services.quantimage2-backend-backend.loadbalancer.server.port=5000"
+      - "traefik.http.routers.quantimage2-backend-backend.rule=Host(`${TRAEFIK_URL_FLASKAPP}`)"
     networks:
       - default
       - prod
@@ -24,10 +23,9 @@ services:
 
   phpmyadmin:
     labels:
-      - "traefik.backend=${TRAEFIK_BACKEND_PHPMYADMIN}"
-      - "traefik.docker.network=prod"
-      - "traefik.frontend.rule=Host:${TRAEFIK_URL_PHPMYADMIN}"
       - "traefik.enable=true"
+      - "traefik.docker.network=prod"
+      - "traefik.http.routers.quantimage2-backend-phpmyadmin.rule=Host(`${TRAEFIK_URL_PHPMYADMIN}`)"
     networks:
       - default
       - prod
@@ -36,31 +34,29 @@ services:
     environment:
       - PROXY_ADDRESS_FORWARDING=true
     labels:
-      - "traefik.backend=${TRAEFIK_BACKEND_KEYCLOAK}"
-      - "traefik.docker.network=prod"
-      - "traefik.frontend.rule=Host:${TRAEFIK_URL_KEYCLOAK}"
       - "traefik.enable=true"
+      - "traefik.docker.network=prod"
+      - "traefik.http.routers.quantimage2-backend-keycloak.rule=Host(`${TRAEFIK_URL_KEYCLOAK}`)"
     networks:
       - default
       - prod
 
   ohif:
     labels:
-      - "traefik.backend=${TRAEFIK_BACKEND_OHIF}"
-      - "traefik.docker.network=prod"
-      - "traefik.frontend.rule=Host:${TRAEFIK_URL_OHIF}"
       - "traefik.enable=true"
+      - "traefik.docker.network=prod"
+      - "traefik.http.routers.quantimage2-backend-ohif.rule=Host(`${TRAEFIK_URL_OHIF}`)"
     networks:
       - default
       - prod
 
   flower:
     labels:
-      - "traefik.backend=${TRAEFIK_BACKEND_FLOWER}"
-      - "traefik.docker.network=prod"
-      - "traefik.frontend.rule=Host:${TRAEFIK_URL_FLOWER}"
       - "traefik.enable=true"
-      - "traefik.frontend.whitelistSourceRange=${TRAEFIK_WHITELIST_FLOWER}"
+      - "traefik.docker.network=prod"
+      - "traefik.http.middlewares.quantimage2-backend-flower-whitelist.ipwhitelist.sourcerange=${TRAEFIK_WHITELIST_FLOWER}"
+      - "traefik.http.routers.quantimage2-backend-flower.rule=Host(`${TRAEFIK_URL_FLOWER}`)"
+      - "traefik.http.routers.quantimage2-backend-flower.middlewares=quantimage2-backend-flower-whitelist"
     networks:
       - default
       - prod
