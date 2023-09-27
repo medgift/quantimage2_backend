@@ -21,16 +21,19 @@ The project uses Docker for easy build & deployment, using the following files :
 - `docker-compose.yml` : Base Docker Compose file
 - `docker-compose.override.yml` : Override file for local development, exposing ports & mapping source directories to containers.
 - `docker-compose.local.yml` : Exports ports but does not map the source code directly
-- `docker-compose.vm.yml` : File for the [QuantImage v2 VM](https://medgift.github.io/quantimage-v2-info/#getting-started), restarting the container automatically on reboot or crash
+- `docker-compose.vm.yml` : File for the [QuantImage v2 VM](https://medgift.github.io/quantimage-v2-info/#getting-started), restarting containers automatically on reboot or crash
 - `docker-compose.zrad.yml` : File to include the [ZRad](https://medical-physics-usz.github.io) feature extraction library (currently not publicly available)
 - `docker-compose.prod.yml` : Production file for use with Traefik
 
+Below is an overview of the various containers that constitute the backend:
+
+![Docker Containers Overview](docs/source/_static/backend-structure.png)
 
 ### Local development
-The [.env.env](.env) file defines the DOCKER_MOUNT_DIRECTORY environment variable to specify which directory will be used
+The [.env](.env) file defines the QUANTIMAGE2_DATA_MOUNT_DIRECTORY environment variable to specify which directory will be used
 to mount the different docker volumes. This is not part of git - please set the mounting directory at setup.
 
-*Note:* On MACOSX you cannot mount on / as it's not writeable on the newest versions of mac.
+*Note:* On macOS you cannot mount on / as it's not writeable on the newest versions of macOS.
 
 ### Code Structure
 
