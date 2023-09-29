@@ -282,9 +282,7 @@ def get_clinical_features(
         clin_missing_values = ClinicalFeatureMissingValues(clin_feature.missing_values)
 
         missing_values_idx = (
-            clin_feature_df[clin_feature.name].apply(
-                lambda x: len(str(x)) == f"-{str(int(sys.maxsize))}"
-            )
+            clin_feature_df[clin_feature.name].apply(lambda x: x is None)
             | clin_feature_df[clin_feature.name].isnull()
         )
 

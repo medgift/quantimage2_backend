@@ -9,10 +9,14 @@ from quantimage2_backend_common.models import (
 )
 import pandas as pd
 from routes.utils import validate_decorate
+from quantimage2_backend_common.models import ClinicalFeatureTypes
 
+from service.feature_transformation import PATIENT_ID_FIELD
 
 # Define blueprint
 bp = Blueprint(__name__, "clinical_features")
+
+NA_VALUE = "N/A"
 
 
 @bp.before_request
@@ -24,15 +28,13 @@ def load_df_from_request_dict(request_dict: Dict) -> pd.core.frame.DataFrame:
     clinical_features_list = []
 
     for patient_id, features in request_dict.items():
-        features["Patient ID"] = patient_id
+        features[PATIENT_ID_FIELD] = patient_id
         clinical_features_list.append(features)
 
     clinical_features_df = pd.DataFrame.from_dict(clinical_features_list)
     # Replace N/A or empty strings by Nones
-    clinical_features_df.replace(
-        "N/A", -sys.maxsize, inplace=True
-    )  # The easiest way to handle nans across multiple column types is to use a very negatvie number that we can check for afterwards
-    clinical_features_df.replace("", -sys.maxsize, inplace=True)
+    # TODO - Implement smarter way to detect N/A values (e.g. regex)
+    clinical_features_df.replace(["", "N/A"], None, inplace=True)
     return clinical_features_df
 
 
@@ -45,45 +47,72 @@ def get_album_id_from_request(request):
     return album_id
 
 
-@bp.route("/clinical_features/get_unique_values", methods=["POST"])
-def clinical_features_get_unique_values():
+@bp.route("/clinical-features/unique-values", methods=["POST"])
+def clinical_features_unique_values():
     if request.method == "POST":
         clinical_features_df = load_df_from_request_dict(
             request.json["clinical_feature_map"]
         )
+        # Filter out Patient ID column, as it will not be used to compute unique values
+        clinical_features_df = clinical_features_df.drop(
+            columns=PATIENT_ID_FIELD, errors="ignore"
+        )
 
-        response = {"frequency_of_occurrence": {}}
+        feature_definitions = request.json["clinical_features_definitions"]
+        feature_types = {
+            name: value["Type"] for name, value in feature_definitions.items()
+        }
+
+        response = {}
 
         # Computing features with no data at all (using strings because we are not guarantee to get nulls from the request)
         for column in clinical_features_df.columns:
-            frequency_of_occurrence = (
-                clinical_features_df[column].value_counts()
-                / clinical_features_df[column].value_counts().sum()
-            ) * 100
-            if len(frequency_of_occurrence) < 10:
-                response["frequency_of_occurrence"][column] = [
-                    f"{idx}-{round(i, 2)}%"
-                    for idx, i in frequency_of_occurrence.items()
+            series = clinical_features_df[column]
+
+            if (
+                ClinicalFeatureTypes(feature_types[column])
+                == ClinicalFeatureTypes.CATEGORICAL
+            ):
+                frequency_of_occurrence = (
+                    series.value_counts() / series.value_counts().sum()
+                ) * 100
+
+                response[column] = [
+                    f"{value} ({round(percentage, 2)}%)"
+                    if len(value) > 0
+                    else f"{NA_VALUE} ({round(percentage, 2)}%)"
+                    for value, percentage in frequency_of_occurrence.items()
                 ]
-            else:
-                cin_feature_df_col = clinical_features_df[column][
-                    clinical_features_df[column].notnull()
-                ]
+            elif (
+                ClinicalFeatureTypes(feature_types[column])
+                == ClinicalFeatureTypes.NUMBER
+            ):
                 try:
-                    min_value = clinical_features_df[column].astype(float).min()
-                    max_value = clinical_features_df[column].astype(float).max()
-                    response["frequency_of_occurrence"][column] = [
-                        f"min-{round(min_value, 2)}",
-                        f"max-{round(max_value, 2)}",
+                    # Filter out empty values when determining the min & max
+                    filtered_values = series[series != ""]
+                    filtered_values = filtered_values.astype(float)
+
+                    min_value = filtered_values.min()
+                    max_value = filtered_values.max()
+                    response[column] = [
+                        f"min={round(min_value, 2)}",
+                        f"max={round(max_value, 2)}",
                     ]
-                except:
+                except Exception as e:
                     print(f"Could not convert {column} to float")
+                    response[column] = [
+                        "ERROR parsing numerical values for this column"
+                    ]
                     continue
+            else:
+                raise ValueError(
+                    f"Unsupported feature type detected for feature {column}"
+                )
 
         return response
 
 
-@bp.route("/clinical_features/filter", methods=["POST"])
+@bp.route("/clinical-features/filter", methods=["POST"])
 def clinical_features_filter():
     if request.method == "POST":
         clinical_features_df = load_df_from_request_dict(
@@ -128,7 +157,7 @@ def clinical_features_filter():
         return response
 
 
-@bp.route("/clinical_features", methods=("GET", "POST", "DELETE"))
+@bp.route("/clinical-features", methods=("GET", "POST", "DELETE"))
 def clinical_features():
 
     if request.method == "POST":
@@ -147,26 +176,24 @@ def clinical_features():
                 )
             )
 
-            saved_features = []
-
             # Save clinical feature values to database
-            values_to_insert_or_update = []
+            values_to_insert = []
 
             for idx, row in clinical_features_df.iterrows():
                 for feature in clinical_feature_definitions:
-                    values_to_insert_or_update.append(
+                    values_to_insert.append(
                         {
                             "value": row[feature.name],
                             "clinical_feature_definition_id": feature.id,
-                            "patient_id": row["Patient ID"],
+                            "patient_id": row[PATIENT_ID_FIELD],
                         }
                     )
 
-            print("Number of feature values to create", len(values_to_insert_or_update))
+            print("Number of feature values to create", len(values_to_insert))
 
-            ClinicalFeatureValue.insert_values(values_to_insert_or_update)
+            saved_features = ClinicalFeatureValue.insert_values(values_to_insert)
 
-            return jsonify([i.to_dict() for i in saved_features])
+            return jsonify(saved_features)
 
         # READING FEATURES
         elif "patient_ids" in request.json:
@@ -187,18 +214,19 @@ def clinical_features():
             return jsonify(output)
 
 
-@bp.route("/clinical_feature_definitions", methods=("GET", "POST", "DELETE"))
+@bp.route("/clinical-features-definitions", methods=("GET", "POST", "DELETE"))
 def clinical_feature_definitions():
 
     if request.method == "POST":
         created_features = []
         album_id = get_album_id_from_request(request)
 
-        clinical_feature_definitions_to_insert_or_update = []
+        clinical_feature_definitions_to_insert = []
+
         for feature_name, feature in request.json[
             "clinical_feature_definitions"
         ].items():
-            clinical_feature_definitions_to_insert_or_update.append(
+            clinical_feature_definitions_to_insert.append(
                 {
                     "name": feature_name,
                     "feat_type": feature["Type"],
@@ -211,17 +239,13 @@ def clinical_feature_definitions():
 
         print(
             "Number of clinical feature definitions to insrt or update",
-            len(clinical_feature_definitions_to_insert_or_update),
+            len(clinical_feature_definitions_to_insert),
         )
-        print(
-            "clinical_feature_definitions_to_insert_or_update",
-            clinical_feature_definitions_to_insert_or_update,
-        )
-        feature_model = ClinicalFeatureDefinition.insert_values(
-            clinical_feature_definitions_to_insert_or_update
+        saved_definitions = ClinicalFeatureDefinition.insert_values(
+            clinical_feature_definitions_to_insert
         )
 
-        return jsonify([i.to_dict() for i in created_features])
+        return jsonify(saved_definitions)
 
     if request.method == "GET":
         album_id = get_album_id_from_request(request)
@@ -241,10 +265,10 @@ def clinical_feature_definitions():
         ClinicalFeatureDefinition.delete_by_user_id_and_album_id(
             g.user, album_id=album_id
         )
-        return "", 200
+        return {"message": "feature definitions deleted successfully"}, 200
 
 
-@bp.route("/clinical_feature_definitions/guess", methods=["POST"])
+@bp.route("/clinical-features-definitions/guess", methods=["POST"])
 def guess_clinical_feature_definitions():
     if request.method == "POST":
         response = {}

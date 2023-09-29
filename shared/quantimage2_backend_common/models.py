@@ -924,6 +924,7 @@ class ClinicalFeatureMissingValues(Enum):
     MEAN = "Mean"
     NONE = "None"
 
+
 class ClinicalFeatureDefinition(BaseModel, db.Model):
 
     __tablename__ = "clinical_feature_definition"
@@ -966,57 +967,23 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         return cls.query.filter(cls.user_id == user_id, cls.album_id == album_id).all()
 
     @classmethod
-    def insert_values(cls, definitions_to_insert_or_update):
-        definitions_to_update = []
-        definitions_to_create = []
-        for definition_to_insert_or_update in definitions_to_insert_or_update:
-            exisiting_definitions = cls.query.filter(
-                cls.name == definition_to_insert_or_update["name"],
-                cls.user_id == definition_to_insert_or_update["user_id"],
-                cls.album_id == definition_to_insert_or_update["album_id"],
-            ).all()  # we enable updating the values of the feature
-
-            if len(exisiting_definitions) > 0:
-                existing_definition = exisiting_definitions[0]
-                definitions_to_update.append(
-                    {
-                        "id": existing_definition.id,
-                        "encoding": definition_to_insert_or_update["encoding"],
-                        "feat_type": definition_to_insert_or_update["feat_type"],
-                    }
-                )
-            else:
-                definitions_to_create.append(definition_to_insert_or_update)
-
-        print("number of definitions_to_create", len(definitions_to_create))
-        print("definitions_to_create", definitions_to_create)
-        print("number of definitions_to_update", len(definitions_to_update))
-        print("Definitions to update", definitions_to_update)
-
-        if len(definitions_to_create) > 0:
-            _ = db.session.bulk_save_objects(
-                [ClinicalFeatureDefinition(**i) for i in definitions_to_create]
-            )
+    def insert_values(cls, definitions_to_insert):
+        if len(definitions_to_insert) > 0:
+            db.session.bulk_insert_mappings(cls, definitions_to_insert)
             db.session.commit()
 
-        if len(definitions_to_update) > 0:
-            _ = db.session.bulk_update_mappings(
-                ClinicalFeatureDefinition, definitions_to_update
-            )
-            db.session.commit()
-
-        return []
+        return definitions_to_insert
 
     def to_dict(self):
         return {
             "id": self.id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "Name": self.name, # these keys are used in the UI to map to the dropdowns that's why the spelling is not camel_case
+            "Name": self.name,  # these keys are used in the UI to map to the dropdowns that's why the spelling is not camel_case
             "Type": self.feat_type,
             "Encoding": self.encoding,
             "user_id": self.user_id,
-            "Missing Values" : self.missing_values,
+            "Missing Values": self.missing_values,
         }
 
     @classmethod
@@ -1042,7 +1009,7 @@ class ClinicalFeatureValue(BaseModel, db.Model):
         self.patient_id = patient_id
 
     # Value of the feature
-    value = db.Column(db.String(255), nullable=False, unique=False)
+    value = db.Column(db.String(255), nullable=True, unique=False)
 
     patient_id = db.Column(db.String(255), nullable=False, unique=False)
 
@@ -1064,61 +1031,12 @@ class ClinicalFeatureValue(BaseModel, db.Model):
         ).all()
 
     @classmethod
-    def insert_values(cls, values_to_insert_or_update: List[Dict[str, Any]]):
-        features_to_update = []
-        features_to_create = []
-
-        print("values_to_insert_or_update", values_to_insert_or_update)
-        for value_to_insert_or_update in values_to_insert_or_update:
-            queried_clinical_feature_value = cls.query.filter(
-                cls.clinical_feature_definition_id
-                == value_to_insert_or_update["clinical_feature_definition_id"],
-                cls.patient_id == value_to_insert_or_update["patient_id"],
-                cls.value == value_to_insert_or_update["value"],
-            ).all()
-
-            # assert len(queried_clinical_feature_value) <= 1, "There should be at most one clinical feature value with the same definition id, patient id and value"
-
-            if len(queried_clinical_feature_value) > 0:
-                queried_clinical_feature_value = queried_clinical_feature_value[0]
-                if (
-                    value_to_insert_or_update["value"]
-                    != queried_clinical_feature_value.value
-                ):
-                    value_to_insert_or_update["id"] = queried_clinical_feature_value.id
-                    features_to_update.append(value_to_insert_or_update)
-            else:
-                features_to_create.append(value_to_insert_or_update)
-
-        print(
-            "features_to_create",
-            features_to_create,
-            "number of features to create",
-            len(features_to_create),
-        )
-        print(
-            "features_to_update",
-            features_to_update,
-            "number of features to update",
-            len(features_to_update),
-        )
-
-        if len(features_to_create) > 0:
-            _ = db.session.bulk_save_objects(
-                [ClinicalFeatureValue(**i) for i in features_to_create],
-                return_defaults=True,
-            )
+    def insert_values(cls, values_to_insert: List[Dict[str, Any]]):
+        if len(values_to_insert) > 0:
+            db.session.bulk_insert_mappings(cls, values_to_insert)
             db.session.commit()
 
-        if len(features_to_update) > 0:
-            _ = db.session.bulk_update_mappings(
-                ClinicalFeatureValue, features_to_update
-            )
-            db.session.commit()
-
-        return [
-            ClinicalFeatureValue(**i) for i in features_to_create + features_to_update
-        ]
+        return values_to_insert
 
     @classmethod
     def find_by_patient_ids(cls, patient_ids, album_id, user_id):
