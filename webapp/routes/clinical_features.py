@@ -1,13 +1,12 @@
-import sys
-from typing import Dict
+import pandas as pd
 
+from typing import Dict
 from collections import defaultdict
 from flask import Blueprint, jsonify, request, g
 from quantimage2_backend_common.models import (
     ClinicalFeatureDefinition,
     ClinicalFeatureValue,
 )
-import pandas as pd
 from routes.utils import validate_decorate
 from quantimage2_backend_common.models import ClinicalFeatureTypes
 
@@ -60,7 +59,7 @@ def clinical_features_unique_values():
 
         feature_definitions = request.json["clinical_features_definitions"]
         feature_types = {
-            name: value["Type"] for name, value in feature_definitions.items()
+            name: value["feat_type"] for name, value in feature_definitions.items()
         }
 
         response = {}
@@ -209,16 +208,15 @@ def clinical_features():
                 out_dict = feat_value[0].to_dict()
                 out_dict.update(feat_value[1].to_dict())
 
-                output[out_dict["patient_id"]][out_dict["Name"]] = out_dict["value"]
+                output[out_dict["patient_id"]][out_dict["name"]] = out_dict["value"]
 
             return jsonify(output)
 
 
-@bp.route("/clinical-features-definitions", methods=("GET", "POST", "DELETE"))
+@bp.route("/clinical-features-definitions", methods=("GET", "POST", "PATCH", "DELETE"))
 def clinical_feature_definitions():
 
     if request.method == "POST":
-        created_features = []
         album_id = get_album_id_from_request(request)
 
         clinical_feature_definitions_to_insert = []
@@ -229,11 +227,11 @@ def clinical_feature_definitions():
             clinical_feature_definitions_to_insert.append(
                 {
                     "name": feature_name,
-                    "feat_type": feature["Type"],
-                    "encoding": feature["Encoding"],
+                    "feat_type": feature["feat_type"],
+                    "encoding": feature["encoding"],
+                    "missing_values": feature["missing_values"],
                     "user_id": g.user,
                     "album_id": album_id,
-                    "missing_values": feature["Missing Values"],
                 }
             )
 
@@ -247,6 +245,13 @@ def clinical_feature_definitions():
 
         return jsonify(saved_definitions)
 
+    if request.method == "PATCH":
+        updated_definitions = request.json["clinical_feature_definitions"]
+
+        ClinicalFeatureDefinition.update_values(updated_definitions)
+
+        return jsonify(updated_definitions)
+
     if request.method == "GET":
         album_id = get_album_id_from_request(request)
         clinical_feature_definitions = (
@@ -254,11 +259,8 @@ def clinical_feature_definitions():
                 user_id=g.user, album_id=album_id
             )
         )
-        output = {}
-        for feature in clinical_feature_definitions:
-            output[feature.name] = feature.to_dict()
 
-        return jsonify(output)
+        return jsonify([d.to_dict() for d in clinical_feature_definitions])
 
     if request.method == "DELETE":
         album_id = get_album_id_from_request(request)
@@ -275,23 +277,27 @@ def guess_clinical_feature_definitions():
         clinical_features_df = load_df_from_request_dict(
             request.json["clinical_feature_map"]
         )
+        default_categorical = {
+            "feat_type": "Categorical",
+            "encoding": "One-Hot Encoding",
+            "missing_values": "Mode",
+        }
+        default_numeric = {
+            "feat_type": "Number",
+            "encoding": "Normalization",
+            "missing_values": "Median",
+        }
         for column_name in clinical_features_df.columns:
             if column_name == "PatientID" or column_name == "__parsed_extra":
                 continue
             if clinical_features_df[column_name].unique().size <= 10:
-                response[column_name] = {
-                    "Type": "Categorical",
-                    "Encoding": "One-Hot Encoding",
-                    "Missing Values": "Mode",
-                }  # The strings here should be the same as the ones used by the frontend (src/config/constants.js - line 79 as of 20th june 2023)
-            try:
-                _ = clinical_features_df[column_name].unique().astype(float)
-                response[column_name] = {
-                    "Type": "Number",
-                    "Encoding": "Normalization",
-                    "Missing Values": "Median",
-                }
-            except:
-                pass
+                response[column_name] = default_categorical
+            else:
+                try:
+                    _ = clinical_features_df[column_name].unique().astype(float)
+                    response[column_name] = default_numeric
+                except ValueError as e:
+                    # If conversion to float fails, assign categorical type
+                    response[column_name] = default_categorical
 
         return response

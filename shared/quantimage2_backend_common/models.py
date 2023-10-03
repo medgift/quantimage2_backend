@@ -929,12 +929,12 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
 
     __tablename__ = "clinical_feature_definition"
 
-    def __init__(self, name, feat_type, encoding, user_id, album_id, missing_values):
+    def __init__(self, name, album_id, user_id, feat_type, encoding, missing_values):
         self.name = name
+        self.album_id = album_id
         self.user_id = user_id
         self.feat_type = feat_type
         self.encoding = encoding
-        self.album_id = album_id
         self.missing_values = missing_values
 
     # Name of the feature
@@ -944,13 +944,13 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
 
     encoding = db.Column(db.String(255), nullable=False, unique=False)
 
-    # User who created the clinical feature category
-    user_id = db.Column(db.String(255), nullable=False, unique=False)
+    missing_values = db.Column(db.String(255), nullable=False, unique=False)
 
     # Album on which the clinical feature was uploaded
     album_id = db.Column(db.String(255), nullable=False, unique=False)
 
-    missing_values = db.Column(db.String(255), nullable=False, unique=False)
+    # User who created the clinical feature category
+    user_id = db.Column(db.String(255), nullable=False, unique=False)
 
     @classmethod
     def find_by_name(cls, clinical_feature_names, user_id):
@@ -974,16 +974,32 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
 
         return definitions_to_insert
 
+    @classmethod
+    def update_values(cls, definitions_to_update):
+
+        definitions_to_update_without_dates = [
+            {
+                key: val
+                for key, val in definition.items()
+                if key not in ["created_at", "updated_at"]
+            }
+            for definition in definitions_to_update
+        ]
+
+        db.session.bulk_update_mappings(cls, definitions_to_update_without_dates)
+        db.session.commit()
+
     def to_dict(self):
         return {
             "id": self.id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "Name": self.name,  # these keys are used in the UI to map to the dropdowns that's why the spelling is not camel_case
-            "Type": self.feat_type,
-            "Encoding": self.encoding,
+            "album_id": self.album_id,
             "user_id": self.user_id,
-            "Missing Values": self.missing_values,
+            "name": self.name,
+            "feat_type": self.feat_type,
+            "encoding": self.encoding,
+            "missing_values": self.missing_values,
         }
 
     @classmethod
@@ -1053,6 +1069,7 @@ class ClinicalFeatureValue(BaseModel, db.Model):
 
     def to_dict(self):
         return {
+            "id": self.id,
             "clinical_feature_definition_id": self.clinical_feature_definition_id,
             "value": self.value,
             "patient_id": self.patient_id,

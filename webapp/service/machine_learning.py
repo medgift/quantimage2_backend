@@ -365,9 +365,13 @@ def get_clinical_features(
                 )
 
             elif clin_feature_encoding == ClinicalFeatureEncodings.NONE:
-                clin_feature_df[[clin_feature.name]] = clin_feature_df[
-                    [clin_feature.name]
-                ].astype(float)
+                try:
+                    clin_feature_df[[clin_feature.name]] = clin_feature_df[
+                        [clin_feature.name]
+                    ].astype(float)
+                except ValueError as e:
+                    print("Error with feature", clin_feature.name)
+                    raise e
             else:
                 raise ValueError(
                     f"We do not support this feature type / encoding combination yet - got {clin_feature_type} and {clin_feature_encoding}"
