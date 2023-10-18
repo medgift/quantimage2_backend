@@ -54,9 +54,9 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=prod"
-      - "traefik.http.middlewares.quantimage2-backend-flower-whitelist.ipwhitelist.sourcerange=${TRAEFIK_WHITELIST_FLOWER}"
+      - "traefik.http.middlewares.quantimage2-backend-flower-auth.basicauth.users=${TRAEFIK_FLOWER_USERS}"
       - "traefik.http.routers.quantimage2-backend-flower.rule=Host(`${TRAEFIK_URL_FLOWER}`)"
-      - "traefik.http.routers.quantimage2-backend-flower.middlewares=quantimage2-backend-flower-whitelist"
+      - "traefik.http.routers.quantimage2-backend-flower.middlewares=quantimage2-backend-flower-auth"
     networks:
       - default
       - prod
