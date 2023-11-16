@@ -218,7 +218,14 @@ def train_model(
             test_metrics = calculate_test_metrics(scores, scoring, random_seed)
 
         # Save model in the DB
-        best_algorithm = fitted_model.best_params_[estimator_step].__class__.__name__
+        classifier_class = fitted_model.best_params_[estimator_step]
+
+        # Best algorithm - Check underlying estimator class name if a CalibratedClassifierCV was used
+        best_algorithm = (
+            classifier_class.__class__.__name__
+            if not hasattr(classifier_class, "estimator")
+            else classifier_class.estimator.__class__.__name__
+        )
         best_normalization = fitted_model.best_params_[
             "preprocessor"
         ].__class__.__name__

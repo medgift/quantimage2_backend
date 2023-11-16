@@ -51,7 +51,6 @@ def calculate_training_metrics(
         bootstrapped_means = [np.mean(values) for values in bootstrapped_values]
 
         # Calculate confidence interval based on the bootstrapped means
-
         metrics[metric] = get_confidence_interval_quartiles(
             split_values, bootstrapped_means, confidence
         )

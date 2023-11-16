@@ -1165,7 +1165,7 @@ class Model(BaseModel, db.Model):
     # Validation strategy (data splitting) used on the test set (Bootstrap, etc.)
     test_validation = db.Column(db.String(255), nullable=True, unique=False)
 
-    # Data normalization used for the model (L2 norm, standardization, etc.)
+    # Data normalization used for the model (min-max, standardization, etc.)
     best_data_normalization = db.Column(db.String(255), nullable=True, unique=False)
 
     # Feature selection used for the model (variance thresholding, correlation, etc.)

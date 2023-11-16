@@ -1,3 +1,4 @@
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import make_scorer, recall_score
@@ -76,11 +77,23 @@ class Classification(Modeling):
             }
         elif classifier_name == "svm":
             options = {
-                "classifier": [SVC(random_state=self.random_seed, probability=True)]
+                "classifier": [
+                    # Using CalibratedClassifierCV as a work-around to strange behaviour when using "probability=True"
+                    # on SVC directly, as documented here : https://scikit-learn.org/stable/modules/svm.html#scores-and-probabilities
+                    # This allows still getting probabilities & having consistent behaviour of predict & predict_proba
+                    CalibratedClassifierCV(
+                        SVC(random_state=self.random_seed, probability=False)
+                    )
+                ]
             }
 
         for key, value in CLASSIFICATION_PARAMS[classifier_name].items():
-            options[f"classifier__{key}"] = value
+            # Parameters need to be passed differently for the CalibratedClassifierCV used for SVM, as they are nested
+            # within the "estimator" attribute of the CalibratedClassifierCV object
+            if classifier_name == "svm":
+                options[f"classifier__estimator__{key}"] = value
+            else:
+                options[f"classifier__{key}"] = value
 
         return options
 

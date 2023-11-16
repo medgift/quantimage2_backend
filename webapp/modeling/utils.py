@@ -1,14 +1,11 @@
 import numpy as np
 from scipy.stats import t
-from sklearn.metrics import (
-    get_scorer,
-)
-from sklearn.preprocessing import StandardScaler, Normalizer, LabelEncoder
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 # Lists of supported normalization & classification methods
 from sklearn.utils import resample
 
-NORMALIZATION_METHODS = ["standardization", "l2norm"]
+NORMALIZATION_METHODS = ["standardization", "minmax"]
 
 
 def preprocess_features(features):
@@ -42,8 +39,8 @@ def select_normalizer(normalization_name):
 
     if normalization_name == "standardization":
         scaler = StandardScaler()
-    elif normalization_name == "l2norm":
-        scaler = Normalizer()
+    elif normalization_name == "minmax":
+        scaler = MinMaxScaler()
 
     return scaler
 
