@@ -5,7 +5,8 @@ from time import time
 
 import numpy as np
 from flask import jsonify
-from sklearn.metrics import get_scorer
+from numpy import argmax
+from sklearn.metrics import get_scorer, roc_curve
 from sklearn.utils import resample
 from scipy import stats
 
@@ -230,3 +231,18 @@ def get_model_path(user_id, album_id, model_type):
     models_path = os.path.join(models_dir, models_filename)
 
     return models_path
+
+
+# TODO - This function might be used in the future if it seems necessary
+# Calculate the optimal decision threshold based on Youden's index
+def get_optimal_threshold(y, positive_probabilities):
+    # calculate roc curves
+    fpr, tpr, thresholds = roc_curve(y, positive_probabilities)
+
+    # get the best threshold
+    J = tpr - fpr
+    ix = argmax(J)
+    best_thresh = thresholds[ix]
+    print("Best Threshold=%f" % (best_thresh))
+
+    return best_thresh

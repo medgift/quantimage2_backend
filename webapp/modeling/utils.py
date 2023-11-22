@@ -3,8 +3,6 @@ from scipy.stats import t
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 # Lists of supported normalization & classification methods
-from sklearn.utils import resample
-
 NORMALIZATION_METHODS = ["standardization", "minmax"]
 
 
