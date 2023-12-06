@@ -197,6 +197,7 @@ def train_model(
             random_seed,
         )
         test_metrics = None
+        test_metrics_value = None
 
         # Train/test only - Perform Bootstrap on the Test set
         if is_train_test:
@@ -215,7 +216,7 @@ def train_model(
             elapsed = toc()
             print(f"Running bootstrap took {elapsed}")
 
-            test_metrics = calculate_test_metrics(scores, scoring, random_seed)
+            test_metrics, test_metrics_values = calculate_test_metrics(scores, scoring, random_seed)
 
         # Save model in the DB
         classifier_class = fitted_model.best_params_[estimator_step]
@@ -267,6 +268,7 @@ def train_model(
             model_path,
             training_metrics,
             test_metrics,
+            test_metrics_values,
             user_id,
             album["album_id"],
             label_category.id,

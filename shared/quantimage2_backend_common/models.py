@@ -1114,6 +1114,7 @@ class Model(BaseModel, db.Model):
         model_path,
         training_metrics,
         test_metrics,
+        test_metrics_values,
         user_id,
         album_id,
         label_category_id,
@@ -1134,6 +1135,7 @@ class Model(BaseModel, db.Model):
         self.model_path = model_path
         self.training_metrics = training_metrics
         self.test_metrics = test_metrics
+        self.test_metrics_values = test_metrics_values
         self.user_id = user_id
         self.album_id = album_id
         self.label_category_id = label_category_id
@@ -1189,6 +1191,9 @@ class Model(BaseModel, db.Model):
     # Model metrics (JSON) - Test
     test_metrics = db.Column(db.JSON, nullable=True, unique=False)
 
+    # Model metrics values (JSON) - Test
+    test_metrics_values = db.Column(db.JSON, nullable=True, unique=False)
+
     # User who created the model
     user_id = db.Column(db.String(255), nullable=False, unique=False)
 
@@ -1225,6 +1230,11 @@ class Model(BaseModel, db.Model):
     def find_by_user(cls, user_id):
         instances = cls.query.filter_by(user_id=user_id).all()
         return instances
+
+    @classmethod
+    def find_by_id(cls, model_id):
+        instance = cls.query.filter_by(id=model_id).one_or_none()
+        return instance
 
     def to_dict(self):
         return {

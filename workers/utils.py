@@ -63,6 +63,7 @@ def calculate_training_metrics(
 def calculate_test_metrics(scores, scoring, random_seed, confidence=0.95):
 
     metrics = {}
+    metrics_values = {}
 
     for index, metric in enumerate(scoring.keys()):
         metric_scores = [score[metric] for score in scores]
@@ -75,12 +76,16 @@ def calculate_test_metrics(scores, scoring, random_seed, confidence=0.95):
         # Calculate mean for each of the 2nd-level boostrap repetitions
         bootstrapped_means = [np.mean(values) for values in bootstrapped_values]
 
+        # Save the bootstrapped values for each metric
+        metrics_values[metric] = bootstrapped_values
+
+        # Calculate the confidence interval for the metric
         metrics[metric] = get_confidence_interval_quartiles(
             metric_scores, bootstrapped_means, confidence
         )
         metrics[metric]["order"] = index
 
-    return metrics
+    return metrics, metrics_values
 
 
 def get_confidence_interval_quartiles(metric_scores, bootstrapped_means, confidence):

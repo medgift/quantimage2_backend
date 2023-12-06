@@ -1,8 +1,9 @@
 import os
 import traceback
+import csv
 
 from sqlalchemy.orm import joinedload
-from flask import Blueprint, jsonify, request, g, make_response
+from flask import Blueprint, jsonify, request, g, make_response, Response
 from quantimage2_backend_common.const import MODEL_TYPES
 from quantimage2_backend_common.models import Model, LabelCategory
 from quantimage2_backend_common.utils import get_training_id, format_model
@@ -95,3 +96,47 @@ def model(id):
 def models_by_user():
     albums = Model.find_by_user(g.user)
     return jsonify(albums)
+
+@bp.route("/models/<id>/download-test-metrics-values")
+def download_test_metrics_values(id):
+    # Get the model
+    model = Model.find_by_id(id)
+
+    if not model:
+        return jsonify({"error": "Model not found"}), 404
+
+    # Get the test metrics values
+    test_metrics_values = model.test_metrics_values
+
+    # Convert JSON content to a list suitable for CSV file
+    csv_content = []
+
+    # Add header row
+    header_row = ["Metric"] + [f"Value_{i+1}" for i in range(100)]
+    csv_content.append(header_row)
+
+    for metric, values_list in test_metrics_values.items():
+        for index, values in enumerate(values_list):
+            row = [f"{metric}_{index + 1}"] + values
+            csv_content.append(row)
+
+    # Generate CSV file
+    csv_filename = f"test_metrics_values_model_{id}.csv"
+    csv_filepath = f"/tmp/{csv_filename}"
+
+    with open(csv_filepath, "w", newline="") as csv_file:
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerows(csv_content)
+
+    # Return the CSV file as a response
+    with open(csv_filepath, "r") as csv_file:
+        csv_content = csv_file.read()
+
+    return Response(
+        csv_content,
+        mimetype="text/csv",
+        headers={
+            "Content-disposition": f"attachment; filename={csv_filename}",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
