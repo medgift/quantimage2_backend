@@ -72,12 +72,11 @@ def calculate_test_metrics(scores, scoring, random_seed, confidence=0.95):
         bootstrapped_values = bootstrap_on_results(
             metric_scores, random_seed, n_bootstrap=50
         )
-
         # Calculate mean for each of the 2nd-level boostrap repetitions
         bootstrapped_means = [np.mean(values) for values in bootstrapped_values]
 
-        # Save the bootstrapped values for each metric
-        metrics_values[metric] = bootstrapped_values
+        # Save the mean of bootstrapped values for each metric
+        metrics_values[metric] = bootstrapped_means
 
         # Calculate the confidence interval for the metric
         metrics[metric] = get_confidence_interval_quartiles(
