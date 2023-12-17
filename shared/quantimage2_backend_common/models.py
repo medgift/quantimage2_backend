@@ -1255,6 +1255,7 @@ class Model(BaseModel, db.Model):
             "model_path": self.model_path,
             "training_metrics": self.training_metrics,
             "test_metrics": self.test_metrics,
+            "test_metrics_values": self.test_metrics_values,
             "user_id": self.user_id,
             "album_id": self.album_id,
             "feature_extraction_id": self.feature_extraction_id,
