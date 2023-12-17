@@ -1,6 +1,7 @@
 import os
 import traceback
 import csv
+import io
 
 from sqlalchemy.orm import joinedload
 from flask import Blueprint, jsonify, request, g, make_response, Response
@@ -112,28 +113,30 @@ def download_test_metrics_values(id):
     csv_content = []
 
     # Add header row
-    header_row = ["Metric"] + [f"Value_{i+1}" for i in range(100)]
+    header_row = ["Metric", "Value"]
     csv_content.append(header_row)
 
-    for metric, values_list in test_metrics_values.items():
-        for index, values in enumerate(values_list):
-            row = [f"{metric}_{index + 1}"] + values
+    # Iterate over the metrics and their bootstrapped values
+    for metric_index, (metric, values) in enumerate(zip(test_metrics_values.keys(), test_metrics_values.values())):
+        for bootstrap_index, value in enumerate(values):
+            row = [f"{metric}_{bootstrap_index + 1}"] + [value]
             csv_content.append(row)
 
-    # Generate CSV file
+    # CSV file name
     csv_filename = f"test_metrics_values_model_{id}.csv"
-    csv_filepath = f"/tmp/{csv_filename}"
 
-    with open(csv_filepath, "w", newline="") as csv_file:
-        csv_writer = csv.writer(csv_file)
-        csv_writer.writerows(csv_content)
+    # Writing data into CSV format as String
+    output = io.StringIO()
+    csv_writer = csv.writer(output)
+    csv_writer.writerows(csv_content)
+    csv_content_string = output.getvalue()
 
-    # Return the CSV file as a response
-    with open(csv_filepath, "r") as csv_file:
-        csv_content = csv_file.read()
+    # Close StringIO to free up resources
+    output.close()
 
+    # Return the CSV content as a response
     return Response(
-        csv_content,
+        csv_content_string,
         mimetype="text/csv",
         headers={
             "Content-disposition": f"attachment; filename={csv_filename}",
