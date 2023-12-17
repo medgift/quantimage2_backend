@@ -197,7 +197,7 @@ def train_model(
             random_seed,
         )
         test_metrics = None
-        test_metrics_value = None
+        test_metrics_values = None
 
         # Train/test only - Perform Bootstrap on the Test set
         if is_train_test:
