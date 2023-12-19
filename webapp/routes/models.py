@@ -1,8 +1,10 @@
 import os
 import traceback
+import csv
+import io
 
 from sqlalchemy.orm import joinedload
-from flask import Blueprint, jsonify, request, g, make_response
+from flask import Blueprint, jsonify, request, g, make_response, Response
 from quantimage2_backend_common.const import MODEL_TYPES
 from quantimage2_backend_common.models import Model, LabelCategory
 from quantimage2_backend_common.utils import get_training_id, format_model
@@ -20,7 +22,7 @@ def before_request():
 
 @bp.route("/models/<album_id>", methods=("GET", "POST"))
 def models_by_album(album_id):
-    
+
     if request.method == "GET":
         models = Model.find_by_album(album_id, g.user)
         formatted_models = list(map(lambda model: format_model(model), models))
@@ -95,3 +97,52 @@ def model(id):
 def models_by_user():
     albums = Model.find_by_user(g.user)
     return jsonify(albums)
+
+
+@bp.route("/models/<id>/download-test-bootstrap-values")
+def download_test_bootstrap_values(id):
+    # Get the model
+    model = Model.find_by_id(id)
+
+    if not model:
+        return jsonify({"error": "Model not found"}), 404
+
+    # Get the test bootstrap values
+    test_bootstrap_values = model.test_bootstrap_values
+
+    # Convert JSON content to a list suitable for CSV file
+    csv_content = []
+
+    # Add header row (based on the number of bootstrap repetitions)
+    n_bootstrap = len(list(test_bootstrap_values.values())[0])
+    header_row = ["Metric", *[f"Repetition {n + 1}" for n in range(n_bootstrap)]]
+    csv_content.append(header_row)
+
+    # Iterate over the metrics and their bootstrapped means
+    for metric_index, (metric, values) in enumerate(
+        zip(test_bootstrap_values.keys(), test_bootstrap_values.values())
+    ):
+        row = [metric, *values]
+        csv_content.append(row)
+
+    # CSV file name
+    csv_filename = f"test_bootstrap_values_model_{id}.csv"
+
+    # Writing data into CSV format as String
+    output = io.StringIO()
+    csv_writer = csv.writer(output)
+    csv_writer.writerows(csv_content)
+    csv_content_string = output.getvalue()
+
+    # Close StringIO to free up resources
+    output.close()
+
+    # Return the CSV content as a response
+    return Response(
+        csv_content_string,
+        mimetype="text/csv",
+        headers={
+            "Content-disposition": f"attachment; filename={csv_filename}",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )

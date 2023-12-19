@@ -4,7 +4,7 @@ FROM python:3.9-alpine
 RUN apk add --no-cache ca-certificates && update-ca-certificates
 
 # Install the required packages
-RUN pip install --no-cache-dir redis https://github.com/roger-schaer/flower/zipball/master
+RUN pip install --no-cache-dir redis https://github.com/medgift/flower/zipball/master
 
 # PYTHONUNBUFFERED: Force stdin, stdout and stderr to be totally unbuffered. (equivalent to `python -u`)
 # PYTHONHASHSEED: Enable hash randomization (equivalent to `python -R`)
