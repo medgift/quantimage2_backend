@@ -22,7 +22,7 @@ def before_request():
 
 @bp.route("/models/<album_id>", methods=("GET", "POST"))
 def models_by_album(album_id):
-    
+
     if request.method == "GET":
         models = Model.find_by_album(album_id, g.user)
         formatted_models = list(map(lambda model: format_model(model), models))
@@ -98,32 +98,35 @@ def models_by_user():
     albums = Model.find_by_user(g.user)
     return jsonify(albums)
 
-@bp.route("/models/<id>/download-test-metrics-values")
-def download_test_metrics_values(id):
+
+@bp.route("/models/<id>/download-test-bootstrap-values")
+def download_test_bootstrap_values(id):
     # Get the model
     model = Model.find_by_id(id)
 
     if not model:
         return jsonify({"error": "Model not found"}), 404
 
-    # Get the test metrics values
-    test_metrics_values = model.test_metrics_values
+    # Get the test bootstrap values
+    test_bootstrap_values = model.test_bootstrap_values
 
     # Convert JSON content to a list suitable for CSV file
     csv_content = []
 
-    # Add header row
-    header_row = ["Metric", "Value"]
+    # Add header row (based on the number of bootstrap repetitions)
+    n_bootstrap = len(list(test_bootstrap_values.values())[0])
+    header_row = ["Metric", *[f"Repetition {n + 1}" for n in range(n_bootstrap)]]
     csv_content.append(header_row)
 
-    # Iterate over the metrics and their bootstrapped values
-    for metric_index, (metric, values) in enumerate(zip(test_metrics_values.keys(), test_metrics_values.values())):
-        for bootstrap_index, value in enumerate(values):
-            row = [f"{metric}_{bootstrap_index + 1}"] + [value]
-            csv_content.append(row)
+    # Iterate over the metrics and their bootstrapped means
+    for metric_index, (metric, values) in enumerate(
+        zip(test_bootstrap_values.keys(), test_bootstrap_values.values())
+    ):
+        row = [metric, *values]
+        csv_content.append(row)
 
     # CSV file name
-    csv_filename = f"test_metrics_values_model_{id}.csv"
+    csv_filename = f"test_bootstrap_values_model_{id}.csv"
 
     # Writing data into CSV format as String
     output = io.StringIO()
