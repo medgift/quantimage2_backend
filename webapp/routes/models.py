@@ -3,12 +3,13 @@ import traceback
 import csv
 import io
 
+from pathvalidate import sanitize_filename
 from sqlalchemy.orm import joinedload
 from flask import Blueprint, jsonify, request, g, make_response, Response
-from quantimage2_backend_common.const import MODEL_TYPES
-from quantimage2_backend_common.models import Model, LabelCategory
+from quantimage2_backend_common.models import Model, LabelCategory, Album
 from quantimage2_backend_common.utils import get_training_id, format_model
 from routes.utils import validate_decorate
+from service.feature_extraction import get_album_details
 from service.machine_learning import train_model
 
 # Define blueprint
@@ -126,7 +127,14 @@ def download_test_bootstrap_values(id):
         csv_content.append(row)
 
     # CSV file name
-    csv_filename = f"test_bootstrap_values_model_{id}.csv"
+    album_id = model.feature_extraction.album_id
+    album_details = get_album_details(album_id, g.token)
+    model_suffix = album_details["name"]
+    if model.feature_collection is not None:
+        model_suffix = f"{model_suffix}_{model.feature_collection.name}"
+
+    csv_filename = f"test_bootstrap_{model_suffix}_{model.best_algorithm}_{model.best_data_normalization}_{id}.csv"
+    csv_filename = sanitize_filename(csv_filename, "_").replace(" ", "_")
 
     # Writing data into CSV format as String
     output = io.StringIO()

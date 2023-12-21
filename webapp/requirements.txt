@@ -79,3 +79,6 @@ tables
 
 # Read Docker Secrets
 get-docker-secret
+
+# Path & filename validation
+pathvalidate
