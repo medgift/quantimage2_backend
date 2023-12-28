@@ -61,6 +61,42 @@ services:
       - default
       - prod
 
+  backup-database:
+    image: fradelg/mysql-cron-backup:1.13.1
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ${DB_BACKUP_DIRECTORY}:/backup
+    secrets:
+      - db-user-password
+    env_file:
+      - env_files/common.env
+    environment:
+      MYSQL_HOST: db
+      MYSQL_PASS_FILE: /run/secrets/db-user-password
+      MYSQLDUMP_OPTS: --no-tablespaces
+      MAX_BACKUPS: 30
+      INIT_BACKUP: 1
+      # Every day at 03:00
+      CRON_TIME: 0 3 * * *
+      # Make it small
+      GZIP_LEVEL: 9
+
+  backup-data:
+    image: offen/docker-volume-backup:v2.35.0
+    restart: unless-stopped
+    volumes:
+      - backend-data:/backup/quantimage2-data:ro
+      - tasks-db:/backup/tasks-db:ro
+      - ${DATA_BACKUP_DIRECTORY}:/archive
+    environment:
+      BACKUP_CRON_EXPRESSION: 0 3 * * *
+      BACKUP_FILENAME: backup-%Y-%m-%dT%H-%M-%S.tar.gz
+      BACKUP_PRUNING_PREFIX: backup-
+      BACKUP_RETENTION_DAYS: 30
+
 networks:
   prod:
     external: true
