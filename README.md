@@ -30,8 +30,15 @@ Below is an overview of the various containers that constitute the backend:
 ![Docker Containers Overview](docs/source/_static/backend-structure.png)
 
 ### Local development
-The [.env](.env) file defines the QUANTIMAGE2_DATA_MOUNT_DIRECTORY environment variable to specify which directory will be used
-to mount the different docker volumes. This is not part of git - please set the mounting directory at setup.
+The .env file defines the QUANTIMAGE2_DATA_MOUNT_DIRECTORY environment variable to specify which directory will be used
+to mount the different docker volumes. This is not part of git - please set the mounting directory at setup and create a `.env` file at the root of this repo when setting up the repo for the first time.
+
+The content of the file could be the following:
+
+```
+# Docker volumes mount directory
+QUANTIMAGE2_DATA_MOUNT_DIRECTORY=/Users/thomasvetterli/quantimage2-data
+```
 
 *Note:* On macOS you cannot mount on / as it's not writeable on the newest versions of macOS.
 
