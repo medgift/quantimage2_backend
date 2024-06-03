@@ -246,7 +246,7 @@ def get_clinical_features(
     # If the front end passes clinical feature names that are not matched by features in the db we should raise an error as the 
     # frontend may have passed in bad data
     if len(full_clin_feature_definitions) > 0 and len(clin_feature_definitions) == 0:
-        raise ValueError(f"Assumed that the following clinical featurees were selected {full_clin_feature_definitions} but got {selected_clinical_features} in the available clin features.")
+        raise ValueError(f"Assumed that the following clinical features can be loaded from the db {[i.name for i in full_clin_feature_definitions]} but got {selected_clinical_features} from the feature_collection passed by the frontend request")
     
     if len(clin_feature_definitions) == 0:
         return pandas.DataFrame()
