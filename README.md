@@ -48,6 +48,8 @@ To run the python code locally without being in the web app use the following st
 - install [`uv`](https://github.com/astral-sh/uv) to manage python virtual environments plus install requirements
 - create a virutal environment in the sub folder that you want to work on: `uv venv` (you may need one for the webapp and one for the worker)
 - install dependencies with `uv pip install -r requirements.txt`
+- for jupyter notebook development - run (after having activated the environment with `ßource .venv/bin/activate`) - `python -m ipykernel install --user --name webapp --display-name "Webapp python environment"`
+- in the notebook subfolder we provide example scrips on how to interact with the db via pandas or a local flask context.
 
 ### Code Structure
 
