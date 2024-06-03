@@ -199,8 +199,6 @@ def train_model(
 
     training_id = get_training_id(extraction_id, collection_id)
 
-    print(features_df.columns)
-
     model = ModelClass(
         feature_extraction_id=extraction_id,
         collection_id=collection_id,
@@ -227,7 +225,7 @@ def train_model(
 def get_clinical_features(
     user_id: str, collection_id: str, radiomics_patient_ids: List[str], album: str
 ):
-    clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(
+    full_clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(
         user_id, album["album_id"]
     )
 
@@ -236,8 +234,6 @@ def get_clinical_features(
 
         selected_clinical_features = []
         for feature_id in feature_collection.feature_ids:
-            print("feature id")
-            print(feature_id)
             if FEATURE_ID_SEPARATOR in feature_id:
                 # In the front end - clinical features are saved with no nesting - and the FEATURE_ID_SEPARATOR is used
                 # to save nesting levels from the radiomics feature - https://github.com/medgift/quantimage2-frontend/blob/34e393867c2ecd364409a4aabaac5fe42dcd4172/src/Visualisation.js#L66
@@ -245,14 +241,14 @@ def get_clinical_features(
                 continue
             else:
                 selected_clinical_features.append(feature_id)
-        
-        print("Selected clinical features", selected_clinical_features)
 
         clin_feature_definitions = [
-            i for i in clin_feature_definitions if i.name in selected_clinical_features
+            i for i in full_clin_feature_definitions if i.name in selected_clinical_features
         ]
 
-    print("length of clin feature_definitions", len(clin_feature_definitions))
+    if len(full_clin_feature_definitions) > 0 and len(clin_feature_definitions) == 0:
+        raise ValueError(f"Assumed that the following clinical featurees were selected {full_clin_feature_definitions} but got {selected_clinical_features} in the available clin features.")
+    
     if len(clin_feature_definitions) == 0:
         return pandas.DataFrame()
 

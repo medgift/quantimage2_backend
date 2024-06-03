@@ -101,7 +101,6 @@ class Classification(Modeling):
         # Classes must be sorted so that the negative class is first & the positive class is second
         if self.classes is not None:
             labels_binarized = label_binarize(labels, classes=self.classes)
-            print("label binarized", labels_binarized)
             labels_encoded = [l[0] for l in labels_binarized]
         else:
             labels_encoded = [
