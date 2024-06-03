@@ -35,6 +35,13 @@ to mount the different docker volumes. This is not part of git - please set the 
 
 *Note:* On macOS you cannot mount on / as it's not writeable on the newest versions of macOS.
 
+To run the python code locally without being in the web app use the following steps:
+- install homebrew and pyenv to install python version
+- install python 3.8 `pyenv install 3.8.15` (it's what is used in the webapp dockerfile and workers dockerfile)
+- install [`uv`](https://github.com/astral-sh/uv) to manage python virtual environments plus install requirements
+- create a virutal environment in the sub folder that you want to work on: `uv venv` (you may need one for the webapp and one for the worker)
+- install dependencies with `uv pip install -r requirements.txt`
+
 ### Code Structure
 
 See the [Documentation](https://quantimage-v2-backend.readthedocs.io/en/latest/) for more information on the code structure.

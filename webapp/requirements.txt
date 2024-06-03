@@ -40,7 +40,7 @@ redis
 requests
 
 # Keycloak
-python-keycloak
+python-keycloak==3.6.1
 
 # SQLAlchemy
 SQLAlchemy<1.4
