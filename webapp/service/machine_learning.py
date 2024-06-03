@@ -246,6 +246,8 @@ def get_clinical_features(
             i for i in full_clin_feature_definitions if i.name in selected_clinical_features
         ]
 
+    # If the front end passes clinical feature names that are not matched by features in the db we should raise an error as the 
+    # frontend may have passed in bad data
     if len(full_clin_feature_definitions) > 0 and len(clin_feature_definitions) == 0:
         raise ValueError(f"Assumed that the following clinical featurees were selected {full_clin_feature_definitions} but got {selected_clinical_features} in the available clin features.")
     
