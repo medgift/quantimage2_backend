@@ -166,13 +166,10 @@ def train_model(
     all_patients = (
         training_patients + test_patients if test_patients else training_patients
     )
-    print("getting collection id", collection_id)
+
     clinical_features = get_clinical_features(
         user_id, collection_id, all_patients, album
     )
-    print("Printing out clinical feautres things")
-    print(clinical_features.shape)
-    print(clinical_features.head())
 
     if len(clinical_features) > 0 and len(features_df) > 0:
         features_df = pandas.merge(
