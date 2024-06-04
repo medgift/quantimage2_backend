@@ -166,6 +166,7 @@ def train_model(
     all_patients = (
         training_patients + test_patients if test_patients else training_patients
     )
+
     clinical_features = get_clinical_features(
         user_id, collection_id, all_patients, album
     )
@@ -221,7 +222,7 @@ def train_model(
 def get_clinical_features(
     user_id: str, collection_id: str, radiomics_patient_ids: List[str], album: str
 ):
-    clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(
+    full_clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(
         user_id, album["album_id"]
     )
 
@@ -239,9 +240,14 @@ def get_clinical_features(
                 selected_clinical_features.append(feature_id)
 
         clin_feature_definitions = [
-            i for i in clin_feature_definitions if i.name in selected_clinical_features
+            i for i in full_clin_feature_definitions if i.name in selected_clinical_features
         ]
 
+    # If the front end passes clinical feature names that are not matched by features in the db we should raise an error as the 
+    # frontend may have passed in bad data
+    if len(full_clin_feature_definitions) > 0 and len(clin_feature_definitions) == 0:
+        raise ValueError(f"Assumed that the following clinical features can be loaded from the db {[i.name for i in full_clin_feature_definitions]} but got {selected_clinical_features} from the feature_collection passed by the frontend request")
+    
     if len(clin_feature_definitions) == 0:
         return pandas.DataFrame()
 

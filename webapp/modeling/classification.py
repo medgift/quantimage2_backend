@@ -98,7 +98,6 @@ class Classification(Modeling):
         return options
 
     def encode_labels(self, labels):
-
         # Classes must be sorted so that the negative class is first & the positive class is second
         if self.classes is not None:
             labels_binarized = label_binarize(labels, classes=self.classes)
@@ -107,7 +106,6 @@ class Classification(Modeling):
             labels_encoded = [
                 int(l) for l in labels[OUTCOME_FIELD_CLASSIFICATION].values
             ]
-
         return labels_encoded
 
     def get_cv(self, n_splits=CV_SPLITS, n_repeats=CV_REPEATS):

@@ -102,3 +102,6 @@ webapp/alembic/versions/*
 # Shared module
 shared/build
 shared/*.egg-info
+
+# Jupyter notebooks
+*/.ipynb_checkpoints/
