@@ -965,6 +965,14 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         cls, user_id, album_id
     ) -> List[ClinicalFeatureDefinition]:
         return cls.query.filter(cls.user_id == user_id, cls.album_id == album_id).all()
+    
+    @classmethod
+    def find_by_user_id_and_album_id_and_name(
+        cls, user_id, album_id, name
+    ) -> List[ClinicalFeatureDefinition]:
+        clinical_feature_definition = cls.query.filter(cls.user_id == user_id, cls.album_id == album_id, cls.name == name).all()
+        assert len(clinical_feature_definition) == 1
+        return clinical_feature_definition[0]
 
     @classmethod
     def insert_values(cls, definitions_to_insert):
@@ -986,7 +994,15 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
             for definition in definitions_to_update
         ]
 
-        db.session.bulk_update_mappings(cls, definitions_to_update_without_dates)
+        # adding the clin feature id
+        # the bulk update mappings only work if we provide the primary key which is the id column.
+        definitions_with_id = []
+        for i in definitions_to_update_without_dates:
+            id = ClinicalFeatureDefinition.find_by_user_id_and_album_id_and_name(user_id=i["user_id"], album_id=i["album_id"], name=i["name"]).id
+            definitions_with_id.append(i)
+        
+
+        db.session.bulk_update_mappings(cls, definitions_with_id)
         db.session.commit()
 
     def to_dict(self):
