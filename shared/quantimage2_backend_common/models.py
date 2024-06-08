@@ -999,6 +999,7 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         definitions_with_id = []
         for i in definitions_to_update_without_dates:
             id = ClinicalFeatureDefinition.find_by_user_id_and_album_id_and_name(user_id=i["user_id"], album_id=i["album_id"], name=i["name"]).id
+            i["id"] = id
             definitions_with_id.append(i)
         
 
