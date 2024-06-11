@@ -290,11 +290,10 @@ def get_clinical_features(
         missing_values_idx = (
             clin_feature_df[clin_feature.name].apply(lambda x: x is None)
             | clin_feature_df[clin_feature.name].isnull()
+            | clin_feature_df[clin_feature.name].apply(lambda x: str(x).lower() in ["n/a"])
         )
 
-        non_missing_values = clin_feature_df.loc[~missing_values_idx][
-            [clin_feature.name]
-        ]
+        non_missing_values = clin_feature_df.loc[~missing_values_idx][clin_feature.name]
 
         if (
             missing_values_idx.sum() > 0
@@ -325,7 +324,7 @@ def get_clinical_features(
                         raise ValueError(
                             f"Tried to compute the mode of {clin_feature.name} but failed"
                         )
-
+                    
                 clin_feature_df.loc[missing_values_idx, clin_feature.name] = value
 
             else:  # If we drop the missing values we need to get rid of them before the encoding.
@@ -385,7 +384,6 @@ def get_clinical_features(
         else:
             raise ValueError("Feature type not supported yet.")
 
-        print(clin_feature.name, clin_feature_df.columns)
         all_features.append(clin_feature_df)
 
     return pandas.concat(all_features, axis=1, join="outer")
