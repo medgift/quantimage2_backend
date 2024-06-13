@@ -75,6 +75,7 @@ def validate_request(request):
             token_decoded = decode_token(token)
             return True
         except (JWTError, ExpiredSignatureError, JWTClaimsError) as e:
+            print(e)
             return False
 
 
