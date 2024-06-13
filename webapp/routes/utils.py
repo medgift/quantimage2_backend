@@ -54,8 +54,9 @@ def decorate_if_possible(request):
 
 def validate_decorate(request):
     if request.method != "OPTIONS":
-        if not validate_request(request):
-            abort(401)
+        is_request_valid, error_message = validate_request(request)
+        if not is_request_valid:
+            abort(401, error_message)
         else:
             g.user = userid_from_token(request.headers["Authorization"].split(" ")[1])
             g.token = request.headers["Authorization"].split(" ")[1]
@@ -73,10 +74,9 @@ def validate_request(request):
         token = authorization.split(" ")[1]
         try:
             token_decoded = decode_token(token)
-            return True
+            return True, ""
         except (JWTError, ExpiredSignatureError, JWTClaimsError) as e:
-            print(e)
-            return False
+            return False, str(e)
 
 
 def decode_token(token):
