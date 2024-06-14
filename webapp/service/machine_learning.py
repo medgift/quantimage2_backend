@@ -290,7 +290,7 @@ def get_clinical_features(
         missing_values_idx = (
             clin_feature_df[clin_feature.name].apply(lambda x: x is None)
             | clin_feature_df[clin_feature.name].isnull()
-            | clin_feature_df[clin_feature.name].apply(lambda x: str(x).lower() in ["n/a"])
+            | clin_feature_df[clin_feature.name].apply(lambda x: str(x).lower() in ["n/a", "n(a"])
         )
 
         non_missing_values = clin_feature_df.loc[~missing_values_idx][clin_feature.name]
