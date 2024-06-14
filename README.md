@@ -9,6 +9,14 @@ This repository is part of the QuantImage v2 platform, which includes the follow
 - https://github.com/medgift/quantimage2_backend - Backend in Python
 - https://github.com/medgift/quantimage2-kheops - Custom configuration for the [Kheops](https://kheops.online) platform
 
+## Deployment on ehealth server at HEVS
+When deploying this project on the ehealth server one needs to ensure that another instance of keycloak has not been started by another project. This repo is supposed
+to only start keycloak if another one is already running. If this process does not work and you end up with two instances of keycloak running we end up with authentification problems.
+
+After starting quantimage - please check:
+
+ `docker ps | grep keycloak`. If you find two - then grab the id of the container named quantimagev2-keycloak and finally remove the running keycloak container and associated postgres database container by doing `docker rm -f <id_container>`. Possibly `docker compose rm <docker_compose_service_name> is working as well.
+
 ## Project Structure
 
 ### Docker
