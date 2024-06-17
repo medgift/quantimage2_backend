@@ -243,11 +243,16 @@ def get_clinical_features(
             i for i in full_clin_feature_definitions if i.name in selected_clinical_features
         ]
 
-    # If the front end passes clinical feature names that are not matched by features in the db we should raise an error as the 
-    # frontend may have passed in bad data
-    if len(selected_clinical_features) > 0 and len(clin_feature_definitions) == 0:
-        raise ValueError(f"Assumed that the feature collection contained these clinical features {selected_clinical_features} but none where selcted for training. Clin Feature definitions table contains these featurs {[i.name for i in full_clin_feature_definitions]}")
+        # If the front end passes clinical feature names that are not matched by features in the db we should raise an error as the 
+        # frontend may have passed in bad data
+        if len(selected_clinical_features) > 0 and len(clin_feature_definitions) == 0:
+            raise ValueError(f"Assumed that the feature collection contained these clinical features {selected_clinical_features} but none where selcted for training. Clin Feature definitions table contains these featurs {[i.name for i in full_clin_feature_definitions]}")
     
+
+    else: # If collection_id is None we are training with all clinical features
+        clin_feature_definitions = full_clin_feature_definitions
+
+
     if len(clin_feature_definitions) == 0:
         return pandas.DataFrame()
 
