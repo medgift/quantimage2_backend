@@ -3,6 +3,8 @@ import traceback
 import csv
 import io
 
+import pandas as pd
+
 from pathvalidate import sanitize_filename
 from sqlalchemy.orm import joinedload
 from flask import Blueprint, jsonify, request, g, make_response, Response
@@ -166,20 +168,12 @@ def download_test_scores_values(id):
     # Get the test scores values
     test_scores_values = model.test_scores_values
 
-    # Convert JSON content to a list suitable for CSV file
-    csv_content = []
-
     # Add header row (based on the number of bootstrap repetitions)
-    n_score = len(list(test_scores_values.values())[0])
-    header_row = ["Metric", *[f"Repetition {n + 1}" for n in range(n_score)]]
-    csv_content.append(header_row)
-
-    # Iterate over the scores
-    for metric_index, (metric, values) in enumerate(
-        zip(test_scores_values.keys(), test_scores_values.values())
-    ):
-        row = [metric, *values]
-        csv_content.append(row)
+    header_row = ["Metric", *[f"Repetition {n + 1}" for n in range(len(test_scores_values))]]
+    
+    
+    df = pd.DataFrame.from_dict(test_scores_values).T.reset_index()
+    df.columns = header_row
 
     # CSV file name
     album_id = model.feature_extraction.album_id
@@ -191,10 +185,13 @@ def download_test_scores_values(id):
     csv_filename = f"test_scores_{model_suffix}_{model.best_algorithm}_{model.best_data_normalization}_{id}.csv"
     csv_filename = sanitize_filename(csv_filename, "_").replace(" ", "_")
 
-    # Writing data into CSV format as String
+    # Create a string buffer
     output = io.StringIO()
-    csv_writer = csv.writer(output)
-    csv_writer.writerows(csv_content)
+
+    # Write the DataFrame to the string buffer as CSV
+    df.to_csv(output, index=False)
+
+    # Get the CSV content as a string
     csv_content_string = output.getvalue()
 
     # Close StringIO to free up resources
