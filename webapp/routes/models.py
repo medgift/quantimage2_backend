@@ -154,3 +154,58 @@ def download_test_bootstrap_values(id):
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )
+
+@bp.route("/models/<id>/download-test-scores-values")
+def download_test_scores_values(id):
+    # Get the model
+    model = Model.find_by_id(id)
+
+    if not model:
+        return jsonify({"error": "Model not found"}), 404
+
+    # Get the test scores values
+    test_scores_values = model.test_scores_values
+
+    # Convert JSON content to a list suitable for CSV file
+    csv_content = []
+
+    # Add header row (based on the number of bootstrap repetitions)
+    n_score = len(list(test_scores_values.values())[0])
+    header_row = ["Metric", *[f"Repetition {n + 1}" for n in range(n_score)]]
+    csv_content.append(header_row)
+
+    # Iterate over the scores
+    for metric_index, (metric, values) in enumerate(
+        zip(test_scores_values.keys(), test_scores_values.values())
+    ):
+        row = [metric, *values]
+        csv_content.append(row)
+
+    # CSV file name
+    album_id = model.feature_extraction.album_id
+    album_details = get_album_details(album_id, g.token)
+    model_suffix = album_details["name"]
+    if model.feature_collection is not None:
+        model_suffix = f"{model_suffix}_{model.feature_collection.name}"
+
+    csv_filename = f"test_scores_{model_suffix}_{model.best_algorithm}_{model.best_data_normalization}_{id}.csv"
+    csv_filename = sanitize_filename(csv_filename, "_").replace(" ", "_")
+
+    # Writing data into CSV format as String
+    output = io.StringIO()
+    csv_writer = csv.writer(output)
+    csv_writer.writerows(csv_content)
+    csv_content_string = output.getvalue()
+
+    # Close StringIO to free up resources
+    output.close()
+
+    # Return the CSV content as a response
+    return Response(
+        csv_content_string,
+        mimetype="text/csv",
+        headers={
+            "Content-disposition": f"attachment; filename={csv_filename}",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
