@@ -3,6 +3,8 @@ import traceback
 import csv
 import io
 
+import pandas as pd
+
 from pathvalidate import sanitize_filename
 from sqlalchemy.orm import joinedload
 from flask import Blueprint, jsonify, request, g, make_response, Response
@@ -140,6 +142,56 @@ def download_test_bootstrap_values(id):
     output = io.StringIO()
     csv_writer = csv.writer(output)
     csv_writer.writerows(csv_content)
+    csv_content_string = output.getvalue()
+
+    # Close StringIO to free up resources
+    output.close()
+
+    # Return the CSV content as a response
+    return Response(
+        csv_content_string,
+        mimetype="text/csv",
+        headers={
+            "Content-disposition": f"attachment; filename={csv_filename}",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
+
+@bp.route("/models/<id>/download-test-scores-values")
+def download_test_scores_values(id):
+    # Get the model
+    model = Model.find_by_id(id)
+
+    if not model:
+        return jsonify({"error": "Model not found"}), 404
+
+    # Get the test scores values
+    test_scores_values = model.test_scores_values
+
+    # Add header row (based on the number of bootstrap repetitions)
+    header_row = ["Metric", *[f"Repetition {n + 1}" for n in range(len(test_scores_values))]]
+    
+    
+    df = pd.DataFrame.from_dict(test_scores_values).T.reset_index()
+    df.columns = header_row
+
+    # CSV file name
+    album_id = model.feature_extraction.album_id
+    album_details = get_album_details(album_id, g.token)
+    model_suffix = album_details["name"]
+    if model.feature_collection is not None:
+        model_suffix = f"{model_suffix}_{model.feature_collection.name}"
+
+    csv_filename = f"test_scores_{model_suffix}_{model.best_algorithm}_{model.best_data_normalization}_{id}.csv"
+    csv_filename = sanitize_filename(csv_filename, "_").replace(" ", "_")
+
+    # Create a string buffer
+    output = io.StringIO()
+
+    # Write the DataFrame to the string buffer as CSV
+    df.to_csv(output, index=False)
+
+    # Get the CSV content as a string
     csv_content_string = output.getvalue()
 
     # Close StringIO to free up resources
