@@ -299,7 +299,6 @@ def get_clinical_features(
         )
 
         non_missing_values = clin_feature_df.loc[~missing_values_idx][clin_feature.name]
-
         if (
             missing_values_idx.sum() > 0
         ):  # only apply missing values logic if there are actually missing values
@@ -309,7 +308,7 @@ def get_clinical_features(
                     pass
                 elif clin_missing_values == ClinicalFeatureMissingValues.MEDIAN:
                     try:
-                        value = non_missing_values.astype(float).median().values[0]
+                        value = non_missing_values.astype(float).median()
                     except:
                         raise ValueError(
                             f"Tried to compute the median of {clin_feature.name} but failed"
@@ -317,7 +316,7 @@ def get_clinical_features(
 
                 elif clin_missing_values == ClinicalFeatureMissingValues.MEAN:
                     try:
-                        value = non_missing_values.astype(float).mean().values[0]
+                        value = non_missing_values.astype(float).mean()
                     except:
                         raise ValueError(
                             f"Tried to compute the mean of {clin_feature.name} but failed"
