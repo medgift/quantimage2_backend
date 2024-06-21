@@ -43,8 +43,8 @@ def select_normalizer(normalization_name):
     return scaler
 
 
-def get_random_seed(extraction_id=None, collection_id=None):
-    return 100000 + collection_id if collection_id else extraction_id
+def get_random_seed():
+    return 42
 
 
 def generate_normalization_methods():
