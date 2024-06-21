@@ -190,9 +190,7 @@ def train_model(
     # Convert to numeric values
     labels_df_indexed = labels_df_indexed.apply(pandas.to_numeric)
 
-    random_seed = get_random_seed(
-        extraction_id=extraction_id, collection_id=collection_id
-    )
+    random_seed = get_random_seed()
 
     training_id = get_training_id(extraction_id, collection_id)
 
