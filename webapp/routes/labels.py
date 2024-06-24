@@ -30,6 +30,13 @@ def labels(label_category_id):
         return delete_label_category(label_category_id)
 
 
+@bp.route("/labels/patients_from_label_category/<label_category_id>", methods=["GET"])
+def get_patient_ids_in_label_category(label_category_id):
+    if request.method == "GET":
+        labels = Label.find_by_label_category_id(label_category_id)
+        return jsonify([i.patient_id for i in labels])
+
+
 @bp.route("/label-categories/<album_id>", methods=("GET", "POST"))
 def label_categories_by_album(album_id):
     if request.method == "POST":

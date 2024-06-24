@@ -1324,6 +1324,7 @@ class LabelCategory(BaseModel, db.Model):
         )
         return instances
 
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -1403,6 +1404,15 @@ class Label(BaseModel, db.Model):
             old_instance.save_to_db()
 
         return old_instance
+
+    @classmethod
+    def find_by_label_category_id(cls, label_category_id):
+        instances = (
+            cls.query.filter_by(label_category_id=label_category_id)
+            .all()
+        )
+        return instances
+
 
     def to_dict(self):
         return {
