@@ -1,10 +1,13 @@
 import os
 import sys
 from typing import List
+import json
 
 import pandas
 import pandas as pd
+from pandas.core.frame import DataFrame
 from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, OrdinalEncoder
+from mlxtend.evaluate import permutation_test as permutation_test_mlxtend
 from modeling.classification import Classification
 from modeling.survival import Survival
 from modeling.utils import get_random_seed
@@ -21,6 +24,7 @@ from quantimage2_backend_common.models import (
     ClinicalFeatureEncodings,
     ClinicalFeatureTypes,
     ClinicalFeatureMissingValues,
+    Model,
 )
 from quantimage2_backend_common.utils import get_training_id
 from service.feature_transformation import (
@@ -396,3 +400,33 @@ def check_if_patients_in_dataframe(features_df, patient_ids):
     for patient_id in patient_ids:
         if patient_id not in features_df.index:
             raise ValueError(f"Patient {patient_id} not found in the dataframe")
+
+
+def model_compare_permuation_test(models: List[Model]) -> DataFrame:
+    all_comparisons = []
+
+    n_models = len(models)
+    for i in range(n_models):
+        comparisons_i = []
+        for j in range(n_models):
+            model_i = models[i]
+            model_j = models[j]
+
+            if model_i.test_scores_values and model_j.test_scores_values:
+                auc_i = [i["auc"] for i in model_i.test_scores_values]
+                auc_j = [i["auc"] for i in model_j.test_scores_values]
+
+                p_bs_lib = permutation_test_mlxtend(auc_i, auc_j, method='approximate', num_rounds=10000, seed=10)
+                comparisons_i.append(p_bs_lib)
+            else:
+                comparisons_i.append("no test scores saved - please retrain model")
+        
+        all_comparisons.append(comparisons_i)
+    
+
+    df = pd.DataFrame(all_comparisons)
+    index_and_columns = [f"model_{i.id}" for i in models]
+    df.index = index_and_columns
+    df.columns = index_and_columns
+
+    return df
