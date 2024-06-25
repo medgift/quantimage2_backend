@@ -82,3 +82,6 @@ get-docker-secret
 
 # Path & filename validation
 pathvalidate
+
+# model comparison
+mlxtend
