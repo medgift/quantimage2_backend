@@ -12,7 +12,7 @@ from quantimage2_backend_common.models import Model, LabelCategory, Album
 from quantimage2_backend_common.utils import get_training_id, format_model
 from routes.utils import validate_decorate
 from service.feature_extraction import get_album_details
-from service.machine_learning import train_model
+from service.machine_learning import train_model, model_compare_permuation_test
 
 # Define blueprint
 bp = Blueprint(__name__, "models")
@@ -100,6 +100,38 @@ def model(id):
 def models_by_user():
     albums = Model.find_by_user(g.user)
     return jsonify(albums)
+
+
+@bp.route("/models/compare", methods=["POST"])
+def compare_models():
+    if request.method == "POST":
+        body = request.json
+        model_ids = body["model_ids"]
+        models = [Model.find_by_id(i) for i in model_ids]
+        model_comparison_df = model_compare_permuation_test(models)
+        model_ids_string = [str(i) for i in model_ids]
+        csv_filename = f"model_comparisons_{'_'.join(model_ids_string)}.csv"
+        # Create a string buffer
+        output = io.StringIO()
+
+        # Write the DataFrame to the string buffer as CSV
+        model_comparison_df.to_csv(output, index=False)
+
+        # Get the CSV content as a string
+        csv_content_string = output.getvalue()
+
+        # Close StringIO to free up resources
+        output.close()
+
+        return Response(
+            csv_content_string,
+            mimetype="text/csv",
+            headers={
+                "Content-disposition": f"attachment; filename={csv_filename}",
+                "Access-Control-Expose-Headers": "Content-Disposition",
+            },
+        )
+
 
 
 @bp.route("/models/<id>/download-test-bootstrap-values")
