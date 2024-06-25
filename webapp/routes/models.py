@@ -1,6 +1,7 @@
 import os
 import traceback
 import csv
+import json
 import io
 
 import pandas as pd
@@ -104,33 +105,37 @@ def models_by_user():
 
 @bp.route("/models/compare", methods=["POST"])
 def compare_models():
-    if request.method == "POST":
-        body = request.json
-        model_ids = body["model_ids"]
-        models = [Model.find_by_id(i) for i in model_ids]
-        model_comparison_df = model_compare_permuation_test(models)
-        model_ids_string = [str(i) for i in model_ids]
-        csv_filename = f"model_comparisons_{'_'.join(model_ids_string)}.csv"
-        # Create a string buffer
-        output = io.StringIO()
+    
+    print("file in the models api")
+    model_ids = json.loads(request.data)["model_ids"]
+    models = [Model.find_by_id(i) for i in model_ids]
+    model_comparison_df = model_compare_permuation_test(models)
+    model_ids_string = [str(i) for i in model_ids]
+    csv_filename = f"model_comparisons_{'_'.join(model_ids_string)}.csv"
+    # Create a string buffer
+    output = io.StringIO()
+    
+    model_comparison_df.insert(0, "model/model", model_comparison_df.index)
+    # Write the DataFrame to the string buffer as CSV
+    model_comparison_df.to_csv(output, index=False)
 
-        # Write the DataFrame to the string buffer as CSV
-        model_comparison_df.to_csv(output, index=False)
+    # Get the CSV content as a string
+    csv_content_string = output.getvalue()
 
-        # Get the CSV content as a string
-        csv_content_string = output.getvalue()
+    # Close StringIO to free up resources
+    output.close()
 
-        # Close StringIO to free up resources
-        output.close()
+    print("file content")
+    print(csv_content_string)
 
-        return Response(
-            csv_content_string,
-            mimetype="text/csv",
-            headers={
-                "Content-disposition": f"attachment; filename={csv_filename}",
-                "Access-Control-Expose-Headers": "Content-Disposition",
-            },
-        )
+    return Response(
+        csv_content_string,
+        mimetype="text/csv",
+        headers={
+            "Content-disposition": f"attachment; filename={csv_filename}",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
 
 
 
