@@ -257,10 +257,10 @@ def download_feature_importances(id):
     test_feature_importance = model.test_feature_importance
 
     if not test_feature_importance:
-        return jsonify({"error": "No feature importance found for this model - please retrain to save feature importances."}), 404
-
-    df = pd.DataFrame.from_dict([model.test_feature_importance]).T.reset_index()
-    df.columns = ["feature_name", "feature_importance_value"]
+        df = pd.DataFrame.from_dict({"feature_importance_results": "Feature importance not saved for this model - please retrain."}).T.reset_index()
+    else:
+        df = pd.DataFrame.from_dict([model.test_feature_importance]).T.reset_index()
+        df.columns = ["feature_name", "feature_importance_value"]
 
     # CSV file name
     album_id = model.feature_extraction.album_id
