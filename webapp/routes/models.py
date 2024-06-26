@@ -257,7 +257,7 @@ def download_feature_importances(id):
     test_feature_importance = model.test_feature_importance
 
     if not test_feature_importance:
-        df = pd.DataFrame.from_dict({"feature_importance_results": "Feature importance not saved for this model - please retrain."}).T.reset_index()
+        df = pd.DataFrame.from_dict([{"feature_importance_results": "Feature importance not saved for this model - please retrain."}]).T.reset_index()
     else:
         df = pd.DataFrame.from_dict([model.test_feature_importance]).T.reset_index()
         df.columns = ["feature_name", "feature_importance_value"]
