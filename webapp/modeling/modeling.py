@@ -81,7 +81,9 @@ class Modeling:
         self.test_patients = test_patients_filtered
 
         # Preprocess features & labels
-        features_df = preprocess_features(features_df)
+        features_df = preprocess_features(
+            features_df, training_patients_filtered, test_patients_filtered
+        )
         labels_df = preprocess_labels(
             labels_df, training_patients_filtered, test_patients_filtered
         )
@@ -148,6 +150,10 @@ class Modeling:
         cv = self.get_cv(n_splits=n_splits)
         scoring = self.get_scoring()
         
+        print("before launching celery")
+
+        print("self.X_train.shape")
+        print(self.X_train.shape)
         current_app.my_celery.send_task(
             "quantimage2tasks.train",
             kwargs={

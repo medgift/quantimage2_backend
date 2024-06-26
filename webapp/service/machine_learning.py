@@ -198,6 +198,12 @@ def train_model(
 
     training_id = get_training_id(extraction_id, collection_id)
 
+    print(features_df.shape)
+    print(labels_df_indexed.shape)
+    print(len(training_patients))
+    if test_patients:
+        print(len(test_patients))
+
     model = ModelClass(
         feature_extraction_id=extraction_id,
         collection_id=collection_id,

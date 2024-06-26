@@ -8,6 +8,7 @@ from flask import jsonify
 from numpy import argmax
 from sklearn.metrics import get_scorer, roc_curve
 from sklearn.utils import resample
+from sklearn.inspection import permutation_importance
 from scipy import stats
 
 from config_workers import MODELS_BASE_DIR
@@ -250,3 +251,13 @@ def get_optimal_threshold(y, positive_probabilities):
     print("Best Threshold=%f" % (best_thresh))
 
     return best_thresh
+
+
+def compute_feature_importance(
+        X_test,
+        y_test,
+        model,
+        random_seed
+    ):
+    result = permutation_importance(model, X_test, y_test, n_repeats=10, random_state=random_seed)
+    pass

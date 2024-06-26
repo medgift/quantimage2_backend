@@ -9,6 +9,7 @@ import socket
 import tempfile
 import traceback
 from multiprocessing import current_process
+import traceback
 
 import joblib
 import pydevd_pycharm
@@ -134,6 +135,8 @@ def train_model(
 ):
     db.session.commit()
 
+    print("asdfasdfasdfasdf in the training celery task")
+
     # TODO - This is a hack, would be best to find a better solution such as Dask
     current_process()._config["daemon"] = False
 
@@ -173,7 +176,7 @@ def train_model(
             return_train_score=False,
             verbose=100,
         )
-
+        
         fitted_model = grid.fit(X_train, y_train_encoded)
 
         elapsed = toc()
@@ -289,7 +292,7 @@ def train_model(
             "model": format_model(db_model),
         }
     except Exception as e:
-        socketio_body = {"training-id": training_id, "failed": True, "error": str(e)}
+        socketio_body = {"training-id": training_id, "failed": True, "error": traceback.print_exc()}
         logging.error(e)
     finally:
         socketio.emit(
