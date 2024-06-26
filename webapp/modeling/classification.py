@@ -21,7 +21,7 @@ CLASSIFICATION_PARAMS = {
     "logistic_regression_lbfgs": {
         "solver": ["lbfgs"],
         "penalty": ["l2"],
-        "max_iter": [100],
+        "max_iter": [1000],
     },
     "logistic_regression_saga": {
         "solver": ["saga"],
