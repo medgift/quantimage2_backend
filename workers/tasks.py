@@ -136,8 +136,6 @@ def train_model(
 ):
     db.session.commit()
 
-    print("asdfasdfasdfasdf in the training celery task")
-
     # TODO - This is a hack, would be best to find a better solution such as Dask
     current_process()._config["daemon"] = False
 
@@ -268,9 +266,6 @@ def train_model(
         training_validation_params = {"k": cv.cvargs["n_splits"], "n": cv.n_repeats}
         test_validation = "Bootstrap" if is_train_test else None
         test_validation_params = {"n": n_bootstrap} if is_train_test else None
-
-        print(test_feature_importances)
-        print("test_feature_importances")
         
         db_model = Model(
             model_name,

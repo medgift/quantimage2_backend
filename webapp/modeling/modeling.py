@@ -149,11 +149,7 @@ class Modeling:
         parameter_grid = self.get_parameter_grid()
         cv = self.get_cv(n_splits=n_splits)
         scoring = self.get_scoring()
-        
-        print("before launching celery")
 
-        print("self.X_train.shape")
-        print(self.X_train.shape)
         current_app.my_celery.send_task(
             "quantimage2tasks.train",
             kwargs={
