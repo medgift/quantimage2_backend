@@ -55,6 +55,7 @@ from utils import (
     run_bootstrap,
     calculate_test_metrics,
     get_model_path,
+    compute_feature_importance,
 )
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
@@ -202,6 +203,7 @@ def train_model(
         test_metrics = None
         test_bootstrap_values = None
         test_scores_values = None
+        test_feature_importances = None
 
         # Train/test only - Perform Bootstrap on the Test set
         if is_train_test:
@@ -225,6 +227,14 @@ def train_model(
             )
 
             test_scores_values = scores
+
+            test_feature_importances = compute_feature_importance(
+                X_test,
+                y_test_encoded,
+                fitted_model.best_estimator_,
+                random_seed
+            )
+
 
         # Save model in the DB
         classifier_class = fitted_model.best_params_[estimator_step]
@@ -259,6 +269,9 @@ def train_model(
         test_validation = "Bootstrap" if is_train_test else None
         test_validation_params = {"n": n_bootstrap} if is_train_test else None
 
+        print(test_feature_importances)
+        print("test_feature_importances")
+        
         db_model = Model(
             model_name,
             best_algorithm,
@@ -278,6 +291,7 @@ def train_model(
             test_metrics,
             test_bootstrap_values,
             test_scores_values,
+            test_feature_importances,
             user_id,
             album["album_id"],
             label_category.id,

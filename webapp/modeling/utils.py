@@ -7,10 +7,10 @@ NORMALIZATION_METHODS = ["standardization", "minmax"]
 
 
 def preprocess_features(features, training_patients, test_patients):
-    # if training_patients and test_patients:
-    #     features = features.loc[training_patients + test_patients]
-    # else:
-    #     features = features.loc[training_patients]
+    if training_patients and test_patients:
+        features = features.loc[training_patients + test_patients]
+    else:
+        features = features.loc[training_patients]
     features = features.drop("PatientID", axis=1)
     features.sort_index(inplace=True)
     return features

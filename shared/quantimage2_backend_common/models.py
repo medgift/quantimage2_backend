@@ -1133,6 +1133,7 @@ class Model(BaseModel, db.Model):
         test_metrics,
         test_bootstrap_values,
         test_scores_values,
+        test_feature_importances,
         user_id,
         album_id,
         label_category_id,
@@ -1155,6 +1156,7 @@ class Model(BaseModel, db.Model):
         self.test_metrics = test_metrics
         self.test_bootstrap_values = test_bootstrap_values
         self.test_scores_values = test_scores_values
+        self.test_feature_importance = test_feature_importances
         self.user_id = user_id
         self.album_id = album_id
         self.label_category_id = label_category_id
@@ -1215,6 +1217,9 @@ class Model(BaseModel, db.Model):
 
     # Model scores values (JSON) - Test
     test_scores_values = db.Column(db.JSON, nullable=True, unique=False)
+
+    # Feature importances on the test set (JSON) - Test
+    test_feature_importance = db.Column(db.JSON, nullable=True, unique=False)
 
     # User who created the model
     user_id = db.Column(db.String(255), nullable=False, unique=False)

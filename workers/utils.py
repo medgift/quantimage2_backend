@@ -4,6 +4,7 @@ import re
 from time import time
 
 import numpy as np
+import pandas as pd
 from flask import jsonify
 from numpy import argmax
 from sklearn.metrics import get_scorer, roc_curve
@@ -260,4 +261,4 @@ def compute_feature_importance(
         random_seed
     ):
     result = permutation_importance(model, X_test, y_test, n_repeats=10, random_state=random_seed)
-    pass
+    return pd.Series(result.importances_mean, index=X_test.columns).to_dict()
