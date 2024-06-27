@@ -243,3 +243,53 @@ def download_test_scores_values(id):
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )
+
+
+@bp.route("/models/<id>/download-feature-importances")
+def download_feature_importances(id):
+    # Get the model
+    model = Model.find_by_id(id)
+
+    if not model:
+        return jsonify({"error": "Model not found"}), 404
+
+    # Get the test scores values
+    test_feature_importance = model.test_feature_importance
+
+    if not test_feature_importance:
+        df = pd.DataFrame.from_dict([{"feature_importance_results": "Feature importance not saved for this model - please retrain."}]).T.reset_index()
+    else:
+        df = pd.DataFrame.from_dict([model.test_feature_importance]).T.reset_index()
+        df.columns = ["feature_name", "feature_importance_value"]
+
+    # CSV file name
+    album_id = model.feature_extraction.album_id
+    album_details = get_album_details(album_id, g.token)
+    model_suffix = album_details["name"]
+    if model.feature_collection is not None:
+        model_suffix = f"{model_suffix}_{model.feature_collection.name}"
+
+    csv_filename = f"test_feature_importances_{model_suffix}_{model.best_algorithm}_{model.best_data_normalization}_{id}.csv"
+    csv_filename = sanitize_filename(csv_filename, "_").replace(" ", "_")
+
+    # Create a string buffer
+    output = io.StringIO()
+
+    # Write the DataFrame to the string buffer as CSV
+    df.to_csv(output, index=False)
+
+    # Get the CSV content as a string
+    csv_content_string = output.getvalue()
+
+    # Close StringIO to free up resources
+    output.close()
+
+    # Return the CSV content as a response
+    return Response(
+        csv_content_string,
+        mimetype="text/csv",
+        headers={
+            "Content-disposition": f"attachment; filename={csv_filename}",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
