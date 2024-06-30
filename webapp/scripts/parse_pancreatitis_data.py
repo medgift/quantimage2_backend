@@ -19,6 +19,9 @@ df_of_interest.rename(columns={"Patient_ID": "PatientID"}, inplace=True)
 date_columns = [i for i in df_of_interest.columns if "date" in i.lower()]
 df_of_interest = df_of_interest.drop(date_columns, axis=1)
 
+# putting M and F to lowercase
+df_of_interest["Gender (M/F)"] = df_of_interest["Gender (M/F)"].str.lower()
+
 # creating an outcome column from the ransom score
 ADMISSION_RANSON = "Ranson score admission"
 RANSON_48H = "Ranson score 48h"
