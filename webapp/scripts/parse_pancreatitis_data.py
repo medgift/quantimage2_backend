@@ -32,7 +32,7 @@ outcome_df[ADMISSION_RANSON] = (outcome_df[ADMISSION_RANSON] >= 2).astype(int)
 outcome_df.rename(columns={ADMISSION_RANSON: "Outcome"}, inplace=True)
 
 # Removing the labels from the feature df
-df_of_interest.drop([ADMISSION_RANSON, RANSON_48H, RANSON_TOTAL], axis=1)
+df_of_interest.drop([ADMISSION_RANSON, RANSON_48H, RANSON_TOTAL], axis=1, inplace=True)
 
 df_of_interest.to_csv(output_dir / "pancreatitis_features.csv", index=False)
 outcome_df.to_csv(output_dir / "pancreatitis_outcomes_ransom_admission_larger_2.csv", index=False)
