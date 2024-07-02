@@ -411,6 +411,10 @@ def model_compare_permuation_test(models: List[Model]) -> DataFrame:
         for j in range(n_models):
             model_i = models[i]
             model_j = models[j]
+            
+            if "Survival" in model_i.name or "Survival" in model_j.name:
+                comparisons_i.append("One of the models is a Survival - permutation test not supported")
+                continue
 
             if model_i.test_scores_values and model_j.test_scores_values:
                 auc_i = [i["auc"] for i in model_i.test_scores_values]
