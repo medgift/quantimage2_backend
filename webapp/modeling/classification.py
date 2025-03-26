@@ -13,15 +13,15 @@ from service.feature_transformation import OUTCOME_FIELD_CLASSIFICATION
 
 CLASSIFICATION_METHODS = [
     "logistic_regression_lbfgs",
-#     "logistic_regression_saga",
-#     "svm",
-#     "random_forest",
+    # "logistic_regression_saga",
+    # "svm",
+    # "random_forest",
 ]
 CLASSIFICATION_PARAMS = {
     "logistic_regression_lbfgs": {
         "solver": ["lbfgs"],
         "penalty": ["l2"],
-        "max_iter": [100],
+        "max_iter": [1000],
     },
     # "logistic_regression_saga": {
     #     "solver": ["saga"],
@@ -31,9 +31,9 @@ CLASSIFICATION_PARAMS = {
     # },
     # "random_forest": {
     #     "max_depth": [10, 100, None],
-    #     # "max_features": ["auto", "sqrt"],
-    #     # "min_samples_leaf": [1, 2, 4],
-    #     # "min_samples_split": [2, 5, 10],
+    #     "max_features": ["auto", "sqrt"],
+    #     "min_samples_leaf": [1, 2, 4],
+    #     "min_samples_split": [2, 5, 10],
     #     "n_estimators": [10, 100, 1000],
     # },
     # "svm": {

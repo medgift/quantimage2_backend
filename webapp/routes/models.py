@@ -142,97 +142,189 @@ def compare_models():
     )
     
 
-@bp.route("/models/<id>/plot-predictions")
+@bp.route("/models/<id>/plot-predictions", methods=["GET", "POST"])
 def plot_predictions(id):
-    # Get the model
-    model = Model.find_by_id(id)
-    
-    if not model:
-        return jsonify({"error": "Model not found"}), 404
-    
-    # Get the test predictions values
-    test_predictions = model.test_predictions
-    test_probabilities = model.test_predictions_probabilities
-    
-    # Create dictionary to store ground truth labels
-    ground_truth = {}
-    labels = Label.find_by_label_category(model.label_category_id)
-    for label in labels:
-        # Extract the first (and only) value from the dict_values object
-        label_value = next(iter(label.label_content.values()))
-        ground_truth[label.patient_id] = int(label_value)
-
-    # Prepare data for plotting
-    probabilities = []
-    predictions = []
-    patient_ids = []
-    ground_truths = []
-    
-    for patient_id in test_predictions.keys():
-        pred = test_predictions[patient_id]["prediction"]
-        # Get the probability of class 1 
-        prob = test_probabilities[patient_id]["probabilities"][1]
-        gt = ground_truth.get(patient_id, None)
+    if request.method == "POST":
+        # Get additional model ID from request body
+        print("Request JSON:", request.json)  # Debug print
+        model_ids_str = request.json.get('model_ids', '')
+        print("Model IDs string:", model_ids_str)  # Debug print
         
-        if gt is not None:  # Only add if we have ground truth
-            probabilities.append(prob)
-            predictions.append(pred)
-            patient_ids.append(patient_id)
-            ground_truths.append(gt)
+        # Split and clean the model IDs string
+        if isinstance(model_ids_str, str):
+            model_ids = [x.strip() for x in model_ids_str.split(',') if x.strip()]
+        else:
+            model_ids = []
+    else:
+        # Handle GET request - split the URL parameter if it contains commas
+        model_ids = [x.strip() for x in id.split(',') if x.strip()]
+        
+    # Convert model IDs to integers
+    model_ids = [int(mid) for mid in model_ids]
 
-    # Create the plot with increased height
-    plt.figure(figsize=(10, 4))  # Increased height even more to accommodate vertical labels
+    # Create the plot with increased height and width
+    plt.figure(figsize=(12, 6))  # Increased size for better spacing
     
-    # Create scatter plot for each class
-    zeros = np.array(predictions) == 0
-    ones = np.array(predictions) == 1
+    # Add background colors for prediction regions
+    plt.axvspan(0, 0.5, color='lightblue', alpha=0.3, label='Prediction Region: Class 0')
+    plt.axvspan(0.5, 1, color='mistyrose', alpha=0.3, label='Prediction Region: Class 1')
     
-    # Plot points with different colors based on prediction - moved lower on y-axis
-    y_position = -0.2  # Move points lower
-    plt.scatter(np.array(probabilities)[zeros], np.zeros(sum(zeros)) + y_position, 
-               c='blue', label='Predicted Class 0', alpha=0.6)
-    plt.scatter(np.array(probabilities)[ones], np.zeros(sum(ones)) + y_position,
-               c='red', label='Predicted Class 1', alpha=0.6)
+    # Add vertical line at threshold 0.5
+    plt.axvline(x=0.5, color='black', linestyle='--', alpha=0.5, label='Decision Threshold')
     
-    # Add markers around points where prediction != ground truth
-    for i, (pred, gt) in enumerate(zip(predictions, ground_truths)):
-        if pred != gt:
-            plt.plot(probabilities[i], y_position, 'k*', markersize=15, alpha=0.3, 
-                    label='Misclassification' if i == 0 else "")
+    # Different y-positions for different models with more separation
+    y_positions = [-0.3, 0.1] if len(model_ids) > 1 else [-0.2]
     
-    # Add patient IDs as annotations - now completely vertical
-    for i, txt in enumerate(patient_ids):
-        plt.annotate(f"{txt}(GT:{ground_truths[i]})", 
-                    (probabilities[i], y_position), 
-                    xytext=(0, 20),  # Increased vertical offset
-                    textcoords='offset points',
-                    ha='center',
-                    va='bottom',
-                    fontsize=8,
-                    rotation=90)  # Changed to 90 degrees for vertical text
+    def adjust_label_positions(x_positions, base_offset, min_distance=0.05):
+        """Adjust vertical offsets for overlapping labels by alternating above/below"""
+        n = len(x_positions)
+        y_offsets = [base_offset] * n
+        
+        # Sort points by x position and get indices
+        idx_sorted = np.argsort(x_positions)
+        x_sorted = x_positions[idx_sorted]
+        
+        # Find groups of overlapping points
+        current_group = []
+        groups = []
+        
+        for i in range(n):
+            if not current_group or abs(x_sorted[i] - x_sorted[current_group[-1]]) < min_distance:
+                current_group.append(i)
+            else:
+                if len(current_group) > 1:
+                    groups.append(current_group)
+                current_group = [i]
+        
+        if len(current_group) > 1:
+            groups.append(current_group)
+        
+        # Adjust offsets for each group
+        for group in groups:
+            for i, idx in enumerate(group):
+                real_idx = idx_sorted[idx]
+                if i % 2 == 0:
+                    y_offsets[real_idx] = base_offset  # Keep original offset
+                else:
+                    y_offsets[real_idx] = -base_offset  # Flip offset
+        
+        return y_offsets
+
+    # Process each model
+    for model_id, y_position in zip(model_ids, y_positions):
+        model = Model.find_by_id(model_id)
+        if not model:
+            return jsonify({"error": f"Model {model_id} not found"}), 404
+            
+        # Get the test predictions values
+        test_predictions = model.test_predictions
+        test_probabilities = model.test_predictions_probabilities
+        
+        # Create dictionary to store ground truth labels
+        ground_truth = {}
+        labels = Label.find_by_label_category(model.label_category_id)
+        for label in labels:
+            label_value = next(iter(label.label_content.values()))
+            ground_truth[label.patient_id] = int(label_value)
+
+        # Prepare data for plotting
+        probabilities = []
+        predictions = []
+        patient_ids = []
+        ground_truths = []
+        
+        for patient_id in test_predictions.keys():
+            pred = test_predictions[patient_id]["prediction"]
+            prob = test_probabilities[patient_id]["probabilities"][1]
+            gt = ground_truth.get(patient_id, None)
+            
+            if gt is not None:
+                probabilities.append(prob)
+                predictions.append(pred)
+                patient_ids.append(patient_id)
+                ground_truths.append(gt)
+
+        # Create scatter plot for each class based on ground truth - smaller points
+        zeros = np.array(ground_truths) == 0
+        ones = np.array(ground_truths) == 1
+        
+        # Plot points with different colors based on ground truth - smaller points
+        plt.scatter(np.array(probabilities)[zeros], np.zeros(sum(zeros)) + y_position, 
+                   c='blue', label='Ground Truth: Class 0' if model_id == model_ids[0] else "", 
+                   alpha=0.6, s=50)  # Reduced point size
+        plt.scatter(np.array(probabilities)[ones], np.zeros(sum(ones)) + y_position,
+                   c='red', label='Ground Truth: Class 1' if model_id == model_ids[0] else "", 
+                   alpha=0.6, s=50)  # Reduced point size
+        
+        # Add patient IDs as annotations with overlap prevention
+        base_offset = 20  # Increased base offset for better separation
+        y_offsets = adjust_label_positions(np.array(probabilities), base_offset)
+        
+        for i, (txt, x_pos, y_offset) in enumerate(zip(patient_ids, probabilities, y_offsets)):
+            plt.annotate(txt, 
+                        (x_pos, y_position), 
+                        xytext=(0, y_offset),
+                        textcoords='offset points',
+                        ha='center',
+                        va='bottom' if y_offset > 0 else 'top',
+                        fontsize=6,
+                        rotation=90)
+        
+        # Add model ID labels on y-axis
+        plt.text(-0.1, y_position, f'Model {model_id}', 
+                horizontalalignment='right',
+                verticalalignment='center',
+                fontsize=8)
+        
+        # Get metrics from the model
+        test_metrics = model.test_metrics
+        metrics_text = [
+            f"Model {model_id}:" if len(model_ids) > 1 else "Metrics:",
+            f"AUC: {test_metrics['auc']['mean']:.3f}",
+            f"Prec: {test_metrics['precision']['mean']:.3f}",
+            f"Sens: {test_metrics['sensitivity']['mean']:.3f}",
+            f"Spec: {test_metrics['specificity']['mean']:.3f}"
+        ]
+        
+        # Add metrics text as a separate legend for each model - smaller font
+        x_pos = 0.02 if len(model_ids) == 1 or model_id == model_ids[0] else 0.25
+        metrics_legend = plt.legend([plt.Rectangle((0, 0), 1, 1, fc='none', fill=False, 
+                                                 edgecolor='none', linewidth=0)]*5,
+                                  metrics_text,
+                                  loc='upper left',
+                                  bbox_to_anchor=(x_pos, 1),
+                                  title=None,
+                                  framealpha=0.9,
+                                  fontsize=7)
+        plt.gca().add_artist(metrics_legend)
+
+    # Main legend for plot elements - smaller font and more compact
+    plt.legend(loc='upper right', 
+              framealpha=0.9, 
+              ncol=2,  # Two columns for more compact legend
+              fontsize=7,
+              bbox_to_anchor=(0.99, 0.99))
     
     # Customize the plot
-    plt.xlabel('Probability')
-    plt.yticks([])  # Remove y-axis ticks
-    plt.grid(True, alpha=0.3)
-    plt.ylim(-0.4, 0.4)  # Set y-axis limits to center the visualization
-    plt.legend(loc='upper right',  # Changed legend position to upper right
-              framealpha=0.9,  # Made legend background slightly transparent
-              ncol=1)  # Single column for better readability
-    plt.title('Prediction Probabilities Distribution')
+    plt.xlabel('Probability of Class 1', fontsize=9)
+    plt.yticks([])  # Hide numerical y-ticks since we have model labels
+    plt.grid(True, alpha=0.2)  # Reduced grid opacity
+    plt.ylim(-0.5, 0.5)  # Increased y-range for better spacing
+    plt.xlim(-0.05, 1.05)
+    plt.title('Prediction Probabilities Distribution Test Set', 
+             fontsize=10, pad=10)
     
-    # Save plot to a bytes buffer with increased bottom margin
+    # Save plot to a bytes buffer
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', 
-                dpi=300, pad_inches=0.5)  # Increased padding
+    plt.savefig(buf, format='png', bbox_inches='tight', dpi=300, pad_inches=0.5)
     plt.close()
     
-    # Instead of returning JSON, return the image as a file download
+    # Return the image as a file download
     return Response(
-        buf.getvalue(),  # Return the raw bytes instead of base64 encoded
+        buf.getvalue(),
         mimetype="image/png",
         headers={
-            "Content-disposition": f"attachment; filename=predictions_plot_{id}.png",
+            "Content-disposition": f"attachment; filename=predictions_plot_{'_'.join(map(str, model_ids))}.png",
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )
@@ -292,6 +384,7 @@ def download_test_bootstrap_values(id):
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )
+
 
 @bp.route("/models/<id>/download-test-scores-values")
 def download_test_scores_values(id):
