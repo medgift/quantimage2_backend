@@ -202,6 +202,12 @@ def train_model(
         test_bootstrap_values = None
         test_scores_values = None
         test_feature_importances = None
+        
+        # Get test predictions for db
+        test_predictions, test_predictions_probabilities = compute_predictions(
+            X_test,
+            fitted_model,
+            test_patients)
 
         # Train/test only - Perform Bootstrap on the Test set
         if is_train_test:
@@ -284,6 +290,8 @@ def train_model(
             model_path,
             training_metrics,
             test_metrics,
+            test_predictions,
+            test_predictions_probabilities,
             test_bootstrap_values,
             test_scores_values,
             test_feature_importances,
