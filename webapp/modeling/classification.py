@@ -13,9 +13,9 @@ from service.feature_transformation import OUTCOME_FIELD_CLASSIFICATION
 
 CLASSIFICATION_METHODS = [
     "logistic_regression_lbfgs",
-    # "logistic_regression_saga",
-    # "svm",
-    # "random_forest",
+    "logistic_regression_saga",
+    "svm",
+    "random_forest",
 ]
 CLASSIFICATION_PARAMS = {
     "logistic_regression_lbfgs": {
@@ -23,24 +23,24 @@ CLASSIFICATION_PARAMS = {
         "penalty": ["l2"],
         "max_iter": [1000],
     },
-    # "logistic_regression_saga": {
-    #     "solver": ["saga"],
-    #     "penalty": ["l1", "l2", "elasticnet"],
-    #     "l1_ratio": [0.5],
-    #     "max_iter": [1000],
-    # },
-    # "random_forest": {
-    #     "max_depth": [10, 100, None],
-    #     "max_features": ["auto", "sqrt"],
-    #     "min_samples_leaf": [1, 2, 4],
-    #     "min_samples_split": [2, 5, 10],
-    #     "n_estimators": [10, 100, 1000],
-    # },
-    # "svm": {
-    #     "C": [0.01, 0.1, 1, 10, 100],
-    #     "gamma": ["scale", "auto", 1, 0.1, 0.01, 0.001],
-    #     "kernel": ["linear", "rbf", "poly", "sigmoid"],
-    # },
+    "logistic_regression_saga": {
+        "solver": ["saga"],
+        "penalty": ["l1", "l2", "elasticnet"],
+        "l1_ratio": [0.5],
+        "max_iter": [1000],
+    },
+    "random_forest": {
+        "max_depth": [10, 100, None],
+        # "max_features": ["auto", "sqrt"],
+        # "min_samples_leaf": [1, 2, 4],
+        # "min_samples_split": [2, 5, 10],
+        "n_estimators": [10, 100, 1000],
+    },
+    "svm": {
+        "C": [0.01, 0.1, 1, 10, 100],
+        "gamma": ["scale", "auto", 1, 0.1, 0.01, 0.001],
+        "kernel": ["linear", "rbf", "poly", "sigmoid"],
+    },
 }
 
 
