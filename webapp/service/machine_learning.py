@@ -47,6 +47,7 @@ def get_features_labels(
 
     if collection_id:
         collection = FeatureCollection.find_by_id(collection_id)
+        print("Collection", collection)
         header, features_df = transform_studies_collection_features_to_df(
             collection, studies
         )
@@ -55,6 +56,7 @@ def get_features_labels(
 
     # Get Labels DataFrame
     # TODO - Allow choosing a mode (Patient only or Patient + ROI)
+    print(gt)
     labels_df = pandas.DataFrame(gt, columns=["PatientID", *outcome_columns])
 
     labels_df_indexed = labels_df.set_index("PatientID", drop=True)

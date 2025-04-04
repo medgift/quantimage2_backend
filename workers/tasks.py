@@ -56,7 +56,6 @@ from utils import (
     calculate_test_metrics,
     get_model_path,
     compute_feature_importance,
-    compute_predictions,
 )
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
@@ -203,16 +202,6 @@ def train_model(
         test_bootstrap_values = None
         test_scores_values = None
         test_feature_importances = None
-        
-        # Get test predictions for db
-        test_predictions, test_predictions_probabilities = compute_predictions(
-            X_test,
-            fitted_model,
-            test_patients)
-        training_predictions, training_predictions_probabilities = compute_predictions(
-            X_train,
-            fitted_model,
-            training_patients)
 
         # Train/test only - Perform Bootstrap on the Test set
         if is_train_test:
@@ -228,7 +217,6 @@ def train_model(
                 socket_io=socket_io,
                 n_bootstrap=100,
             )
-
             elapsed = toc()
             print(f"Running bootstrap took {elapsed}")
 
@@ -296,10 +284,6 @@ def train_model(
             model_path,
             training_metrics,
             test_metrics,
-            test_predictions,
-            test_predictions_probabilities,
-            training_predictions,
-            training_predictions_probabilities,
             test_bootstrap_values,
             test_scores_values,
             test_feature_importances,
