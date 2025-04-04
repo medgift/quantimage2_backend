@@ -56,6 +56,7 @@ from utils import (
     calculate_test_metrics,
     get_model_path,
     compute_feature_importance,
+    compute_predictions,
 )
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
