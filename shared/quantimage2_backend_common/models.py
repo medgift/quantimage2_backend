@@ -1133,8 +1133,6 @@ class Model(BaseModel, db.Model):
         test_metrics,
         test_predictions,
         test_predictions_probabilities,
-        training_predictions,
-        training_predictions_probabilities,
         test_bootstrap_values,
         test_scores_values,
         test_feature_importances,
@@ -1160,8 +1158,6 @@ class Model(BaseModel, db.Model):
         self.test_metrics = test_metrics
         self.test_predictions = test_predictions
         self.test_predictions_probabilities = test_predictions_probabilities
-        self.training_predictions = training_predictions
-        self.training_predictions_probabilities = training_predictions_probabilities
         self.test_bootstrap_values = test_bootstrap_values
         self.test_scores_values = test_scores_values
         self.test_feature_importance = test_feature_importances
@@ -1220,13 +1216,9 @@ class Model(BaseModel, db.Model):
     # Model metrics (JSON) - Test
     test_metrics = db.Column(db.JSON, nullable=True, unique=False)
     
-    # Model predictions (JSON) - Test
+    # Model test predictions (JSON) - Test
     test_predictions = db.Column(db.JSON, nullable=True, unique=False)
     test_predictions_probabilities = db.Column(db.JSON, nullable=True, unique=False)
-    
-    # Model predictions (JSON) - Training
-    training_predictions = db.Column(db.JSON, nullable=True, unique=False)
-    training_predictions_probabilities = db.Column(db.JSON, nullable=True, unique=False)
 
     # Model metrics values (JSON) - Test
     test_bootstrap_values = db.Column(db.JSON, nullable=True, unique=False)
@@ -1300,8 +1292,6 @@ class Model(BaseModel, db.Model):
             "test_metrics": self.test_metrics,
             "test_predictions": self.test_predictions,
             "test_predictions_probabilities": self.test_predictions_probabilities,
-            "training_predictions": self.training_predictions,
-            "training_predictions_probabilities": self.training_predictions_probabilities,
             "test_bootstrap_values": self.test_bootstrap_values,
             "test_scores_values": self.test_scores_values,
             "user_id": self.user_id,

@@ -209,10 +209,6 @@ def train_model(
             X_test,
             fitted_model,
             test_patients)
-        training_predictions, training_predictions_probabilities = compute_predictions(
-            X_train,
-            fitted_model,
-            training_patients)
 
         # Train/test only - Perform Bootstrap on the Test set
         if is_train_test:
@@ -298,8 +294,6 @@ def train_model(
             test_metrics,
             test_predictions,
             test_predictions_probabilities,
-            training_predictions,
-            training_predictions_probabilities,
             test_bootstrap_values,
             test_scores_values,
             test_feature_importances,
