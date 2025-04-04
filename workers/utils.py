@@ -262,3 +262,16 @@ def compute_feature_importance(
     ):
     result = permutation_importance(model, X_test, y_test, n_repeats=10, random_state=random_seed)
     return pd.Series(result.importances_mean, index=X_test.columns).to_dict()
+
+
+def compute_predictions(X, model, patients):
+    predictions = {}
+    predictions_probabilities = {}
+    model_predictions = model.predict(X)
+    model_predictions_probabilities = model.predict_proba(X)
+    
+    for patient, pred, prob in zip(patients, model_predictions, model_predictions_probabilities):
+        predictions[patient] = {"prediction": pred.item()}
+        predictions_probabilities[patient] = {"probabilities": prob.tolist()}
+        
+    return predictions, predictions_probabilities
