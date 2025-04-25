@@ -1,0 +1,190 @@
+general:
+  padding: 10
+  submodalities: True
+  result_format: "long"
+  combine_segmentation: False
+  additional_dicom_tags:
+    - "SeriesInstanceUID"
+    - "SeriesDescription"
+
+volume_preprocessing:
+  common:
+  MR_T1Pre:
+    bspline_resampler:
+      resampling_spacing: [1.0, 1.0, 1.0]
+      order: 1
+    standardizer:
+      threshold: 0.001
+  MR_T1Venous:
+    bspline_resampler:
+        resampling_spacing: [1.0, 1.0, 1.0]
+        order: 1
+    standardizer:
+      threshold: 0.001
+  MR_T2map:
+    bspline_resampler:
+      resampling_spacing: [1.0, 1.0, 1.0]
+      order: 1
+    standardizer:
+      threshold: 0.001
+  MR_T2:
+    bspline_resampler:
+      resampling_spacing: [1.0, 1.0, 1.0]
+      order: 1
+    standardizer:
+      threshold: 0.001
+  MR_ADC:
+    bspline_resampler:
+      resampling_spacing: [1.0, 1.0, 1.0]
+      order: 1
+    standardizer:
+      threshold: 0.001
+  CT:
+    bspline_resampler:
+      resampling_spacing: [1.0, 1.0, 1.0]
+      order: 3
+  default:
+
+mask_preprocessing:
+  default:
+    binary_bspline_resampler:
+      order: 1
+
+feature_extraction:
+  MR_T1Pre:
+    riesz:
+      extractor0:
+        RieszOrder: 1
+        RieszScales: 4
+    pyradiomics:
+      original:
+        imageType:
+          Original: {}
+        featureClass:
+          shape:
+          firstorder:
+          glcm:
+          glszm:
+          glrlm:
+          ngtdm:
+          gldm:
+
+        setting:
+          binWidth: 0.3
+          voxelArrayShift: 10
+          label: 1
+
+  MR_T1Venous:
+    riesz:
+      extractor0:
+        RieszOrder: 1
+        RieszScales: 4
+    pyradiomics:
+      original:
+        imageType:
+          Original: {}
+        featureClass:
+          shape:
+          firstorder:
+          glcm:
+          glszm:
+          glrlm:
+          ngtdm:
+          gldm:
+
+        setting:
+          binWidth: 0.3
+          voxelArrayShift: 10
+          label: 1
+
+  MR_T2map:
+    riesz:
+      extractor0:
+        RieszOrder: 1
+        RieszScales: 4
+    pyradiomics:
+      original:
+        imageType:
+          Original: {}
+        featureClass:
+          shape:
+          firstorder:
+          glcm:
+          glszm:
+          glrlm:
+          ngtdm:
+          gldm:
+
+        setting:
+          binWidth: 0.3
+          voxelArrayShift: 10
+          label: 1
+
+  MR_T2:
+    riesz:
+      extractor0:
+        RieszOrder: 1
+        RieszScales: 4
+    pyradiomics:
+      original:
+        imageType:
+          Original: {}
+        featureClass:
+          shape:
+          firstorder:
+          glcm:
+          glszm:
+          glrlm:
+          ngtdm:
+          gldm:
+
+        setting:
+          binWidth: 0.3
+          voxelArrayShift: 10
+          label: 1
+
+  MR_ADC:
+    riesz:
+      extractor0:
+        RieszOrder: 1
+        RieszScales: 4
+    pyradiomics:
+      original:
+        imageType:
+          Original: {}
+        featureClass:
+          shape:
+          firstorder:
+          glcm:
+          glszm:
+          glrlm:
+          ngtdm:
+          gldm:
+
+        setting:
+          binWidth: 0.3
+          voxelArrayShift: 10
+          label: 1
+
+  CT:
+    riesz:
+      extractor0:
+        RieszOrder: 1
+        RieszScales: 4
+    pyradiomics:
+      original:
+        imageType:
+          Original: {}
+        featureClass:
+          shape:
+          firstorder:
+          glcm:
+          glszm:
+          glrlm:
+          ngtdm:
+          gldm:
+
+        setting:
+          binWidth: 20
+          voxelArrayShift: 1000
+          label: 1
