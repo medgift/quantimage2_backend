@@ -219,9 +219,6 @@ def train_model(
             X_train,
             fitted_model,
             training_patients)
-        
-        print(f"Train predictions: {train_predictions}")
-        print(f"Train probabilities: {train_predictions_probabilities}")
 
         # Train/test only - Perform Bootstrap on the Test set
         if is_train_test:
@@ -306,7 +303,7 @@ def train_model(
             test_metrics,
             test_predictions,
             test_predictions_probabilities,
-            training_predictions,
+            train_predictions,
             train_predictions_probabilities,
             test_bootstrap_values,
             test_scores_values,
