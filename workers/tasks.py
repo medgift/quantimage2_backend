@@ -178,7 +178,12 @@ def train_model(
         )
         
         fitted_model = grid.fit(X_train, y_train_encoded)
-
+        
+        print(f"Best parameters: {fitted_model.best_params_}")
+        print(f"Best score: {fitted_model.cv_results_}")
+        print(f"X_train: {X_train}")
+        print(f"y_train: {y_train_encoded}")
+        
         elapsed = toc()
 
         print(f"Fitting the model took {elapsed}")
@@ -204,11 +209,19 @@ def train_model(
         test_scores_values = None
         test_feature_importances = None
         
-        # Get test predictions for db
+        # Get test and train predictions for db
         test_predictions, test_predictions_probabilities = compute_predictions(
             X_test,
             fitted_model,
             test_patients)
+        
+        train_predictions, train_predictions_probabilities = compute_predictions(
+            X_train,
+            fitted_model,
+            training_patients)
+        
+        print(f"Train predictions: {train_predictions}")
+        print(f"Train probabilities: {train_predictions_probabilities}")
 
         # Train/test only - Perform Bootstrap on the Test set
         if is_train_test:
@@ -293,6 +306,8 @@ def train_model(
             test_metrics,
             test_predictions,
             test_predictions_probabilities,
+            training_predictions,
+            train_predictions_probabilities,
             test_bootstrap_values,
             test_scores_values,
             test_feature_importances,
