@@ -5,6 +5,7 @@ import requests
 from flask import abort, g
 from jose import JWTError, ExpiredSignatureError
 from jose.exceptions import JWTClaimsError
+import numpy as np
 
 from config import oidc_client
 
@@ -101,3 +102,38 @@ def userid_from_token(token):
     id = token_decoded["sub"]
 
     return id
+
+def adjust_label_positions(x_positions, base_offset, min_distance=0.05):
+    """Adjust vertical offsets for overlapping labels by alternating above/below"""
+    n = len(x_positions)
+    y_offsets = [base_offset] * n
+
+    # Sort points by x position and get indices
+    idx_sorted = np.argsort(x_positions)
+    x_sorted = x_positions[idx_sorted]
+
+    # Find groups of overlapping points
+    current_group = []
+    groups = []
+
+    for i in range(n):
+        if not current_group or abs(x_sorted[i] - x_sorted[current_group[-1]]) < min_distance:
+            current_group.append(i)
+        else:
+            if len(current_group) > 1:
+                groups.append(current_group)
+            current_group = [i]
+
+    if len(current_group) > 1:
+        groups.append(current_group)
+
+    # Adjust offsets for each group
+    for group in groups:
+        for i, idx in enumerate(group):
+            real_idx = idx_sorted[idx]
+            if i % 2 == 0:
+                y_offsets[real_idx] = base_offset  # Keep original offset
+            else:
+                y_offsets[real_idx] = -base_offset  # Flip offset
+
+    return y_offsets
