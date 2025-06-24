@@ -85,3 +85,5 @@ pathvalidate==3.2.1
 
 # model comparison
 mlxtend==0.23.4
+
+plotly>=5.0.0
