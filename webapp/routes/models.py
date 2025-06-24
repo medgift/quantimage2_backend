@@ -18,6 +18,11 @@ from routes.utils import validate_decorate, adjust_label_positions
 from service.feature_extraction import get_album_details
 from service.machine_learning import train_model, model_compare_permuation_test
 
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import plotly.io as pio
+
 # Define blueprint
 bp = Blueprint(__name__, "models")
 
@@ -319,16 +324,47 @@ def _plot_classification_predictions(model_ids, prediction_type):
     plt.savefig(buf, format='png', bbox_inches='tight', dpi=300, pad_inches=0.5)
     plt.close()
 
-    # Return the image as a file download
-    filename = f"{'test' if prediction_type == 'test' else 'train'}_predictions_plot_{'_'.join(map(str, model_ids))}.png"
-    return Response(
-        buf.getvalue(),
-        mimetype="image/png",
-        headers={
-            "Content-disposition": f"attachment; filename={filename}",
-            "Access-Control-Expose-Headers": "Content-Disposition",
-        },
+    # Create interactive plotly figure instead of matplotlib
+    fig = go.Figure()
+    
+    # Add background regions
+    fig.add_shape(type="rect", x0=0, y0=-0.5, x1=0.5, y1=0.5,
+                  fillcolor="lightblue", opacity=0.3, layer="below")
+    fig.add_shape(type="rect", x0=0.5, y0=-0.5, x1=1, y1=0.5,
+                  fillcolor="mistyrose", opacity=0.3, layer="below")
+    
+    # Add threshold line
+    fig.add_vline(x=0.5, line_dash="dash", line_color="black")
+    
+    # Add scatter points for each model
+    for model_id, y_position in zip(model_ids, y_positions):
+        # ... process model data ...
+        
+        # Add scatter points with hover info
+        fig.add_trace(go.Scatter(
+            x=np.array(probabilities)[zeros],
+            y=np.zeros(sum(zeros)) + y_position,
+            mode='markers',
+            name=f'Model {model_id} - Class 0',
+            marker=dict(color='blue', size=8),
+            text=[f"Patient: {pid}" for pid in np.array(patient_ids)[zeros]],
+            hovertemplate="<b>%{text}</b><br>Probability: %{x:.3f}<br>Ground Truth: Class 0"
+        ))
+    
+    # Update layout
+    fig.update_layout(
+        title="Interactive Prediction Probabilities",
+        xaxis_title="Probability of Class 1",
+        showlegend=True,
+        height=600
     )
+    
+    # Return as interactive HTML or JSON
+    return jsonify({
+        "plot_html": fig.to_html(include_plotlyjs="cdn"),
+        # or
+        "plot_json": fig.to_json()
+    })
     
 def _plot_survival_predictions(model_ids, prediction_type):
     """Helper function for survival model plots - handles both test and train"""
