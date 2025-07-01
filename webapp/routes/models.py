@@ -635,3 +635,33 @@ def download_feature_importances(id):
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )
+
+@bp.route("/models/<id>/feature-importances")
+def get_feature_importances(id):
+    # Get the model
+    model = Model.find_by_id(id)
+
+    if not model:
+        return jsonify({"error": "Model not found"}), 404
+
+    # Get the test feature importance
+    test_feature_importance = model.test_feature_importance
+
+    if not test_feature_importance:
+        return jsonify({"error": "Feature importance not saved for this model - please retrain."}), 404
+    
+    # Convert to list of dictionaries for easier frontend consumption
+    feature_importance_data = [
+        {"feature_name": feature_name, "importance_value": importance_value}
+        for feature_name, importance_value in test_feature_importance.items()
+    ]
+    
+    # Sort by importance value in descending order
+    feature_importance_data.sort(key=lambda x: x["importance_value"], reverse=True)
+    
+    return jsonify({
+        "feature_importances": feature_importance_data,
+        "model_id": id,
+        "algorithm": model.best_algorithm,
+        "normalization": model.best_data_normalization
+    })
