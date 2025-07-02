@@ -323,11 +323,22 @@ def plot_test_predictions(id):
     )
     
     # Return as interactive HTML or JSON
-    return jsonify({
-        "plot_html": fig.to_html(include_plotlyjs="cdn"),
-        # or
-        "plot_json": fig.to_json()
-    })
+    return jsonify([
+    {
+        "model_id": model_id,
+        "model_name": f"Model {model_id}",
+        "patients": [
+        {
+            "patient_id": patient_id,
+            "probability": prob,
+            "ground_truth": gt
+        }
+        for patient_id, prob, gt in zip(patient_ids, probabilities, ground_truths)
+        ],
+        "auc": test_metrics['auc']['mean']
+    }
+    for model_id in model_ids
+    ])
     
 @bp.route("/models/<id>/plot-train-predictions", methods=["GET", "POST"])
 def plot_train_predictions(id):
