@@ -5,20 +5,18 @@ import json
 import io
 import base64
 
-import matplotlib.pyplot as plt
 import pandas as pd
-import numpy as np
 
 from pathvalidate import sanitize_filename
 from sqlalchemy.orm import joinedload
 from flask import Blueprint, jsonify, request, g, make_response, Response
 from quantimage2_backend_common.models import Model, LabelCategory, Album, Label
 from quantimage2_backend_common.utils import get_training_id, format_model
-from routes.utils import validate_decorate, adjust_label_positions
+from routes.utils import validate_decorate
 from service.feature_extraction import get_album_details
 from service.machine_learning import train_model, model_compare_permuation_test
 
-
+# Note: Plotly imports kept for potential future use
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.io as pio
@@ -150,12 +148,14 @@ def plot_test_predictions(id):
     if request.method == "POST":
         # Get additional model ID from request body
         print("Request JSON:", request.json)  # Debug print
-        model_ids_str = request.json.get('model_ids', '')
-        print("Model IDs string:", model_ids_str)  # Debug print
+        model_ids_data = request.json.get('model_ids', [])
+        print("Model IDs data:", model_ids_data)  # Debug print
 
-        # Split and clean the model IDs string
-        if isinstance(model_ids_str, str):
-            model_ids = [x.strip() for x in model_ids_str.split(',') if x.strip()]
+        # Handle both string and array formats
+        if isinstance(model_ids_data, str):
+            model_ids = [x.strip() for x in model_ids_data.split(',') if x.strip()]
+        elif isinstance(model_ids_data, list):
+            model_ids = [str(x).strip() for x in model_ids_data if str(x).strip()]
         else:
             model_ids = []
     else:
@@ -164,26 +164,16 @@ def plot_test_predictions(id):
 
     # Convert model IDs to integers
     model_ids = [int(mid) for mid in model_ids]
+    print("Final model_ids:", model_ids)  # Debug print
 
-    # Create the plot with increased height and width
-    plt.figure(figsize=(12, 6))  # Increased size for better spacing
-
-    # Add background colors for prediction regions
-    plt.axvspan(0, 0.5, color='lightblue', alpha=0.3, label='Prediction Region: Class 0')
-    plt.axvspan(0.5, 1, color='mistyrose', alpha=0.3, label='Prediction Region: Class 1')
-
-    # Add vertical line at threshold 0.5
-    plt.axvline(x=0.5, color='black', linestyle='--', alpha=0.5, label='Decision Threshold')
-
-    # Different y-positions for different models with more separation
-    y_positions = [-0.3, 0.1] if len(model_ids) > 1 else [-0.2]
-
-    # Process each model
-    for model_id, y_position in zip(model_ids, y_positions):
+    # Prepare data structure for frontend Plotly components
+    models_data = []
+    
+    for model_id in model_ids:
         model = Model.find_by_id(model_id)
         if not model:
             return jsonify({"error": f"Model {model_id} not found"}), 404
-
+            
         # Get the test predictions values
         test_predictions = model.test_predictions
         test_probabilities = model.test_predictions_probabilities
@@ -195,162 +185,49 @@ def plot_test_predictions(id):
             label_value = next(iter(label.label_content.values()))
             ground_truth[label.patient_id] = int(label_value)
 
-        # Prepare data for plotting
-        probabilities = []
-        predictions = []
-        patient_ids = []
-        ground_truths = []
-
+        # Prepare patient data for this model
+        patients_data = []
         for patient_id in test_predictions.keys():
             pred = test_predictions[patient_id]["prediction"]
             prob = test_probabilities[patient_id]["probabilities"][1]
             gt = ground_truth.get(patient_id, None)
 
             if gt is not None:
-                probabilities.append(prob)
-                predictions.append(pred)
-                patient_ids.append(patient_id)
-                ground_truths.append(gt)
-
-        # Create scatter plot for each class based on ground truth - smaller points
-        zeros = np.array(ground_truths) == 0
-        ones = np.array(ground_truths) == 1
-
-        # Plot points with different colors based on ground truth - smaller points
-        plt.scatter(np.array(probabilities)[zeros], np.zeros(sum(zeros)) + y_position, 
-                   c='blue', label='Ground Truth: Class 0' if model_id == model_ids[0] else "", 
-                   alpha=0.6, s=50)  # Reduced point size
-        plt.scatter(np.array(probabilities)[ones], np.zeros(sum(ones)) + y_position,
-                   c='red', label='Ground Truth: Class 1' if model_id == model_ids[0] else "", 
-                   alpha=0.6, s=50)  # Reduced point size
-
-        # Add patient IDs as annotations with overlap prevention
-        base_offset = 20  # Increased base offset for better separation
-        y_offsets = adjust_label_positions(np.array(probabilities), base_offset)
-
-        for i, (txt, x_pos, y_offset) in enumerate(zip(patient_ids, probabilities, y_offsets)):
-            plt.annotate(txt, 
-                        (x_pos, y_position), 
-                        xytext=(0, y_offset),
-                        textcoords='offset points',
-                        ha='center',
-                        va='bottom' if y_offset > 0 else 'top',
-                        fontsize=6,
-                        rotation=90)
-
-        # Add model ID labels on y-axis
-        plt.text(-0.1, y_position, f'Model {model_id}', 
-                horizontalalignment='right',
-                verticalalignment='center',
-                fontsize=8)
+                patients_data.append({
+                    "patient_id": patient_id,
+                    "probability": prob,
+                    "prediction": pred,
+                    "ground_truth": gt
+                })
 
         # Get metrics from the model
         test_metrics = model.test_metrics
-        metrics_text = [
-            f"Model {model_id}:" if len(model_ids) > 1 else "Metrics:",
-            f"AUC: {test_metrics['auc']['mean']:.3f} ({test_metrics['auc']['inf_value']:.3f} - {test_metrics['auc']['sup_value']:.3f})",
-            f"Prec: {test_metrics['precision']['mean']:.3f} ({test_metrics['precision']['inf_value']:.3f} - {test_metrics['precision']['sup_value']:.3f})",
-            f"Sens: {test_metrics['sensitivity']['mean']:.3f} ({test_metrics['sensitivity']['inf_value']:.3f} - {test_metrics['sensitivity']['sup_value']:.3f})",
-            f"Spec: {test_metrics['specificity']['mean']:.3f} ({test_metrics['specificity']['inf_value']:.3f} - {test_metrics['specificity']['sup_value']:.3f})"
-        ]
+        auc_value = test_metrics.get('auc', {}).get('mean', 0) if test_metrics else 0
 
-        # Add metrics text as a separate legend for each model - smaller font
-        x_pos = 0.02 if len(model_ids) == 1 or model_id == model_ids[0] else 0.25
-        metrics_legend = plt.legend([plt.Rectangle((0, 0), 1, 1, fc='none', fill=False, 
-                                                 edgecolor='none', linewidth=0)]*5,
-                                  metrics_text,
-                                  loc='upper left',
-                                  bbox_to_anchor=(x_pos, 1),
-                                  title=None,
-                                  framealpha=0.9,
-                                  fontsize=7)
-        plt.gca().add_artist(metrics_legend)
+        # Add model data to response
+        models_data.append({
+            "model_id": model_id,
+            "model_name": f"Model {model_id}",
+            "patients": patients_data,
+            "auc": auc_value,
+            "metrics": test_metrics
+        })
 
-    # Main legend for plot elements - smaller font and more compact
-    plt.legend(loc='upper right', 
-              framealpha=0.9, 
-              ncol=2,  # Two columns for more compact legend
-              fontsize=7,
-              bbox_to_anchor=(0.99, 0.99))
-
-    # Customize the plot
-    plt.xlabel('Probability of Class 1', fontsize=9)
-    plt.yticks([])  # Hide numerical y-ticks since we have model labels
-    plt.grid(True, alpha=0.2)  # Reduced grid opacity
-    plt.ylim(-0.5, 0.5)  # Increased y-range for better spacing
-    plt.xlim(-0.05, 1.05)
-    plt.title('Prediction Probabilities Distribution Test Set', 
-             fontsize=10, pad=10)
-
-    # Save plot to a bytes buffer
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', dpi=300, pad_inches=0.5)
-    plt.close()
-
-    # Create interactive plotly figure instead of matplotlib
-    fig = go.Figure()
-    
-    # Add background regions
-    fig.add_shape(type="rect", x0=0, y0=-0.5, x1=0.5, y1=0.5,
-                  fillcolor="lightblue", opacity=0.3, layer="below")
-    fig.add_shape(type="rect", x0=0.5, y0=-0.5, x1=1, y1=0.5,
-                  fillcolor="mistyrose", opacity=0.3, layer="below")
-    
-    # Add threshold line
-    fig.add_vline(x=0.5, line_dash="dash", line_color="black")
-    
-    # Add scatter points for each model
-    for model_id, y_position in zip(model_ids, y_positions):
-        # ... process model data ...
-        
-        # Add scatter points with hover info
-        fig.add_trace(go.Scatter(
-            x=np.array(probabilities)[zeros],
-            y=np.zeros(sum(zeros)) + y_position,
-            mode='markers',
-            name=f'Model {model_id} - Class 0',
-            marker=dict(color='blue', size=8),
-            text=[f"Patient: {pid}" for pid in np.array(patient_ids)[zeros]],
-            hovertemplate="<b>%{text}</b><br>Probability: %{x:.3f}<br>Ground Truth: Class 0"
-        ))
-    
-    # Update layout
-    fig.update_layout(
-        title="Interactive Prediction Probabilities",
-        xaxis_title="Probability of Class 1",
-        showlegend=True,
-        height=600
-    )
-    
-    # Return as interactive HTML or JSON
-    return jsonify([
-    {
-        "model_id": model_id,
-        "model_name": f"Model {model_id}",
-        "patients": [
-        {
-            "patient_id": patient_id,
-            "probability": prob,
-            "ground_truth": gt
-        }
-        for patient_id, prob, gt in zip(patient_ids, probabilities, ground_truths)
-        ],
-        "auc": test_metrics['auc']['mean']
-    }
-    for model_id in model_ids
-    ])
+    return jsonify(models_data)
     
 @bp.route("/models/<id>/plot-train-predictions", methods=["GET", "POST"])
 def plot_train_predictions(id):
     if request.method == "POST":
         # Get additional model ID from request body
         print("Request JSON:", request.json)  # Debug print
-        model_ids_str = request.json.get('model_ids', '')
-        print("Model IDs string:", model_ids_str)  # Debug print
+        model_ids_data = request.json.get('model_ids', [])
+        print("Model IDs data:", model_ids_data)  # Debug print
 
-        # Split and clean the model IDs string
-        if isinstance(model_ids_str, str):
-            model_ids = [x.strip() for x in model_ids_str.split(',') if x.strip()]
+        # Handle both string and array formats
+        if isinstance(model_ids_data, str):
+            model_ids = [x.strip() for x in model_ids_data.split(',') if x.strip()]
+        elif isinstance(model_ids_data, list):
+            model_ids = [str(x).strip() for x in model_ids_data if str(x).strip()]
         else:
             model_ids = []
     else:
@@ -359,26 +236,16 @@ def plot_train_predictions(id):
 
     # Convert model IDs to integers
     model_ids = [int(mid) for mid in model_ids]
+    print("Final model_ids:", model_ids)  # Debug print
 
-    # Create the plot with increased height and width
-    plt.figure(figsize=(12, 6))  # Increased size for better spacing
-
-    # Add background colors for prediction regions
-    plt.axvspan(0, 0.5, color='lightblue', alpha=0.3, label='Prediction Region: Class 0')
-    plt.axvspan(0.5, 1, color='mistyrose', alpha=0.3, label='Prediction Region: Class 1')
-
-    # Add vertical line at threshold 0.5
-    plt.axvline(x=0.5, color='black', linestyle='--', alpha=0.5, label='Decision Threshold')
-
-    # Different y-positions for different models with more separation
-    y_positions = [-0.3, 0.1] if len(model_ids) > 1 else [-0.2]
-
-    # Process each model
-    for model_id, y_position in zip(model_ids, y_positions):
+    # Prepare data structure for frontend Plotly components
+    models_data = []
+    
+    for model_id in model_ids:
         model = Model.find_by_id(model_id)
         if not model:
             return jsonify({"error": f"Model {model_id} not found"}), 404
-
+            
         # Get the train predictions values
         train_predictions = model.train_predictions
         train_probabilities = model.train_predictions_probabilities
@@ -390,107 +257,35 @@ def plot_train_predictions(id):
             label_value = next(iter(label.label_content.values()))
             ground_truth[label.patient_id] = int(label_value)
 
-        # Prepare data for plotting
-        probabilities = []
-        predictions = []
-        patient_ids = []
-        ground_truths = []
-
+        # Prepare patient data for this model
+        patients_data = []
         for patient_id in train_predictions.keys():
             pred = train_predictions[patient_id]["prediction"]
             prob = train_probabilities[patient_id]["probabilities"][1]
             gt = ground_truth.get(patient_id, None)
 
             if gt is not None:
-                probabilities.append(prob)
-                predictions.append(pred)
-                patient_ids.append(patient_id)
-                ground_truths.append(gt)
-
-        # Create scatter plot for each class based on ground truth - smaller points
-        zeros = np.array(ground_truths) == 0
-        ones = np.array(ground_truths) == 1
-
-        # Plot points with different colors based on ground truth - smaller points
-        plt.scatter(np.array(probabilities)[zeros], np.zeros(sum(zeros)) + y_position, 
-                   c='blue', label='Ground Truth: Class 0' if model_id == model_ids[0] else "", 
-                   alpha=0.6, s=50)  # Reduced point size
-        plt.scatter(np.array(probabilities)[ones], np.zeros(sum(ones)) + y_position,
-                   c='red', label='Ground Truth: Class 1' if model_id == model_ids[0] else "", 
-                   alpha=0.6, s=50)  # Reduced point size
-
-        # Add patient IDs as annotations with overlap prevention
-        base_offset = 20  # Increased base offset for better separation
-        y_offsets = adjust_label_positions(np.array(probabilities), base_offset)
-
-        for i, (txt, x_pos, y_offset) in enumerate(zip(patient_ids, probabilities, y_offsets)):
-            plt.annotate(txt, 
-                        (x_pos, y_position), 
-                        xytext=(0, y_offset),
-                        textcoords='offset points',
-                        ha='center',
-                        va='bottom' if y_offset > 0 else 'top',
-                        fontsize=6,
-                        rotation=90)
-
-        # Add model ID labels on y-axis
-        plt.text(-0.1, y_position, f'Model {model_id}', 
-                horizontalalignment='right',
-                verticalalignment='center',
-                fontsize=8)
+                patients_data.append({
+                    "patient_id": patient_id,
+                    "probability": prob,
+                    "prediction": pred,
+                    "ground_truth": gt
+                })
 
         # Get metrics from the model
         training_metrics = model.training_metrics
-        metrics_text = [
-            f"Model {model_id}:" if len(model_ids) > 1 else "Metrics:",
-            f"AUC: {training_metrics['auc']['mean']:.3f} ({training_metrics['auc']['inf_value']:.3f} - {training_metrics['auc']['sup_value']:.3f})",
-            f"Prec: {training_metrics['precision']['mean']:.3f} ({training_metrics['precision']['inf_value']:.3f} - {training_metrics['precision']['sup_value']:.3f})",
-            f"Sens: {training_metrics['sensitivity']['mean']:.3f} ({training_metrics['sensitivity']['inf_value']:.3f} - {training_metrics['sensitivity']['sup_value']:.3f})",
-            f"Spec: {training_metrics['specificity']['mean']:.3f} ({training_metrics['specificity']['inf_value']:.3f} - {training_metrics['specificity']['sup_value']:.3f})"
-        ]
+        auc_value = training_metrics.get('auc', {}).get('mean', 0) if training_metrics else 0
 
-        # Add metrics text as a separate legend for each model - smaller font
-        x_pos = 0.02 if len(model_ids) == 1 or model_id == model_ids[0] else 0.25
-        metrics_legend = plt.legend([plt.Rectangle((0, 0), 1, 1, fc='none', fill=False, 
-                                                 edgecolor='none', linewidth=0)]*5,
-                                  metrics_text,
-                                  loc='upper left',
-                                  bbox_to_anchor=(x_pos, 1),
-                                  title=None,
-                                  framealpha=0.9,
-                                  fontsize=7)
-        plt.gca().add_artist(metrics_legend)
+        # Add model data to response
+        models_data.append({
+            "model_id": model_id,
+            "model_name": f"Model {model_id}",
+            "patients": patients_data,
+            "auc": auc_value,
+            "metrics": training_metrics
+        })
 
-    # Main legend for plot elements - smaller font and more compact
-    plt.legend(loc='upper right', 
-              framealpha=0.9, 
-              ncol=2,  # Two columns for more compact legend
-              fontsize=7,
-              bbox_to_anchor=(0.99, 0.99))
-
-    # Customize the plot
-    plt.xlabel('Probability of Class 1', fontsize=9)
-    plt.yticks([])  # Hide numerical y-ticks since we have model labels
-    plt.grid(True, alpha=0.2)  # Reduced grid opacity
-    plt.ylim(-0.5, 0.5)  # Increased y-range for better spacing
-    plt.xlim(-0.05, 1.05)
-    plt.title('Prediction Probabilities Distribution Complete Train Set', 
-             fontsize=10, pad=10)
-
-    # Save plot to a bytes buffer
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', dpi=300, pad_inches=0.5)
-    plt.close()
-
-    # Return the image as a file download
-    return Response(
-        buf.getvalue(),
-        mimetype="image/png",
-        headers={
-            "Content-disposition": f"attachment; filename=train_predictions_plot_{'_'.join(map(str, model_ids))}.png",
-            "Access-Control-Expose-Headers": "Content-Disposition",
-        },
-    )
+    return jsonify(models_data)
 
 @bp.route("/models/<id>/download-test-bootstrap-values")
 def download_test_bootstrap_values(id):
