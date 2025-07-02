@@ -360,11 +360,22 @@ def _plot_classification_predictions(model_ids, prediction_type):
     )
     
     # Return as interactive HTML or JSON
-    return jsonify({
-        "plot_html": fig.to_html(include_plotlyjs="cdn"),
-        # or
-        "plot_json": fig.to_json()
-    })
+    return jsonify([
+    {
+        "model_id": model_id,
+        "model_name": f"Model {model_id}",
+        "patients": [
+        {
+            "patient_id": patient_id,
+            "probability": prob,
+            "ground_truth": gt
+        }
+        for patient_id, prob, gt in zip(patient_ids, probabilities, ground_truths)
+        ],
+        "auc": test_metrics['auc']['mean']
+    }
+    for model_id in model_ids
+    ])
     
 def _plot_survival_predictions(model_ids, prediction_type):
     """Helper function for survival model plots - handles both test and train"""
