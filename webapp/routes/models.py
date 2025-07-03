@@ -469,3 +469,24 @@ def get_feature_importances(id):
         "algorithm": model.best_algorithm,
         "normalization": model.best_data_normalization
     })
+
+@bp.route("/models/<id>/test-scores-values")
+def get_test_scores_values(id):
+    # Get the model
+    model = Model.find_by_id(id)
+
+    if not model:
+        return jsonify({"error": "Model not found"}), 404
+
+    # Get the test scores values
+    test_scores_values = model.test_scores_values
+
+    if not test_scores_values:
+        return jsonify({"error": "Test scores not available for this model"}), 404
+
+    return jsonify({
+        "model_id": id,
+        "algorithm": model.best_algorithm,
+        "normalization": model.best_data_normalization,
+        "test_scores": test_scores_values
+    })
