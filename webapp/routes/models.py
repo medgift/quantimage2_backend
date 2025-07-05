@@ -143,6 +143,33 @@ def compare_models():
         },
     )
 
+@bp.route("/models/compare-data", methods=["POST"])
+def compare_models_data():
+    
+    print("model comparison data endpoint")
+    model_ids = json.loads(request.data)["model_ids"]
+    models = [Model.find_by_id(i) for i in model_ids]
+    model_comparison_df = model_compare_permuation_test(models)
+    
+    # Convert DataFrame to dictionary for JSON response
+    comparison_data = {
+        "model_ids": model_ids,
+        "comparison_matrix": model_comparison_df.to_dict('index'),
+        "p_values": {}
+    }
+    
+    # Extract p-values for easier frontend access
+    for i, model_id_1 in enumerate(model_ids):
+        comparison_data["p_values"][f"model_{model_id_1}"] = {}
+        for j, model_id_2 in enumerate(model_ids):
+            p_value = model_comparison_df.iloc[i, j]
+            comparison_data["p_values"][f"model_{model_id_1}"][f"model_{model_id_2}"] = p_value
+    
+    print("comparison data:")
+    print(comparison_data)
+    
+    return jsonify(comparison_data)
+
 @bp.route("/models/<id>/plot-test-predictions", methods=["GET", "POST"])
 def plot_test_predictions(id):
     if request.method == "POST":
