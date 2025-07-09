@@ -244,245 +244,69 @@ def plot_test_predictions(id):
 
     return jsonify(models_data)
 
-@bp.route("/models/<id>/roc-curve-test-data", methods=["GET"])
-def get_roc_curve_test_data(id):
+
+def process_single_model_roc(model_id, data_type='test'):
     """
-    Generate ROC curve data for a trained radiomics model.
+    Helper function to process ROC curve for a single model.
     
+    Args:
+        model_id: Integer model ID
+        data_type: 'test' or 'train'
+        
     Returns:
-        JSON with FPR, TPR, thresholds, AUC, and sample count
-        Format designed for clinical radiomics visualization
+        Dictionary with ROC data or None if failed
     """
     try:
-        model_id = int(id)
         model = Model.find_by_id(model_id)
         if not model:
-            return jsonify({"error": f"Model {model_id} not found"}), 404
+            return None
 
-        # Validate model has required prediction data
-        if not hasattr(model, 'test_predictions') or not model.test_predictions:
-            return jsonify({"error": "Model has no test predictions data"}), 400
-            
-        if not hasattr(model, 'test_predictions_probabilities') or not model.test_predictions_probabilities:
-            return jsonify({"error": "Model has no test prediction probabilities"}), 400
+        # Select prediction data based on type
+        if data_type == 'test':
+            predictions = getattr(model, 'test_predictions', None)
+            probabilities = getattr(model, 'test_predictions_probabilities', None)
+            metrics = getattr(model, 'test_metrics', None)
+        else:  # train
+            predictions = getattr(model, 'train_predictions', None)
+            probabilities = getattr(model, 'train_predictions_probabilities', None)
+            metrics = getattr(model, 'training_metrics', None)
 
-        test_predictions = model.test_predictions
-        test_probabilities = model.test_predictions_probabilities
+        if not predictions or not probabilities:
+            return None
 
         # Get ground truth labels
         labels = Label.find_by_label_category(model.label_category_id)
         if not labels:
-            return jsonify({"error": "No ground truth labels found for this model"}), 400
-            
-        ground_truth = {}
-        for label in labels:
-            try:
-                label_value = next(iter(label.label_content.values()))
-                # Ensure binary classification (0 or 1)
-                gt_value = int(label_value)
-                if gt_value not in [0, 1]:
-                    print(f"Warning: Non-binary label {gt_value} for patient {label.patient_id}, skipping")
-                    continue
-                ground_truth[label.patient_id] = gt_value
-            except (ValueError, TypeError, StopIteration) as e:
-                print(f"Warning: Invalid label for patient {label.patient_id}: {e}")
-                continue
-
-        if not ground_truth:
-            return jsonify({"error": "No valid ground truth labels found"}), 400
-
-        # Extract and validate prediction data
-        y_true, y_scores = [], []
-        skipped_patients = []
-        
-        for patient_id in test_predictions.keys():
-            # Get ground truth
-            gt = ground_truth.get(patient_id)
-            if gt is None:
-                skipped_patients.append(f"{patient_id} (no ground truth)")
-                continue
-            
-            # Get probability - expect format: {"probabilities": [prob_class_0, prob_class_1]}
-            prob_data = test_probabilities.get(patient_id, {})
-            probabilities = prob_data.get("probabilities", [None, None])
-            
-            # Use probability for positive class (index 1)
-            if len(probabilities) < 2:
-                skipped_patients.append(f"{patient_id} (insufficient probabilities)")
-                continue
-                
-            prob_positive = probabilities[1]
-            
-            # Validate probability value
-            try:
-                prob_float = float(prob_positive)
-                # Check for valid probability range [0, 1]
-                if not (0.0 <= prob_float <= 1.0):
-                    print(f"Warning: Probability {prob_float} out of range [0,1] for patient {patient_id}")
-                    # Clip to valid range
-                    prob_float = max(0.0, min(1.0, prob_float))
-                
-                # Check for finite values
-                if not math.isfinite(prob_float):
-                    skipped_patients.append(f"{patient_id} (non-finite probability)")
-                    continue
-                    
-                y_true.append(gt)
-                y_scores.append(prob_float)
-                
-            except (ValueError, TypeError):
-                skipped_patients.append(f"{patient_id} (invalid probability format)")
-                continue
-
-        # Log skipped patients for debugging
-        if skipped_patients:
-            print(f"Skipped {len(skipped_patients)} patients: {skipped_patients[:5]}...")
-
-        # Validate we have sufficient data for ROC analysis
-        if len(y_true) < 2:
-            return jsonify({"error": "Insufficient valid prediction data (need at least 2 samples)"}), 400
-            
-        # Check for both classes present
-        unique_labels = set(y_true)
-        if len(unique_labels) < 2:
-            return jsonify({"error": f"Only one class present in data: {unique_labels}. ROC analysis requires both classes."}), 400
-
-        # Convert to numpy arrays with explicit types
-        y_true_array = np.array(y_true, dtype=np.int32)
-        y_scores_array = np.array(y_scores, dtype=np.float64)
-        
-        # Calculate ROC curve using sklearn
-        try:
-            fpr, tpr, thresholds = roc_curve(y_true_array, y_scores_array)
-            
-            # Calculate AUC
-            from sklearn.metrics import auc
-            auc_calculated = auc(fpr, tpr)
-            
-        except Exception as e:
-            print(f"Error calculating ROC curve: {e}")
-            return jsonify({"error": "Failed to calculate ROC curve"}), 500
-        
-        # Convert numpy arrays to JSON-serializable lists
-        # Handle any remaining edge cases in the arrays
-        def numpy_to_json_safe(arr):
-            """Convert numpy array to JSON-safe list, handling edge cases"""
-            result = []
-            for val in arr:
-                if np.isfinite(val):
-                    result.append(float(val))
-                else:
-                    # Replace inf/-inf/nan with edge values
-                    if np.isposinf(val):
-                        result.append(1.0)
-                    elif np.isneginf(val):
-                        result.append(0.0)
-                    else:  # nan
-                        result.append(0.5)  # neutral value
-            return result
-        
-        fpr_points = numpy_to_json_safe(fpr)
-        tpr_points = numpy_to_json_safe(tpr)
-        thresholds_points = numpy_to_json_safe(thresholds)
-        
-        # Get AUC from model metrics if available, otherwise use calculated
-        auc_value = auc_calculated
-        if hasattr(model, 'test_metrics') and model.test_metrics:
-            if 'auc' in model.test_metrics:
-                stored_auc = model.test_metrics['auc'].get('mean', auc_calculated)
-                # Use stored AUC if reasonable, otherwise use calculated
-                if 0.0 <= stored_auc <= 1.0:
-                    auc_value = stored_auc
-        
-        # Prepare response data
-        roc_data = [{
-            "model_id": model_id,
-            "model_name": f"Model {model_id}",
-            "fpr": fpr_points,
-            "tpr": tpr_points, 
-            "thresholds": thresholds_points,
-            "auc": float(auc_value),
-            "n_samples": len(y_true),
-            "n_positive": int(np.sum(y_true_array)),
-            "n_negative": int(len(y_true_array) - np.sum(y_true_array)),
-            "data_quality": {
-                "total_test_patients": len(test_predictions),
-                "patients_with_valid_data": len(y_true),
-                "patients_skipped": len(skipped_patients),
-                "class_balance": {
-                    "positive_ratio": float(np.mean(y_true_array)),
-                    "negative_ratio": float(1.0 - np.mean(y_true_array))
-                }
-            }
-        }]
-        
-        return jsonify(roc_data)
-
-    except ValueError as e:
-        return jsonify({"error": f"Invalid model ID: {e}"}), 400
-    except Exception as e:
-        print(f"Unexpected error in ROC endpoint: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": "Internal server error during ROC calculation"}), 500
-
-
-@bp.route("/models/<id>/roc-curve-train-data", methods=["GET"])  
-def get_roc_curve_train_data(id):
-    """
-    Generate ROC curve data for training set of a radiomics model.
-    Similar to test data but uses training predictions.
-    """
-    try:
-        model_id = int(id)
-        model = Model.find_by_id(model_id)
-        if not model:
-            return jsonify({"error": f"Model {model_id} not found"}), 404
-
-        # Validate model has required training prediction data
-        if not hasattr(model, 'train_predictions') or not model.train_predictions:
-            return jsonify({"error": "Model has no training predictions data"}), 400
-            
-        if not hasattr(model, 'train_predictions_probabilities') or not model.train_predictions_probabilities:
-            return jsonify({"error": "Model has no training prediction probabilities"}), 400
-
-        train_predictions = model.train_predictions
-        train_probabilities = model.train_predictions_probabilities
-
-        # Get ground truth labels (same as test)
-        labels = Label.find_by_label_category(model.label_category_id)
-        if not labels:
-            return jsonify({"error": "No ground truth labels found for this model"}), 400
+            return None
             
         ground_truth = {}
         for label in labels:
             try:
                 label_value = next(iter(label.label_content.values()))
                 gt_value = int(label_value)
-                if gt_value not in [0, 1]:
-                    continue
-                ground_truth[label.patient_id] = gt_value
+                if gt_value in [0, 1]:
+                    ground_truth[label.patient_id] = gt_value
             except (ValueError, TypeError, StopIteration):
                 continue
 
         if not ground_truth:
-            return jsonify({"error": "No valid ground truth labels found"}), 400
+            return None
 
-        # Extract and validate training prediction data
+        # Extract and validate prediction data
         y_true, y_scores = [], []
         
-        for patient_id in train_predictions.keys():
+        for patient_id in predictions.keys():
             gt = ground_truth.get(patient_id)
             if gt is None:
                 continue
             
-            prob_data = train_probabilities.get(patient_id, {})
-            probabilities = prob_data.get("probabilities", [None, None])
+            prob_data = probabilities.get(patient_id, {})
+            prob_list = prob_data.get("probabilities", [None, None])
             
-            if len(probabilities) < 2:
+            if len(prob_list) < 2:
                 continue
                 
-            prob_positive = probabilities[1]
+            prob_positive = prob_list[1]
             
             try:
                 prob_float = float(prob_positive)
@@ -499,22 +323,22 @@ def get_roc_curve_train_data(id):
                 continue
 
         # Validate sufficient data
-        if len(y_true) < 2:
-            return jsonify({"error": "Insufficient valid training prediction data"}), 400
-            
-        if len(set(y_true)) < 2:
-            return jsonify({"error": "Only one class present in training data"}), 400
+        if len(y_true) < 2 or len(set(y_true)) < 2:
+            return None
 
-        # Calculate ROC for training data
-        y_true_array = np.array(y_true, dtype=np.int32)
-        y_scores_array = np.array(y_scores, dtype=np.float64)
-        
+        # Calculate ROC curve
         try:
+            y_true_array = np.array(y_true, dtype=np.int32)
+            y_scores_array = np.array(y_scores, dtype=np.float64)
+            
             fpr, tpr, thresholds = roc_curve(y_true_array, y_scores_array)
+            
             from sklearn.metrics import auc
             auc_calculated = auc(fpr, tpr)
+            
         except Exception as e:
-            return jsonify({"error": "Failed to calculate training ROC curve"}), 500
+            print(f"Error calculating ROC for model {model_id}: {e}")
+            return None
         
         # Convert to JSON-safe format
         def numpy_to_json_safe(arr):
@@ -535,15 +359,14 @@ def get_roc_curve_train_data(id):
         tpr_points = numpy_to_json_safe(tpr)
         thresholds_points = numpy_to_json_safe(thresholds)
         
-        # Get training AUC from model metrics if available
+        # Get AUC from stored metrics if available
         auc_value = auc_calculated
-        if hasattr(model, 'training_metrics') and model.training_metrics:
-            if 'auc' in model.training_metrics:
-                stored_auc = model.training_metrics['auc'].get('mean', auc_calculated)
-                if 0.0 <= stored_auc <= 1.0:
-                    auc_value = stored_auc
+        if metrics and 'auc' in metrics:
+            stored_auc = metrics['auc'].get('mean', auc_calculated)
+            if 0.0 <= stored_auc <= 1.0:
+                auc_value = stored_auc
         
-        roc_data = [{
+        return {
             "model_id": model_id,
             "model_name": f"Model {model_id}",
             "fpr": fpr_points,
@@ -553,25 +376,175 @@ def get_roc_curve_train_data(id):
             "n_samples": len(y_true),
             "n_positive": int(np.sum(y_true_array)),
             "n_negative": int(len(y_true_array) - np.sum(y_true_array)),
-            "data_quality": {
-                "total_training_patients": len(train_predictions),
-                "patients_with_valid_data": len(y_true),
-                "class_balance": {
-                    "positive_ratio": float(np.mean(y_true_array)),
-                    "negative_ratio": float(1.0 - np.mean(y_true_array))
-                }
-            }
-        }]
+            "data_type": data_type
+        }
         
+    except Exception as e:
+        print(f"Error in process_single_model_roc for model {model_id}: {e}")
+        return None
+
+@bp.route("/models/<id>/roc-curve-test-data", methods=["GET", "POST"])
+def get_roc_curve_test_data(id):
+    """
+    Generate ROC curve data for one or multiple trained radiomics models (test set).
+    
+    GET: Single model using model ID in URL
+    POST: Multiple models using model_ids in request body
+    """
+    try:
+        # Determine model IDs to process
+        if request.method == "POST":
+            # Multiple models from request body
+            request_data = request.get_json() or {}
+            model_ids_data = request_data.get('model_ids', [])
+            
+            # Handle different input formats
+            if isinstance(model_ids_data, str):
+                model_ids = [x.strip() for x in model_ids_data.split(',') if x.strip()]
+            elif isinstance(model_ids_data, list):
+                model_ids = [str(x).strip() for x in model_ids_data if str(x).strip()]
+            else:
+                return jsonify({"error": "Invalid model_ids format"}), 400
+                
+            # Convert to integers
+            try:
+                model_ids = [int(mid) for mid in model_ids]
+            except ValueError:
+                return jsonify({"error": "All model IDs must be valid integers"}), 400
+                
+            if not model_ids:
+                return jsonify({"error": "No valid model IDs provided"}), 400
+                
+        else:
+            # Single model from URL (GET request)
+            try:
+                model_ids = [int(id)]
+            except ValueError:
+                return jsonify({"error": f"Invalid model ID: {id}"}), 400
+
+        # Limit number of models for performance
+        if len(model_ids) > 10:
+            return jsonify({"error": "Maximum 10 models allowed for comparison"}), 400
+
+        roc_data = []
+        
+        # Process each model using your existing helper function
+        for model_id in model_ids:
+            try:
+                model_roc = process_single_model_roc(model_id, data_type='test')
+                if model_roc:
+                    roc_data.append(model_roc)
+                else:
+                    # Add placeholder for failed model
+                    roc_data.append({
+                        "model_id": model_id,
+                        "model_name": f"Model {model_id}",
+                        "error": "Failed to process model",
+                        "fpr": [0.0, 1.0],
+                        "tpr": [0.0, 1.0],
+                        "thresholds": [1.0, 0.0],
+                        "auc": 0.0,
+                        "n_samples": 0
+                    })
+            except Exception as e:
+                print(f"Error processing model {model_id}: {e}")
+                roc_data.append({
+                    "model_id": model_id,
+                    "model_name": f"Model {model_id}",
+                    "error": str(e),
+                    "fpr": [0.0, 1.0],
+                    "tpr": [0.0, 1.0], 
+                    "thresholds": [1.0, 0.0],
+                    "auc": 0.0,
+                    "n_samples": 0
+                })
+
+        if not roc_data:
+            return jsonify({"error": "No models could be processed"}), 400
+
         return jsonify(roc_data)
 
-    except ValueError as e:
-        return jsonify({"error": f"Invalid model ID: {e}"}), 400
+    except Exception as e:
+        print(f"Unexpected error in ROC endpoint: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "Internal server error during ROC calculation"}), 500
+
+
+@bp.route("/models/<id>/roc-curve-train-data", methods=["GET", "POST"])
+def get_roc_curve_train_data(id):
+    """Same logic but for training data"""
+    try:
+        # Same logic as test data but use 'train' data_type
+        if request.method == "POST":
+            request_data = request.get_json() or {}
+            model_ids_data = request_data.get('model_ids', [])
+            
+            if isinstance(model_ids_data, str):
+                model_ids = [x.strip() for x in model_ids_data.split(',') if x.strip()]
+            elif isinstance(model_ids_data, list):
+                model_ids = [str(x).strip() for x in model_ids_data if str(x).strip()]
+            else:
+                return jsonify({"error": "Invalid model_ids format"}), 400
+                
+            try:
+                model_ids = [int(mid) for mid in model_ids]
+            except ValueError:
+                return jsonify({"error": "All model IDs must be valid integers"}), 400
+                
+            if not model_ids:
+                return jsonify({"error": "No valid model IDs provided"}), 400
+        else:
+            try:
+                model_ids = [int(id)]
+            except ValueError:
+                return jsonify({"error": f"Invalid model ID: {id}"}), 400
+
+        if len(model_ids) > 10:
+            return jsonify({"error": "Maximum 10 models allowed for comparison"}), 400
+
+        roc_data = []
+        
+        for model_id in model_ids:
+            try:
+                model_roc = process_single_model_roc(model_id, data_type='train')
+                if model_roc:
+                    roc_data.append(model_roc)
+                else:
+                    roc_data.append({
+                        "model_id": model_id,
+                        "model_name": f"Model {model_id}",
+                        "error": "Failed to process model",
+                        "fpr": [0.0, 1.0],
+                        "tpr": [0.0, 1.0],
+                        "thresholds": [1.0, 0.0],
+                        "auc": 0.0,
+                        "n_samples": 0
+                    })
+            except Exception as e:
+                print(f"Error processing model {model_id}: {e}")
+                roc_data.append({
+                    "model_id": model_id,
+                    "model_name": f"Model {model_id}",
+                    "error": str(e),
+                    "fpr": [0.0, 1.0],
+                    "tpr": [0.0, 1.0],
+                    "thresholds": [1.0, 0.0],
+                    "auc": 0.0,
+                    "n_samples": 0
+                })
+
+        if not roc_data:
+            return jsonify({"error": "No models could be processed"}), 400
+
+        return jsonify(roc_data)
+
     except Exception as e:
         print(f"Unexpected error in training ROC endpoint: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": "Internal server error during training ROC calculation"}), 500
+    
 
 @bp.route("/models/<id>/plot-train-predictions", methods=["GET", "POST"])
 def plot_train_predictions(id):
