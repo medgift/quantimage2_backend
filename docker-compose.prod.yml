@@ -30,16 +30,16 @@ services:
       - default
       - prod
 
-  keycloak:
-    environment:
-      - PROXY_ADDRESS_FORWARDING=true
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=prod"
-      - "traefik.http.routers.quantimage2-backend-keycloak.rule=Host(`${TRAEFIK_URL_KEYCLOAK}`)"
-    networks:
-      - default
-      - prod
+  # keycloak:
+  #   environment:
+  #     - PROXY_ADDRESS_FORWARDING=true
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.docker.network=prod"
+  #     - "traefik.http.routers.quantimage2-backend-keycloak.rule=Host(`${TRAEFIK_URL_KEYCLOAK}`)"
+  #   networks:
+  #     - default
+  #     - prod
 
   ohif:
     labels:

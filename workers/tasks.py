@@ -204,22 +204,11 @@ def train_model(
             scoring,
             random_seed,
         )
+        
         test_metrics = None
         test_bootstrap_values = None
         test_scores_values = None
         test_feature_importances = None
-        
-        # Get test and train predictions for db
-        test_predictions, test_predictions_probabilities = compute_predictions(
-            X_test,
-            fitted_model,
-            test_patients)
-        
-        train_predictions, train_predictions_probabilities = compute_predictions(
-            X_train,
-            fitted_model,
-            training_patients)
-
         # Train/test only - Perform Bootstrap on the Test set
         if is_train_test:
             tic()
@@ -284,6 +273,23 @@ def train_model(
         test_validation = "Bootstrap" if is_train_test else None
         test_validation_params = {"n": n_bootstrap} if is_train_test else None
         
+        # Get test and train predictions for db
+        if label_category.label_type == "Classification":
+            test_predictions, test_predictions_probabilities = compute_predictions(
+                X_test,
+                fitted_model,
+                test_patients)
+            
+            train_predictions, train_predictions_probabilities = compute_predictions(
+                X_train,
+                fitted_model,
+                training_patients)
+        else:
+            test_predictions = None
+            test_predictions_probabilities = None
+            train_predictions = None
+            train_predictions_probabilities = None
+
         db_model = Model(
             model_name,
             best_algorithm,

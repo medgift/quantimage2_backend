@@ -32,10 +32,10 @@ mysqlclient
 SQLAlchemy<1.4
 
 # Celery
-Celery
+Celery==5.5.0
 
 # Redis
-redis
+redis==5.2.1
 
 # JSON
 simplejson
@@ -51,6 +51,9 @@ pydicom
 
 # YAML
 pyyaml
+
+# SimpleITK
+SimpleITK==2.4.1
 
 # ML
 scikit-learn

@@ -2,7 +2,7 @@
 black
 
 # Eventlet
-eventlet
+eventlet==0.33.3
 
 # Multipart handler
 requests-toolbelt
@@ -31,10 +31,10 @@ werkzeug==2.0.2
 dnspython==1.16.0
 
 # Celery
-Celery
+Celery==5.5.0
 
 # Redis
-redis
+redis==5.2.1
 
 # HTTP requests handler
 requests
