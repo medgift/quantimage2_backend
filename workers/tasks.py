@@ -179,11 +179,6 @@ def train_model(
         
         fitted_model = grid.fit(X_train, y_train_encoded)
         
-        print(f"Best parameters: {fitted_model.best_params_}")
-        print(f"Best score: {fitted_model.cv_results_}")
-        print(f"X_train: {X_train}")
-        print(f"y_train: {y_train_encoded}")
-        
         elapsed = toc()
 
         print(f"Fitting the model took {elapsed}")
