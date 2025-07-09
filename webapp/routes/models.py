@@ -4,9 +4,10 @@ import csv
 import json
 import io
 import base64
+import math
 
 import pandas as pd
-
+import numpy as np
 from pathvalidate import sanitize_filename
 from sqlalchemy.orm import joinedload
 from flask import Blueprint, jsonify, request, g, make_response, Response
@@ -15,6 +16,7 @@ from quantimage2_backend_common.utils import get_training_id, format_model
 from routes.utils import validate_decorate
 from service.feature_extraction import get_album_details
 from service.machine_learning import train_model, model_compare_permuation_test
+from sklearn.metrics import roc_curve
 
 # Note: Plotly imports kept for potential future use
 import plotly.graph_objects as go
@@ -239,7 +241,153 @@ def plot_test_predictions(id):
         })
 
     return jsonify(models_data)
-    
+
+@bp.route("/models/<id>/roc-curve-test-data", methods=["GET", "POST"])
+def get_roc_curve_test_data(id):
+    if request.method == "POST":
+        model_ids_data = request.json.get('model_ids', [])
+        if isinstance(model_ids_data, str):
+            model_ids = [x.strip() for x in model_ids_data.split(',') if x.strip()]
+        elif isinstance(model_ids_data, list):
+            model_ids = [str(x).strip() for x in model_ids_data if str(x).strip()]
+        else:
+            model_ids = []
+    else:
+        model_ids = [x.strip() for x in id.split(',') if x.strip()]
+    model_ids = [int(mid) for mid in model_ids]
+
+    roc_data = []
+
+    for model_id in model_ids:
+        model = Model.find_by_id(model_id)
+        if not model:
+            return jsonify({"error": f"Model {model_id} not found"}), 404
+
+        test_predictions = model.test_predictions
+        test_probabilities = model.test_predictions_probabilities
+
+        labels = Label.find_by_label_category(model.label_category_id)
+        ground_truth = {}
+        for label in labels:
+            label_value = next(iter(label.label_content.values()))
+            ground_truth[label.patient_id] = int(label_value)
+
+        y_true, y_scores = [], []
+        for patient_id in test_predictions.keys():
+            prob = test_probabilities.get(patient_id, {}).get("probabilities", [None, None])[1]
+            gt = ground_truth.get(patient_id)
+            if gt is not None and prob is not None:
+                y_true.append(gt)
+                y_scores.append(prob)
+
+        # Validate y_scores: reject if NaN or Inf present
+        arr_scores = np.array(y_scores)
+        if np.any(np.isnan(arr_scores)) or np.any(np.isinf(arr_scores)):
+            # Skip ROC calc or return fallback
+            fpr_points, tpr_points, thresholds = [0.0, 1.0], [0.0, 1.0], [1.0, 0.0]
+        elif len(y_true) > 0 and len(set(y_true)) > 1:
+            fpr, tpr, thresholds = roc_curve(y_true, y_scores)
+            # Sanitize arrays for JSON (replace NaN/Inf with None)
+            def sanitize(arr):
+                arr = np.array(arr)
+                arr = np.where(np.isinf(arr), None, arr)
+                arr = np.where(np.isnan(arr), None, arr)
+                return arr.tolist()
+            fpr_points = sanitize(fpr)
+            tpr_points = sanitize(tpr)
+            thresholds = sanitize(thresholds)
+        else:
+            fpr_points, tpr_points, thresholds = [0.0, 1.0], [0.0, 1.0], [1.0, 0.0]
+
+        auc_value = 0
+        test_metrics = model.test_metrics
+        if test_metrics and 'auc' in test_metrics:
+            auc_value = test_metrics['auc'].get('mean', 0)
+
+        roc_data.append({
+            "model_id": model_id,
+            "model_name": f"Model {model_id}",
+            "fpr": fpr_points,
+            "tpr": tpr_points,
+            "thresholds": thresholds,
+            "auc": auc_value,
+            "n_samples": len(y_true)
+        })
+
+    return jsonify(roc_data)
+
+
+@bp.route("/models/<id>/roc-curve-train-data", methods=["GET", "POST"])
+def get_roc_curve_train_data(id):
+    if request.method == "POST":
+        model_ids_data = request.json.get('model_ids', [])
+        if isinstance(model_ids_data, str):
+            model_ids = [x.strip() for x in model_ids_data.split(',') if x.strip()]
+        elif isinstance(model_ids_data, list):
+            model_ids = [str(x).strip() for x in model_ids_data if str(x).strip()]
+        else:
+            model_ids = []
+    else:
+        model_ids = [x.strip() for x in id.split(',') if x.strip()]
+    model_ids = [int(mid) for mid in model_ids]
+
+    roc_data = []
+
+    for model_id in model_ids:
+        model = Model.find_by_id(model_id)
+        if not model:
+            return jsonify({"error": f"Model {model_id} not found"}), 404
+
+        train_predictions = model.train_predictions
+        train_probabilities = model.train_predictions_probabilities
+
+        labels = Label.find_by_label_category(model.label_category_id)
+        ground_truth = {}
+        for label in labels:
+            label_value = next(iter(label.label_content.values()))
+            ground_truth[label.patient_id] = int(label_value)
+
+        y_true, y_scores = [], []
+        for patient_id in train_predictions.keys():
+            prob = train_probabilities.get(patient_id, {}).get("probabilities", [None, None])[1]
+            gt = ground_truth.get(patient_id)
+            if gt is not None and prob is not None:
+                y_true.append(gt)
+                y_scores.append(prob)
+
+        arr_scores = np.array(y_scores)
+        if np.any(np.isnan(arr_scores)) or np.any(np.isinf(arr_scores)):
+            fpr_points, tpr_points, thresholds = [0.0, 1.0], [0.0, 1.0], [1.0, 0.0]
+        elif len(y_true) > 0 and len(set(y_true)) > 1:
+            fpr, tpr, thresholds = roc_curve(y_true, y_scores)
+            def sanitize(arr):
+                arr = np.array(arr)
+                arr = np.where(np.isinf(arr), None, arr)
+                arr = np.where(np.isnan(arr), None, arr)
+                return arr.tolist()
+            fpr_points = sanitize(fpr)
+            tpr_points = sanitize(tpr)
+            thresholds = sanitize(thresholds)
+        else:
+            fpr_points, tpr_points, thresholds = [0.0, 1.0], [0.0, 1.0], [1.0, 0.0]
+
+        auc_value = 0
+        training_metrics = model.training_metrics
+        if training_metrics and 'auc' in training_metrics:
+            auc_value = training_metrics['auc'].get('mean', 0)
+
+        roc_data.append({
+            "model_id": model_id,
+            "model_name": f"Model {model_id}",
+            "fpr": fpr_points,
+            "tpr": tpr_points,
+            "thresholds": thresholds,
+            "auc": auc_value,
+            "n_samples": len(y_true)
+        })
+
+    return jsonify(roc_data)
+
 @bp.route("/models/<id>/plot-train-predictions", methods=["GET", "POST"])
 def plot_train_predictions(id):
     if request.method == "POST":
