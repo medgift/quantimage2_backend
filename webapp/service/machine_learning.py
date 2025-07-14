@@ -413,12 +413,16 @@ def model_compare_permuation_test(models: List[Model]) -> DataFrame:
             model_j = models[j]
             
             if "Survival" in model_i.name or "Survival" in model_j.name:
-                comparisons_i.append("One of the models is a Survival - permutation test not supported")
+                c_index_i = [score["c-index"] for score in model_i.test_scores_values]
+                c_index_j = [score["c-index"] for score in model_j.test_scores_values]
+                
+                p_bs_lib = permutation_test_mlxtend(c_index_i, c_index_j, method='approximate', num_rounds=10000, seed=10)
+                comparisons_i.append(p_bs_lib)
                 continue
 
             if model_i.test_scores_values and model_j.test_scores_values:
-                auc_i = [i["auc"] for i in model_i.test_scores_values]
-                auc_j = [i["auc"] for i in model_j.test_scores_values]
+                auc_i = [score["auc"] for score in model_i.test_scores_values]
+                auc_j = [score["auc"] for score in model_j.test_scores_values]
 
                 p_bs_lib = permutation_test_mlxtend(auc_i, auc_j, method='approximate', num_rounds=10000, seed=10)
                 comparisons_i.append(p_bs_lib)

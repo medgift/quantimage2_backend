@@ -231,6 +231,8 @@ def train_model(
                 X_test,
                 y_test_encoded,
                 fitted_model.best_estimator_,
+                fitted_model.scoring,
+                label_category.label_type,
                 random_seed
             )
 

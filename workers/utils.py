@@ -258,9 +258,32 @@ def compute_feature_importance(
         X_test,
         y_test,
         model,
+        scoring,
+        label_category,
         random_seed
     ):
-    result = permutation_importance(model, X_test, y_test, n_repeats=10, random_state=random_seed)
+    
+    result_dict = permutation_importance(model, 
+                                         X_test, 
+                                         y_test, 
+                                         scoring=scoring, 
+                                         n_repeats=10, 
+                                         random_state=random_seed)
+    
+    # Get feature importance from auc for Classification and c-index for Survival
+    if label_category == "Classification":
+        print("Classification model detected, using 'auc' to compute feature importance")
+        if "auc" in result_dict:
+            result = result_dict["auc"]
+        else:
+            raise ValueError("Expected 'auc' key in scoring result for Classification model")
+    elif label_category == "Survival":
+        print("Survival model detected, using 'c-index' to compute feature importance")
+        if "c-index" in result_dict:
+            result = result_dict["c-index"]
+        else:
+            raise ValueError("Expected 'c-index' key in scoring result for Survival model")
+
     return pd.Series(result.importances_mean, index=X_test.columns).to_dict()
 
 def compute_predictions(X, model, patients):
