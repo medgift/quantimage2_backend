@@ -40,6 +40,7 @@ COPY ./workers/requirements*.txt ./
 
 # Install numpy first (for PyRadiomics)
 RUN pip install --no-cache-dir numpy
+RUN pip install --no-cache-dir SimpleITK==2.4.0
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
