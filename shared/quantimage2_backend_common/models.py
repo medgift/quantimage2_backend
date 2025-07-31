@@ -18,6 +18,13 @@ from quantimage2_backend_common.const import (
 )
 from quantimage2_backend_common.kheops_utils import dicomFields
 
+import sys
+sys.path.append("/usr/src/app")
+from service.feature_extraction import get_studies_from_album
+from routes.features import get_features_cache_or_db
+from flask import g
+
+
 db = SQLAlchemy()
 
 
@@ -1349,6 +1356,38 @@ class LabelCategory(BaseModel, db.Model):
         )
         return instances
 
+    def initialize_empty_labels(self):
+        """Initialize empty labels for all patients from feature extraction data."""
+        # Get feature extraction
+        feature_extraction = FeatureExtraction.query.filter_by(
+            album_id=self.album_id,
+            user_id=self.user_id
+        ).first()
+
+        if not feature_extraction:
+            return
+
+        # Get studies and features dataframe - same source as frontend
+        studies = get_studies_from_album(self.album_id, g.token)
+        _, features_df = get_features_cache_or_db(feature_extraction, studies)
+
+        # Get unique patient IDs from features dataframe
+        patient_names = features_df['PatientID'].unique()
+        
+        print(f"Found {len(patient_names)} patients from features: {patient_names}")
+        
+        # Create empty labels with correct structure based on label type
+        if self.label_type == "Classification":
+            empty_content = {"Outcome": "9"}
+        else:
+            empty_content = {"Time": "9", "Event": "9"}
+        
+        # Create empty labels for each patient
+        labels_to_save = [
+            Label(self.id, patient_name, empty_content) for patient_name in patient_names
+        ]
+        
+        Label.save_labels(self.id, labels_to_save)
 
     def to_dict(self):
         return {

@@ -56,6 +56,8 @@ def save_label_category(album_id, label_type, name, user_id):
     new_category = LabelCategory(album_id, label_type, name, user_id)
 
     new_category.save_to_db()
+    
+    new_category.initialize_empty_labels()
 
     return jsonify(new_category.to_dict())
 
