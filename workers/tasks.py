@@ -57,6 +57,7 @@ from utils import (
     get_model_path,
     compute_feature_importance,
     compute_predictions,
+    compute_risk_scores
 )
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
@@ -282,10 +283,19 @@ def train_model(
                 fitted_model,
                 training_patients)
         else:
-            test_predictions = None
+            # For survival models, compute hazard values instead of predictions, no compute probabilities
             test_predictions_probabilities = None
-            train_predictions = None
             train_predictions_probabilities = None
+            test_predictions = compute_risk_scores(
+                X_test,
+                fitted_model,
+                test_patients
+            )
+            train_predictions = compute_risk_scores(
+                X_train,
+                fitted_model,
+                training_patients
+            )
 
         db_model = Model(
             model_name,

@@ -1,8 +1,8 @@
 general:
   padding: 10
-  submodalities: False
+  submodalities: True
   result_format: "long"
-  combine_segmentation: True
+  combine_segmentation: False
   additional_dicom_tags:
     - "SeriesInstanceUID"
     - "SeriesDescription"
@@ -11,16 +11,19 @@ volume_preprocessing:
   common:
     bspline_resampler:
       resampling_spacing: [1.0, 1.0, 1.0]
-      order: 3
+      order: 1
+    standardizer:
+      threshold: 0.001
+
   default:
 
 mask_preprocessing:
   default:
     binary_bspline_resampler:
-      order: 3
+      order: 1
 
 feature_extraction:
-  CT:
+  MR_T1:
     pyradiomics:
       original:
         imageType:
@@ -35,11 +38,11 @@ feature_extraction:
           gldm:
 
         setting:
-          binWidth: 20
-          voxelArrayShift: 1000
+          binWidth: 0.3
+          voxelArrayShift: 10
           label: 1
 
-  PT:
+  MR_T2:
     pyradiomics:
       original:
         imageType:
@@ -54,6 +57,6 @@ feature_extraction:
           gldm:
 
         setting:
-          binWidth: 0.2
-          voxelArrayShift: 0
+          binWidth: 0.3
+          voxelArrayShift: 10
           label: 1

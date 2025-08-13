@@ -18,13 +18,6 @@ from quantimage2_backend_common.const import (
 )
 from quantimage2_backend_common.kheops_utils import dicomFields
 
-import sys
-sys.path.append("/usr/src/app")
-from service.feature_extraction import get_studies_from_album
-from routes.features import get_features_cache_or_db
-from flask import g
-
-
 db = SQLAlchemy()
 
 
@@ -1358,6 +1351,10 @@ class LabelCategory(BaseModel, db.Model):
 
     def initialize_empty_labels(self):
         """Initialize empty labels for all patients from feature extraction data."""
+        from service.feature_extraction import get_studies_from_album
+        from routes.features import get_features_cache_or_db
+        from flask import g
+        
         # Get feature extraction
         feature_extraction = FeatureExtraction.query.filter_by(
             album_id=self.album_id,
@@ -1378,9 +1375,9 @@ class LabelCategory(BaseModel, db.Model):
         
         # Create empty labels with correct structure based on label type
         if self.label_type == "Classification":
-            empty_content = {"Outcome": "9"}
+            empty_content = {"Outcome": "Undefined"}
         else:
-            empty_content = {"Time": "9", "Event": "9"}
+            empty_content = {"Time": "Undefined", "Event": "Undefined"}
         
         # Create empty labels for each patient
         labels_to_save = [
