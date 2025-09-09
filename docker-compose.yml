@@ -84,35 +84,35 @@ services:
   redis-socket:
     image: redis:7.4.1
 
-  keycloak:
-    image: quay.io/keycloak/keycloak:16.1.1
-    env_file:
-      - env_files/common.env
-      - env_files/keycloak.env
-    environment:
-      DB_ADDR: keycloak-db
-    secrets:
-      - keycloak-db-user-password
-      - keycloak-admin-password
-      - quantimage2-admin-password
-    volumes:
-      - ./keycloak/quantimage2_theme:/opt/jboss/keycloak/themes/quantimage-v2
-      - ./keycloak/QuantImage-v2-realm.json:/QuantImage-v2-realm.json
-      - ./keycloak/startup-scripts:/opt/jboss/startup-scripts
-      - ./keycloak/exports:/tmp/export
-      - ./keycloak/export-realm.sh:/opt/jboss/tools/export-realm.sh
-    depends_on:
-      - keycloak-db
-    command: [ "-b", "0.0.0.0","-Dkeycloak.profile=preview","-Dkeycloak.migration.strategy=IGNORE_EXISTING" ]
+  # keycloak:
+  #   image: quay.io/keycloak/keycloak:16.1.1
+  #   env_file:
+  #     - env_files/common.env
+  #     - env_files/keycloak.env
+  #   environment:
+  #     DB_ADDR: keycloak-db
+  #   secrets:
+  #     - keycloak-db-user-password
+  #     - keycloak-admin-password
+  #     - quantimage2-admin-password
+  #   volumes:
+  #     - ./keycloak/quantimage2_theme:/opt/jboss/keycloak/themes/quantimage-v2
+  #     - ./keycloak/QuantImage-v2-realm.json:/QuantImage-v2-realm.json
+  #     - ./keycloak/startup-scripts:/opt/jboss/startup-scripts
+  #     - ./keycloak/exports:/tmp/export
+  #     - ./keycloak/export-realm.sh:/opt/jboss/tools/export-realm.sh
+  #   depends_on:
+  #     - keycloak-db
+  #   command: [ "-b", "0.0.0.0","-Dkeycloak.profile=preview","-Dkeycloak.migration.strategy=IGNORE_EXISTING" ]
 
-  keycloak-db:
-    image: postgres
-    env_file:
-      - env_files/keycloak.env
-    secrets:
-      - keycloak-db-user-password
-    volumes:
-      - keycloak-db-data:/var/lib/postgresql/data
+  # keycloak-db:
+  #   image: postgres
+  #   env_file:
+  #     - env_files/keycloak.env
+  #   secrets:
+  #     - keycloak-db-user-password
+  #   volumes:
+  #     - keycloak-db-data:/var/lib/postgresql/data
 
   ohif:
     image: ohif/viewer:v4.12.35.19437
@@ -124,10 +124,10 @@ secrets:
     file: secrets/db_root_password
   db-user-password:
     file: secrets/db_user_password
-  keycloak-db-user-password:
-    file: secrets/keycloak_db_user_password
-  keycloak-admin-password:
-    file: secrets/keycloak_admin_password
+  # keycloak-db-user-password:
+  #   file: secrets/keycloak_db_user_password
+  # keycloak-admin-password:
+  #   file: secrets/keycloak_admin_password
   quantimage2-admin-password:
     file: secrets/quantimage2_admin_password
 
@@ -136,4 +136,4 @@ volumes:
   backend-db:
   pma-sessions:
   tasks-db:
-  keycloak-db-data:
+  # keycloak-db-data:
