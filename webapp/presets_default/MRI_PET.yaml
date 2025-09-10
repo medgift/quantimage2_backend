@@ -2,6 +2,7 @@ general:
   padding: 10
   submodalities: True
   result_format: "long"
+  combine_segmentation: False
   additional_dicom_tags:
     - "SeriesInstanceUID"
     - "SeriesDescription"

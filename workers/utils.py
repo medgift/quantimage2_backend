@@ -297,3 +297,23 @@ def compute_predictions(X, model, patients):
         predictions_probabilities[patient] = {"probabilities": prob.tolist()}
 
     return predictions, predictions_probabilities
+
+def compute_risk_scores(X, model, patients):
+    risk_scores = {}
+    model_risk_scores = model.predict(X)
+    
+    # Check if this is an IPCRidge model - these predict survival times, not hazard ratios
+    model_name = model.best_estimator_['analyzer'].__class__.__name__
+    
+    for patient, pred in zip(patients, model_risk_scores):
+        if model_name == 'IPCRidge':
+            # IPCRidge outputs survival times - convert to risk scores by negating
+            # Higher survival time = lower risk, so we negate to get risk scores
+            risk_score = -pred.item()
+        else:
+            # CoxPH/Coxnet output log hazard ratios - higher values = higher risk
+            risk_score = pred.item()
+            
+        risk_scores[patient] = {"risk_score": risk_score}
+
+    return risk_scores

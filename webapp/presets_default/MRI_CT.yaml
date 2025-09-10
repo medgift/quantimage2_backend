@@ -52,10 +52,6 @@ mask_preprocessing:
 
 feature_extraction:
   MR_T1Pre:
-    riesz:
-      extractor0:
-        RieszOrder: 1
-        RieszScales: 4
     pyradiomics:
       original:
         imageType:
@@ -75,10 +71,6 @@ feature_extraction:
           label: 1
 
   MR_T1Venous:
-    riesz:
-      extractor0:
-        RieszOrder: 1
-        RieszScales: 4
     pyradiomics:
       original:
         imageType:
@@ -98,10 +90,6 @@ feature_extraction:
           label: 1
 
   MR_T2map:
-    riesz:
-      extractor0:
-        RieszOrder: 1
-        RieszScales: 4
     pyradiomics:
       original:
         imageType:
@@ -121,10 +109,6 @@ feature_extraction:
           label: 1
 
   MR_T2:
-    riesz:
-      extractor0:
-        RieszOrder: 1
-        RieszScales: 4
     pyradiomics:
       original:
         imageType:
@@ -144,10 +128,6 @@ feature_extraction:
           label: 1
 
   MR_ADC:
-    riesz:
-      extractor0:
-        RieszOrder: 1
-        RieszScales: 4
     pyradiomics:
       original:
         imageType:
@@ -167,10 +147,6 @@ feature_extraction:
           label: 1
 
   CT:
-    riesz:
-      extractor0:
-        RieszOrder: 1
-        RieszScales: 4
     pyradiomics:
       original:
         imageType:
