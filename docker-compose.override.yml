@@ -1,5 +1,3 @@
-version: '3.9'
-
 # Host mappings
 x-host-mappings: &host-mappings
   extra_hosts:
