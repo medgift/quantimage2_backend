@@ -30,16 +30,16 @@ services:
       - default
       - prod
 
-  # keycloak:
-  #   environment:
-  #     - PROXY_ADDRESS_FORWARDING=true
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.docker.network=prod"
-  #     - "traefik.http.routers.quantimage2-backend-keycloak.rule=Host(`${TRAEFIK_URL_KEYCLOAK}`)"
-  #   networks:
-  #     - default
-  #     - prod
+  keycloak:
+    environment:
+      - PROXY_ADDRESS_FORWARDING=true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=prod"
+      - "traefik.http.routers.quantimage2-backend-keycloak.rule=Host(`${TRAEFIK_URL_KEYCLOAK}`)"
+    networks:
+      - default
+      - prod
 
   ohif:
     labels:
@@ -84,6 +84,27 @@ services:
       # Make it small
       GZIP_LEVEL: 9
 
+  backup-database-monthly:
+    image: fradelg/mysql-cron-backup:1.13.1
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ${DB_BACKUP_DIRECTORY}/monthly:/backup
+    secrets:
+      - db-user-password
+    env_file:
+      - env_files/common.env
+    environment:
+      MYSQL_HOST: db
+      MYSQL_PASS_FILE: /run/secrets/db-user-password
+      MYSQLDUMP_OPTS: --no-tablespaces
+      MAX_BACKUPS: 30                 # Keep last 12 monthly backups
+      INIT_BACKUP: 1
+      CRON_TIME: 0 3 1 * *            # First day of every month at 03:00
+      GZIP_LEVEL: 9
+
   backup-data:
     image: offen/docker-volume-backup:v2.35.0
     restart: unless-stopped
@@ -96,6 +117,19 @@ services:
       BACKUP_FILENAME: backup-%Y-%m-%dT%H-%M-%S.tar.gz
       BACKUP_PRUNING_PREFIX: backup-
       BACKUP_RETENTION_DAYS: 30
+
+  backup-data-monthly:
+    image: offen/docker-volume-backup:v2.35.0
+    restart: unless-stopped
+    volumes:
+      - backend-data:/backup/quantimage2-data:ro
+      - tasks-db:/backup/tasks-db:ro
+      - ${DATA_BACKUP_DIRECTORY}/monthly:/archive
+    environment:
+      BACKUP_CRON_EXPRESSION: 0 3 1 * *         # First day of each month at 03:00
+      BACKUP_FILENAME: backup-monthly-%Y-%m.tar.gz
+      BACKUP_PRUNING_PREFIX: backup-monthly-
+      # BACKUP_RETENTION_DAYS: 365                # Keep up to 1 year of monthly backups
 
 networks:
   prod:

@@ -1,22 +1,22 @@
 # Code formatter
-black
+black==24.8.0
+
+# Debug
+pydevd-pycharm==233.13135.95
+ptvsd==4.3.2
 
 # Eventlet
 eventlet==0.33.3
 
 # Multipart handler
-requests-toolbelt
-
-# Debug
-pydevd-pycharm~=233.13135.95
-ptvsd
+requests-toolbelt==1.0.0
 
 # Flask
-Flask<2.0
-Flask-SQLAlchemy
-Flask-CORS
-Flask-SocketIO<5
-Flask-Compress
+Flask==1.1.2
+Flask-SQLAlchemy==2.5.1
+Flask-CORS==5.0.0
+Flask-SocketIO==4.3.2
+Flask-Compress==1.15
 
 # itsdangerous (for flask compatibility)
 itsdangerous==2.0.1
@@ -37,51 +37,51 @@ Celery==5.5.0
 redis==5.2.1
 
 # HTTP requests handler
-requests
+requests==2.32.4
 
 # Keycloak
 python-keycloak==3.6.1
 
 # SQLAlchemy
-SQLAlchemy<1.4
+SQLAlchemy==1.3.24
 
 # Alembic
-alembic
+alembic==1.14.1
 
 # MySQL
-mysqlclient
+mysqlclient==2.2.7
 
 # Hashing
-passlib
+passlib==1.7.4
 
 # JSON
-simplejson
+simplejson==3.20.1
 
 # Numpy
-numpy
+numpy==1.23.5
 
 # PyYAML
-pyyaml
+pyyaml==6.0.2
 
 # Timing
-ttictoc
+ttictoc==0.5.6
 
 # ML
-scikit-learn
-scikit-survival
-pandas<2.0
+scikit-learn==1.3.2
+scikit-survival==0.22.2
+pandas==1.5.3
 
 # Iteration
-more-itertools
+more-itertools==10.5.0
 
 # Tables (HDF5)
-tables
+tables==3.8.0
 
 # Read Docker Secrets
-get-docker-secret
+get-docker-secret==2.0.0
 
 # Path & filename validation
-pathvalidate
+pathvalidate==3.2.1
 
 # model comparison
-mlxtend
+mlxtend==0.23.4
