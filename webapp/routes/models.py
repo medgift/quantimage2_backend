@@ -18,10 +18,6 @@ from service.feature_extraction import get_album_details
 from service.machine_learning import train_model, model_compare_permuation_test
 from sklearn.metrics import roc_curve
 
-# Note: Plotly imports kept for potential future use
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import plotly.io as pio
 
 # Define blueprint
 bp = Blueprint(__name__, "models")
