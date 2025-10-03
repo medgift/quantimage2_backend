@@ -3,7 +3,6 @@ import traceback
 import csv
 import json
 import io
-import base64
 import math
 
 import pandas as pd
@@ -189,7 +188,68 @@ def plot_test_predictions(id):
     model_ids = [int(mid) for mid in model_ids]
     print("Final model_ids:", model_ids)  # Debug print
 
-    # Prepare data structure for frontend Plotly components
+    # Check model type from first model to determine plot type
+    first_model = Model.find_by_id(model_ids[0])
+    if not first_model:
+        return jsonify({"error": f"Model {model_ids[0]} not found"}), 404
+    
+    label_category = LabelCategory.find_by_id(first_model.label_category_id)
+    is_survival = label_category.label_type == "Survival"
+    
+    if is_survival:
+        return _get_survival_predictions_data(model_ids, "test")
+    else:
+        return _get_classification_predictions_data(model_ids, "test")
+
+
+@bp.route("/models/<id>/plot-train-predictions", methods=["GET", "POST"])
+def plot_train_predictions(id):
+    if request.method == "POST":
+        # Get additional model ID from request body
+        print("Request JSON:", request.json)  # Debug print
+        model_ids_data = request.json.get('model_ids', [])
+        print("Model IDs data:", model_ids_data)  # Debug print
+
+        # Handle both string and array formats
+        if isinstance(model_ids_data, str):
+            model_ids = [x.strip() for x in model_ids_data.split(',') if x.strip()]
+        elif isinstance(model_ids_data, list):
+            model_ids = [str(x).strip() for x in model_ids_data if str(x).strip()]
+        else:
+            model_ids = []
+    else:
+        # Handle GET request - split the URL parameter if it contains commas
+        model_ids = [x.strip() for x in id.split(',') if x.strip()]
+
+    # Convert model IDs to integers
+    model_ids = [int(mid) for mid in model_ids]
+    print("Final model_ids:", model_ids)  # Debug print
+
+    # Check model type from first model to determine plot type
+    first_model = Model.find_by_id(model_ids[0])
+    if not first_model:
+        return jsonify({"error": f"Model {model_ids[0]} not found"}), 404
+    
+    label_category = LabelCategory.find_by_id(first_model.label_category_id)
+    is_survival = label_category.label_type == "Survival"
+    
+    if is_survival:
+        return _get_survival_predictions_data(model_ids, "train")
+    else:
+        return _get_classification_predictions_data(model_ids, "train")
+
+
+def _get_classification_predictions_data(model_ids, data_type='test'):
+    """
+    Helper function to extract classification prediction data for frontend plotting.
+    
+    Args:
+        model_ids: List of model IDs
+        data_type: 'test' or 'train'
+        
+    Returns:
+        JSON response with prediction data for all models
+    """
     models_data = []
     
     for model_id in model_ids:
@@ -197,9 +257,15 @@ def plot_test_predictions(id):
         if not model:
             return jsonify({"error": f"Model {model_id} not found"}), 404
             
-        # Get the test predictions values
-        test_predictions = model.test_predictions
-        test_probabilities = model.test_predictions_probabilities
+        # Get the appropriate predictions based on data_type
+        if data_type == 'test':
+            predictions = model.test_predictions
+            probabilities = model.test_predictions_probabilities
+            metrics = model.test_metrics
+        else:  # train
+            predictions = model.train_predictions
+            probabilities = model.train_predictions_probabilities
+            metrics = model.training_metrics
 
         # Create dictionary to store ground truth labels
         ground_truth = {}
@@ -210,9 +276,9 @@ def plot_test_predictions(id):
 
         # Prepare patient data for this model
         patients_data = []
-        for patient_id in test_predictions.keys():
-            pred = test_predictions[patient_id]["prediction"]
-            prob = test_probabilities[patient_id]["probabilities"][1]
+        for patient_id in predictions.keys():
+            pred = predictions[patient_id]["prediction"]
+            prob = probabilities[patient_id]["probabilities"][1]
             gt = ground_truth.get(patient_id, None)
 
             if gt is not None:
@@ -223,9 +289,8 @@ def plot_test_predictions(id):
                     "ground_truth": gt
                 })
 
-        # Get metrics from the model
-        test_metrics = model.test_metrics
-        auc_value = test_metrics.get('auc', {}).get('mean', 0) if test_metrics else 0
+        # Get AUC value
+        auc_value = metrics.get('auc', {}).get('mean', 0) if metrics else 0
 
         # Add model data to response
         models_data.append({
@@ -233,7 +298,81 @@ def plot_test_predictions(id):
             "model_name": f"Model {model_id}",
             "patients": patients_data,
             "auc": auc_value,
-            "metrics": test_metrics
+            "metrics": metrics,
+            "data_type": data_type
+        })
+
+    return jsonify(models_data)
+
+
+def _get_survival_predictions_data(model_ids, data_type='test'):
+    """
+    Helper function to extract survival prediction data for frontend plotting.
+    
+    Args:
+        model_ids: List of model IDs
+        data_type: 'test' or 'train'
+        
+    Returns:
+        JSON response with prediction data for all models
+    """
+    models_data = []
+    
+    for model_id in model_ids:
+        model = Model.find_by_id(model_id)
+        if not model:
+            return jsonify({"error": f"Model {model_id} not found"}), 404
+            
+        # Get the appropriate predictions based on data_type
+        if data_type == 'test':
+            predictions = model.test_predictions
+            metrics = model.test_metrics
+        else:  # train
+            predictions = model.train_predictions
+            metrics = model.training_metrics
+
+        # Create dictionary to store ground truth labels (Time and Event)
+        ground_truth = {}
+        labels = Label.find_by_label_category(model.label_category_id)
+        for label in labels:
+            # For survival: {"Time": "123.4", "Event": "1"}
+            time_value = label.label_content.get("Time", "")
+            event_value = label.label_content.get("Event", "")
+            if time_value and event_value:
+                try:
+                    ground_truth[label.patient_id] = {
+                        "time": float(time_value),
+                        "event": int(event_value)
+                    }
+                except (ValueError, TypeError):
+                    continue
+
+        # Prepare patient data for this model
+        patients_data = []
+        for patient_id, pred_data in predictions.items():
+            risk_score = pred_data.get("risk_score")
+            gt = ground_truth.get(patient_id)
+
+            if gt is not None and risk_score is not None:
+                patients_data.append({
+                    "patient_id": patient_id,
+                    "risk_score": risk_score,
+                    "time": gt["time"],
+                    "event": gt["event"]
+                })
+
+        # Get C-index value
+        c_index_value = metrics.get('c_index', {}).get('mean', 0) if metrics else 0
+
+        # Add model data to response
+        models_data.append({
+            "model_id": model_id,
+            "model_name": f"Model {model_id}",
+            "patients": patients_data,
+            "c_index": c_index_value,
+            "metrics": metrics,
+            "data_type": data_type,
+            "model_type": "survival"
         })
 
     return jsonify(models_data)
@@ -539,78 +678,6 @@ def get_roc_curve_train_data(id):
         traceback.print_exc()
         return jsonify({"error": "Internal server error during training ROC calculation"}), 500
     
-
-@bp.route("/models/<id>/plot-train-predictions", methods=["GET", "POST"])
-def plot_train_predictions(id):
-    if request.method == "POST":
-        # Get additional model ID from request body
-        print("Request JSON:", request.json)  # Debug print
-        model_ids_data = request.json.get('model_ids', [])
-        print("Model IDs data:", model_ids_data)  # Debug print
-
-        # Handle both string and array formats
-        if isinstance(model_ids_data, str):
-            model_ids = [x.strip() for x in model_ids_data.split(',') if x.strip()]
-        elif isinstance(model_ids_data, list):
-            model_ids = [str(x).strip() for x in model_ids_data if str(x).strip()]
-        else:
-            model_ids = []
-    else:
-        # Handle GET request - split the URL parameter if it contains commas
-        model_ids = [x.strip() for x in id.split(',') if x.strip()]
-
-    # Convert model IDs to integers
-    model_ids = [int(mid) for mid in model_ids]
-    print("Final model_ids:", model_ids)  # Debug print
-
-    # Prepare data structure for frontend Plotly components
-    models_data = []
-    
-    for model_id in model_ids:
-        model = Model.find_by_id(model_id)
-        if not model:
-            return jsonify({"error": f"Model {model_id} not found"}), 404
-            
-        # Get the train predictions values
-        train_predictions = model.train_predictions
-        train_probabilities = model.train_predictions_probabilities
-
-        # Create dictionary to store ground truth labels
-        ground_truth = {}
-        labels = Label.find_by_label_category(model.label_category_id)
-        for label in labels:
-            label_value = next(iter(label.label_content.values()))
-            ground_truth[label.patient_id] = int(label_value)
-
-        # Prepare patient data for this model
-        patients_data = []
-        for patient_id in train_predictions.keys():
-            pred = train_predictions[patient_id]["prediction"]
-            prob = train_probabilities[patient_id]["probabilities"][1]
-            gt = ground_truth.get(patient_id, None)
-            
-            if gt is not None:
-                patients_data.append({
-                    "patient_id": patient_id,
-                    "probability": prob,
-                    "prediction": pred,
-                    "ground_truth": gt
-                })
-
-        # Get metrics from the model
-        training_metrics = model.training_metrics
-        auc_value = training_metrics.get('auc', {}).get('mean', 0) if training_metrics else 0
-
-        # Add model data to response
-        models_data.append({
-            "model_id": model_id,
-            "model_name": f"Model {model_id}",
-            "patients": patients_data,
-            "auc": auc_value,
-            "metrics": training_metrics
-        })
-
-    return jsonify(models_data)
 
 @bp.route("/models/<id>/download-test-bootstrap-values")
 def download_test_bootstrap_values(id):
