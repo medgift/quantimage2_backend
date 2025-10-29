@@ -44,10 +44,6 @@ RUN pip install --no-cache-dir numpy==1.23.5
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install python-gdcm from a working version first
-RUN pip install --no-cache-dir python-gdcm==3.0.24 || \
-    pip install --no-cache-dir --only-binary=python-gdcm python-gdcm
-
 # Bust cache if version of okapy has changed
 ADD https://api.github.com/repos/voreille/okapy/git/refs/heads/quantimage2 version-okapy.json
 

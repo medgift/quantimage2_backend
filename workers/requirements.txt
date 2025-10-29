@@ -71,3 +71,6 @@ pygtail==0.14.0
 
 # Read Docker Secrets
 get-docker-secret==2.0.0
+
+# Okapy
+python-gdcm==3.0.24.1
