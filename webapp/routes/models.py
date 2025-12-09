@@ -272,7 +272,13 @@ def _get_classification_predictions_data(model_ids, data_type='test'):
         labels = Label.find_by_label_category(model.label_category_id)
         for label in labels:
             label_value = next(iter(label.label_content.values()))
-            ground_truth[label.patient_id] = int(label_value)
+            # Skip empty or None labels
+            if label_value and label_value != '':
+                try:
+                    ground_truth[label.patient_id] = int(label_value)
+                except ValueError:
+                    print(f"Warning: Could not convert label value '{label_value}' to int for patient {label.patient_id}")
+                    continue
 
         # Prepare patient data for this model
         patients_data = []
@@ -416,6 +422,9 @@ def process_single_model_roc(model_id, data_type='test'):
         for label in labels:
             try:
                 label_value = next(iter(label.label_content.values()))
+                # Skip empty or None labels
+                if not label_value or label_value == '':
+                    continue
                 gt_value = int(label_value)
                 if gt_value in [0, 1]:
                     ground_truth[label.patient_id] = gt_value
