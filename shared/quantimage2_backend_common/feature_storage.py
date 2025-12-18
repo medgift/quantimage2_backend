@@ -16,6 +16,11 @@ OKAPY_FEATURE_VALUE_FIELD = "feature_value"
 def store_features(feature_extraction_task_id, feature_extraction_id, features):
 
     feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
+    
+    # If extraction was deleted (cancelled), skip storing features
+    if not feature_extraction:
+        print(f"Feature extraction {feature_extraction_id} not found (likely cancelled), skipping storage")
+        return
 
     # Store or retrieve metadata (modalities, ROIs & feature definitions) first
     modalities = list(features[OKAPY_MODALITY_FIELD].unique())

@@ -262,6 +262,11 @@ def send_extraction_status_message(
     feature_extraction_id, celery, socketio, send_extraction=False
 ):
     feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
+    
+    # If extraction was deleted (cancelled), silently skip status update
+    if not feature_extraction:
+        print(f"Feature extraction {feature_extraction_id} not found (likely cancelled)")
+        return
 
     print("Send extraction is  " + str(send_extraction))
     if send_extraction:

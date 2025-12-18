@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request, g, current_app, Response
+from celery.result import AsyncResult
 from quantimage2_backend_common.const import (
     FIRSTORDER_REPLACEMENT_SUV,
     PET_MODALITY,
@@ -74,6 +75,93 @@ def extraction_by_id(id):
         feature_extraction.update(**request.json)
 
         return jsonify(format_extraction(feature_extraction, tasks=True))
+
+
+# Cancel a feature extraction in progress
+@bp.route("/extractions/<id>/cancel", methods=["POST"])
+def cancel_extraction(id):
+    from quantimage2_backend_common.models import db, FeatureValue, FeatureExtractionTask
+    
+    user_id = g.user
+    
+    # Get the feature extraction to cancel
+    feature_extraction = FeatureExtraction.find_by_id(id)
+    
+    if not feature_extraction:
+        return jsonify({"error": "Feature extraction not found"}), 404
+    
+    # Verify the user owns this extraction
+    if feature_extraction.user_id != user_id:
+        return jsonify({"error": "Unauthorized"}), 403
+    
+    # Revoke all Celery tasks associated with this extraction (best effort)
+    for task in feature_extraction.tasks:
+        if task.task_id:
+            try:
+                AsyncResult(task.task_id, app=current_app.my_celery).revoke(terminate=True)
+            except Exception as e:
+                current_app.logger.error(f"Error revoking task {task.task_id}: {e}")
+    
+    # Find the previous extraction BEFORE deleting the current one
+    previous_extraction = (
+        FeatureExtraction.query
+        .filter(
+            FeatureExtraction.user_id == user_id,
+            FeatureExtraction.album_id == feature_extraction.album_id,
+            FeatureExtraction.id < feature_extraction.id
+        )
+        .order_by(db.desc(FeatureExtraction.id))
+        .first()
+    )
+    
+    # Clean up cached features file if it exists
+    features_cache_folder = f"extraction-{feature_extraction.id}"
+    features_cache_path = f"{FEATURES_CACHE_BASE_DIR}/{features_cache_folder}"
+    if Path(features_cache_path).exists():
+        try:
+            import shutil
+            shutil.rmtree(features_cache_path)
+            current_app.logger.info(f"Deleted cached features at {features_cache_path}")
+        except Exception as e:
+            current_app.logger.error(f"Error deleting cached features: {e}")
+    
+    # Collect task IDs before deleting
+    task_ids = [task.id for task in feature_extraction.tasks]
+    
+    # Delete in correct order: FeatureValues first, then Tasks, then Extraction
+    # Use raw SQL deletes to avoid session tracking issues
+    if task_ids:
+        # Delete all feature values associated with these tasks
+        db.session.execute(
+            db.text("DELETE FROM feature_value WHERE feature_extraction_task_id IN :task_ids"),
+            {"task_ids": tuple(task_ids)}
+        )
+        
+        # Delete all extraction tasks
+        db.session.execute(
+            db.text("DELETE FROM feature_extraction_task WHERE feature_extraction_id = :extraction_id"),
+            {"extraction_id": feature_extraction.id}
+        )
+    
+    # Delete the feature extraction itself
+    db.session.execute(
+        db.text("DELETE FROM feature_extraction WHERE id = :extraction_id"),
+        {"extraction_id": feature_extraction.id}
+    )
+    
+    db.session.commit()
+    
+    # Return the previous extraction or None
+    if previous_extraction:
+        return jsonify({
+            "cancelled": True,
+            "previous_extraction": format_extraction(previous_extraction, tasks=True)
+        })
+    else:
+        return jsonify({
+            "cancelled": True,
+            "previous_extraction": None
+        })
 
 
 # Get feature details for a given extraction
