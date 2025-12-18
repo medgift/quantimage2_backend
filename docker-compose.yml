@@ -21,7 +21,7 @@ services:
     build:
       context: .
       dockerfile: ./workers/Dockerfile
-    image: quantimage2_backend_celery:3.0
+    image: quantimage2_backend_celery:3.1
     env_file:
       - env_files/common.env
       - env_files/workers.env
@@ -33,7 +33,7 @@ services:
     command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=prefork", "--hostname=extraction@%h", "--queues=extraction"]
 
   celery_training:
-    image: quantimage2_backend_celery:3.0
+    image: quantimage2_backend_celery:3.1
     env_file:
       - env_files/common.env
       - env_files/workers.env
