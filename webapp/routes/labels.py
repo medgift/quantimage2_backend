@@ -73,9 +73,12 @@ def edit_label_category(label_category_id, name):
 
 
 def delete_label_category(label_category_id):
-
+    # First, delete all labels associated with this category
+    Label.query.filter_by(label_category_id=label_category_id).delete()
+    
+    # Then delete the category itself
     category = LabelCategory.delete_by_id(label_category_id)
-
+    
     return jsonify(category.to_dict())
 
 

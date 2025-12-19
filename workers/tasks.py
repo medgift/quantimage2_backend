@@ -372,6 +372,19 @@ def run_extraction(
 
         feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
 
+        # Early exit if extraction was cancelled before we start
+        if not feature_extraction:
+            print(
+                f"Feature extraction {feature_extraction_id} not found (cancelled), aborting task"
+            )
+            return {
+                "feature_extraction_task_id": feature_extraction_task_id,
+                "current": steps,
+                "total": steps,
+                "completed": steps,
+                "status_message": "Cancelled",
+            }
+
         if not feature_extraction_task:
             raise Exception("Didn't find the task in the DB!!!")
 
@@ -389,6 +402,20 @@ def run_extraction(
             steps,
             status_message,
         )
+
+        # Check again before downloading (user might cancel during status update)
+        feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
+        if not feature_extraction:
+            print(
+                f"Feature extraction {feature_extraction_id} not found (cancelled), aborting before download"
+            )
+            return {
+                "feature_extraction_task_id": feature_extraction_task_id,
+                "current": steps,
+                "total": steps,
+                "completed": steps,
+                "status_message": "Cancelled",
+            }
 
         # Download study and write files to directory
         dicom_dir = download_study(album_token, study_uid, album_id)
@@ -420,10 +447,11 @@ def run_extraction(
         status_message = "Extraction Complete"
 
         # TODO Find a better way to do this, not from the task level hopefully
-        # Check if parent is done
-        extraction_status = fetch_extraction_result(
-            celery, feature_extraction.result_id
-        )
+        # Check if parent is done (skip if extraction was cancelled/deleted)
+        if feature_extraction:
+            extraction_status = fetch_extraction_result(
+                celery, feature_extraction.result_id
+            )
 
         return {
             "feature_extraction_task_id": feature_extraction_task_id,
