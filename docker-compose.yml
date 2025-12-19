@@ -14,8 +14,6 @@ services:
       - db-user-password
     volumes:
       - backend-data:/quantimage2-data
-    deploy:
-      replicas: 4  # Run 4 instances for concurrency
 
   celery_extraction:
     build:

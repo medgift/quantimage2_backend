@@ -663,14 +663,6 @@ def extract_all_features(
             status_message,
         )
 
-        # Check if extraction was cancelled before starting heavy computation
-        feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
-        if not feature_extraction:
-            print(
-                f"Feature extraction {feature_extraction_id} not found (cancelled), aborting task early"
-            )
-            return {}
-
         # Get results directly from Okapy
         converter = ExtractorConverter.from_params(config_path)
 
