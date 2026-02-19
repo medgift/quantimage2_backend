@@ -344,7 +344,13 @@ def train_model(
         db.session.remove()
 
 
-@celery.task(name="quantimage2tasks.extract", bind=True)
+@celery.task(
+    name="quantimage2tasks.extract",
+    bind=True,
+    time_limit=7200,  # Hard limit: 2 hours - task will be killed after this
+    soft_time_limit=6600,  # Soft limit: 1 hour 50 minutes - SoftTimeLimitExceeded exception raised
+    track_started=True,  # Update task state to STARTED immediately when task begins execution
+)
 def run_extraction(
     self,
     feature_extraction_id,
