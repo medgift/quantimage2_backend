@@ -91,6 +91,8 @@ def model(id):
             joinedload(Model.label_category),
         ),
     )
+    if the_model is None:
+        return jsonify({"error": "Model not found"}), 404
     formatted_model = format_model(the_model)
     model_path = the_model.model_path
     try:
@@ -194,6 +196,8 @@ def plot_test_predictions(id):
         return jsonify({"error": f"Model {model_ids[0]} not found"}), 404
     
     label_category = LabelCategory.find_by_id(first_model.label_category_id)
+    if not label_category:
+        return jsonify({"error": f"Label category {first_model.label_category_id} not found"}), 404
     is_survival = label_category.label_type == "Survival"
     
     if is_survival:
@@ -231,6 +235,8 @@ def plot_train_predictions(id):
         return jsonify({"error": f"Model {model_ids[0]} not found"}), 404
     
     label_category = LabelCategory.find_by_id(first_model.label_category_id)
+    if not label_category:
+        return jsonify({"error": f"Label category {first_model.label_category_id} not found"}), 404
     is_survival = label_category.label_type == "Survival"
     
     if is_survival:
@@ -806,9 +812,9 @@ def download_feature_importances(id):
     test_feature_importance = model.test_feature_importance
 
     if not test_feature_importance:
-        df = pd.DataFrame.from_dict([{"feature_importance_results": "Feature importance not saved for this model - please retrain."}]).T.reset_index()
+        df = pd.DataFrame([{"feature_importance_results": "Feature importance not saved for this model - please retrain."}]).T.reset_index()
     else:
-        df = pd.DataFrame.from_dict([model.test_feature_importance]).T.reset_index()
+        df = pd.DataFrame([model.test_feature_importance]).T.reset_index()
         df.columns = ["feature_name", "feature_importance_value"]
 
     # CSV file name

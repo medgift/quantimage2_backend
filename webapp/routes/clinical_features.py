@@ -23,14 +23,14 @@ def before_request():
     validate_decorate(request)
 
 
-def load_df_from_request_dict(request_dict: Dict) -> pd.core.frame.DataFrame:
+def load_df_from_request_dict(request_dict: Dict) -> pd.DataFrame:
     clinical_features_list = []
 
     for patient_id, features in request_dict.items():
         features[PATIENT_ID_FIELD] = patient_id
         clinical_features_list.append(features)
 
-    clinical_features_df = pd.DataFrame.from_dict(clinical_features_list)
+    clinical_features_df = pd.DataFrame(clinical_features_list)
     # Replace N/A or empty strings by Nones
     # TODO - Implement smarter way to detect N/A values (e.g. regex)
     clinical_features_df.replace(["", "N/A"], None, inplace=True)

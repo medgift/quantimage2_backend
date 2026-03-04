@@ -1,8 +1,10 @@
 import json
+import logging
 import math
 import os
 from enum import Enum
 
+logger = logging.getLogger(__name__)
 
 # Exceptions
 from pathlib import Path
@@ -89,20 +91,70 @@ def format_extraction(extraction, tasks=False):
     return extraction_dict
 
 
-# Format feature tasks
+# Format feature tasks — batch-fetches all Celery results in ONE Redis MGET
+# instead of N sequential HTTP requests to Flower (was ~70ms × N = 10-15s for large albums)
 def format_feature_tasks(feature_tasks):
-    # Gather the feature tasks
-    feature_task_list = []
+    if not feature_tasks:
+        return []
 
-    if feature_tasks:
-        for feature_task in feature_tasks:
-            formatted_feature_task = format_feature_task(feature_task)
-            feature_task_list.append(formatted_feature_task)
+    # 1. Collect task IDs that exist
+    task_ids = [t.task_id for t in feature_tasks if t.task_id]
+
+    # 2. Batch-fetch ALL results from Redis in a single round-trip
+    batch_results = {}
+    if task_ids:
+        tic()
+        try:
+            # celery.backend.get_many() issues a single Redis MGET pipeline
+            for task_id, meta in celery.backend.get_many(task_ids, timeout=10):
+                result_obj = CustomResult()
+                if meta:
+                    result_obj.status = meta.get("status", celerystates.PENDING)
+                    result_obj.result = meta.get("result")
+                else:
+                    result_obj.status = celerystates.PENDING
+                    result_obj.result = None
+                batch_results[task_id] = result_obj
+        except Exception as e:
+            logger.warning("Batch task result fetch failed (%s), falling back to per-task requests", e)
+            for task_id in task_ids:
+                batch_results[task_id] = fetch_task_result(task_id)
+        elapsed = toc()
+        logger.debug("Batch-fetched %d task results in %.3fs", len(task_ids), elapsed)
+
+    # 3. Format each task using the pre-fetched result
+    feature_task_list = []
+    for feature_task in feature_tasks:
+        result_obj = batch_results.get(feature_task.task_id) if feature_task.task_id else None
+        feature_task_list.append(_format_feature_task_with_result(feature_task, result_obj))
 
     return feature_task_list
 
 
-# Formate feature task
+def _format_feature_task_with_result(feature_task, result_obj):
+    """Format a single feature task given a pre-fetched CustomResult (or None)."""
+    status = celerystates.PENDING
+    status_message = StatusMessage.WAITING_TO_START.value
+
+    if result_obj is not None:
+        result = result_obj.result
+        if result:
+            status = result_obj.status
+            if status != celerystates.FAILURE:
+                status_message = task_status_message_from_result(result)
+            else:
+                status_message = result
+
+    return {
+        "id": feature_task.id,
+        "updated_at": feature_task.updated_at.strftime(DATE_FORMAT),
+        "status": status,
+        "status_message": status_message,
+        "study_uid": feature_task.study_uid,
+    }
+
+
+# Format a single feature task (kept for backward compatibility; prefer format_feature_tasks for bulk)
 def format_feature_task(feature_task):
     status = celerystates.PENDING
     status_message = StatusMessage.WAITING_TO_START.value
@@ -126,15 +178,13 @@ def format_feature_task(feature_task):
             else:
                 status_message = result
 
-    response_dict = {
+    return {
         "id": feature_task.id,
         "updated_at": feature_task.updated_at.strftime(DATE_FORMAT),
         "status": status,
         "status_message": status_message,
         "study_uid": feature_task.study_uid,
     }
-
-    return response_dict
 
 
 # Read Config File

@@ -33,6 +33,22 @@ def create_app():
     app.config["SECRET-KEY"] = "cookies are delicious!"
     app.config["DEBUG"] = debug
 
+    # Increase connection pool size to handle concurrent eventlet greenlets.
+    # Default pool_size=5 means only 5 simultaneous DB queries — concurrent users
+    # beyond that block waiting for a free connection.
+    # pool_pre_ping detects stale connections (prevents "MySQL server has gone away"
+    # errors after MySQL closes idle connections past its wait_timeout).
+    # NOTE: pool_size + max_overflow (= 30) must stay below MySQL's max_connections
+    # (default 151). If running multiple services against the same MySQL instance,
+    # divide the budget accordingly.
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_size": 10,        # was default 5
+        "max_overflow": 20,     # extra connections under burst load (total cap: 30)
+        "pool_timeout": 30,     # raise error rather than hang forever
+        "pool_pre_ping": True,  # test connection health before each use
+        "pool_recycle": 1800,   # recycle connections every 30min to avoid timeout
+    }
+
     app.config["CELERY_BROKER_URL"] = os.environ["CELERY_BROKER_URL"]
     app.config["CELERY_RESULT_BACKEND"] = os.environ["CELERY_RESULT_BACKEND"]
 

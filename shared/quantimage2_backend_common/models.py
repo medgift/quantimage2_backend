@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import decimal, datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from enum import Enum
 
 import sqlalchemy
@@ -66,7 +66,15 @@ class BaseModel(db.Model):
         return instances
 
     @classmethod
-    def get_or_create(cls, criteria=None, defaults=None):
+    def get_or_create(
+        cls,
+        criteria: Optional[Dict[str, Any]] = None,
+        defaults: Optional[Dict[str, Any]] = None,
+    ):
+        if criteria is None:
+            criteria = {}
+        if defaults is None:
+            defaults = {}
         instance = (
             db.session.query(cls).filter_by(**criteria).with_for_update().one_or_none()
         )
@@ -254,6 +262,21 @@ class FeatureExtraction(BaseModel, db.Model):
     def find_latest_by_user_and_album_id(cls, user_id, album_id):
         query_result = (
             cls.query.filter(cls.user_id == user_id, cls.album_id == album_id)
+            .order_by(db.desc(FeatureExtraction.id))
+            .first()
+        )
+
+        return query_result
+
+    @classmethod
+    def find_latest_by_user_album_and_type(cls, user_id, album_id, extraction_type):
+        """Find the most recent extraction for a user/album filtered by type."""
+        query_result = (
+            cls.query.filter(
+                cls.user_id == user_id,
+                cls.album_id == album_id,
+                cls.extraction_type == extraction_type,
+            )
             .order_by(db.desc(FeatureExtraction.id))
             .first()
         )
@@ -625,9 +648,10 @@ class FeatureValue(BaseModel, db.Model):
         # Transform feature IDs to triplets of Modality ID, ROI ID & Feature Definition ID
         conditions = []
         for feature_id in feature_ids:
-            modality_name, roi_name, feature_name = featureIDMatcher.match(
-                feature_id
-            ).groups()
+            match = featureIDMatcher.match(feature_id)
+            if match is None:
+                continue
+            modality_name, roi_name, feature_name = match.groups()
             conditions.append(
                 (
                     db_modality_map[modality_name],
@@ -748,9 +772,9 @@ class FeatureValue(BaseModel, db.Model):
 
     def to_formatted_dict(self, study_uid=None):
         return {
-            "study_uid": study_uid
-            if study_uid
-            else self.feature_extraction_task.study_uid,
+            "study_uid": (
+                study_uid if study_uid else self.feature_extraction_task.study_uid
+            ),
             "modality": self.modality.name,
             "roi": self.roi.name,
             "name": self.feature_definition.name,
@@ -965,12 +989,14 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         cls, user_id, album_id
     ) -> List[ClinicalFeatureDefinition]:
         return cls.query.filter(cls.user_id == user_id, cls.album_id == album_id).all()
-    
+
     @classmethod
     def find_by_user_id_and_album_id_and_name(
         cls, user_id, album_id, name
-    ) -> List[ClinicalFeatureDefinition]:
-        clinical_feature_definition = cls.query.filter(cls.user_id == user_id, cls.album_id == album_id, cls.name == name).all()
+    ) -> ClinicalFeatureDefinition:
+        clinical_feature_definition = cls.query.filter(
+            cls.user_id == user_id, cls.album_id == album_id, cls.name == name
+        ).all()
         assert len(clinical_feature_definition) == 1
         return clinical_feature_definition[0]
 
@@ -998,10 +1024,11 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         # the bulk update mappings only work if we provide the primary key which is the id column.
         definitions_with_id = []
         for i in definitions_to_update_without_dates:
-            id = ClinicalFeatureDefinition.find_by_user_id_and_album_id_and_name(user_id=i["user_id"], album_id=i["album_id"], name=i["name"]).id
+            id = ClinicalFeatureDefinition.find_by_user_id_and_album_id_and_name(
+                user_id=i["user_id"], album_id=i["album_id"], name=i["name"]
+            ).id
             i["id"] = id
             definitions_with_id.append(i)
-        
 
         db.session.bulk_update_mappings(cls, definitions_with_id)
         db.session.commit()
@@ -1219,11 +1246,11 @@ class Model(BaseModel, db.Model):
 
     # Model metrics (JSON) - Test
     test_metrics = db.Column(db.JSON, nullable=True, unique=False)
-    
+
     # Model test predictions (JSON) - Test
     test_predictions = db.Column(db.JSON, nullable=True, unique=False)
     test_predictions_probabilities = db.Column(db.JSON, nullable=True, unique=False)
-    
+
     # Model training predictions (JSON) - Training
     train_predictions = db.Column(db.JSON, nullable=True, unique=False)
     train_predictions_probabilities = db.Column(db.JSON, nullable=True, unique=False)
@@ -1354,11 +1381,10 @@ class LabelCategory(BaseModel, db.Model):
         from service.feature_extraction import get_studies_from_album
         from routes.features import get_features_cache_or_db
         from flask import g
-        
+
         # Get feature extraction
         feature_extraction = FeatureExtraction.query.filter_by(
-            album_id=self.album_id,
-            user_id=self.user_id
+            album_id=self.album_id, user_id=self.user_id
         ).first()
 
         if not feature_extraction:
@@ -1369,21 +1395,22 @@ class LabelCategory(BaseModel, db.Model):
         _, features_df = get_features_cache_or_db(feature_extraction, studies)
 
         # Get unique patient IDs from features dataframe
-        patient_names = features_df['PatientID'].unique()
-        
+        patient_names = features_df["PatientID"].unique()
+
         print(f"Found {len(patient_names)} patients from features: {patient_names}")
-        
+
         # Create empty labels with correct structure based on label type
         if self.label_type == "Classification":
             empty_content = {"Outcome": "Undefined"}
         else:
             empty_content = {"Time": "Undefined", "Event": "Undefined"}
-        
+
         # Create empty labels for each patient
         labels_to_save = [
-            Label(self.id, patient_name, empty_content) for patient_name in patient_names
+            Label(self.id, patient_name, empty_content)
+            for patient_name in patient_names
         ]
-        
+
         Label.save_labels(self.id, labels_to_save)
 
     def to_dict(self):
@@ -1468,12 +1495,8 @@ class Label(BaseModel, db.Model):
 
     @classmethod
     def find_by_label_category_id(cls, label_category_id):
-        instances = (
-            cls.query.filter_by(label_category_id=label_category_id)
-            .all()
-        )
+        instances = cls.query.filter_by(label_category_id=label_category_id).all()
         return instances
-
 
     def to_dict(self):
         return {

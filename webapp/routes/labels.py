@@ -79,6 +79,9 @@ def delete_label_category(label_category_id):
     # Then delete the category itself
     category = LabelCategory.delete_by_id(label_category_id)
     
+    if category is None:
+        return jsonify({"error": "Label category not found"}), 404
+    
     return jsonify(category.to_dict())
 
 
@@ -91,6 +94,8 @@ def save_labels(label_category_id, labels_dict, pos_label):
 
     # Define the positive label if defined
     category = LabelCategory.find_by_id(label_category_id)
+    if category is None:
+        return jsonify({"error": "Label category not found"}), 404
     if pos_label:
         category.pos_label = pos_label
     category.save_to_db()

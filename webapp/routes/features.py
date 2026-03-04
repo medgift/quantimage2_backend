@@ -1,6 +1,12 @@
+import logging
 from pathlib import Path
 
+import eventlet
+import eventlet.tpool
+
 from flask import Blueprint, jsonify, request, g, current_app, Response
+
+logger = logging.getLogger(__name__)
 from celery.result import AsyncResult
 from quantimage2_backend_common.const import (
     FIRSTORDER_REPLACEMENT_SUV,
@@ -174,12 +180,16 @@ def cancel_extraction(id):
 def extraction_features_by_id(extraction_id):
     token = g.token
 
+    tic()
     extraction = FeatureExtraction.find_by_id(extraction_id)
     album = Album.find_by_album_id(extraction.album_id)
     album_outcome = AlbumOutcome.find_by_album_user_id(extraction.album_id, g.user)
-    studies = get_studies_from_album(extraction.album_id, token)
+    logger.debug("DB lookups took %.3fs", toc())
 
-    header, features_df = get_features_cache_or_db(extraction, studies)
+    # studies is only needed on a cache miss — get_features_cache_or_db handles it internally
+    tic()
+    header, features_df = get_features_cache_or_db(extraction, token)
+    logger.debug("get_features_cache_or_db total took %.3fs", toc())
 
     label_category = None
     labels = []
@@ -189,24 +199,38 @@ def extraction_features_by_id(extraction_id):
         label_category = LabelCategory.find_by_id(album_outcome.outcome_id)
         labels = Label.find_by_label_category(label_category.id)
 
+    # Run all CPU-bound pandas work in a real OS thread via tpool.execute.
+    # This yields the eventlet hub so other concurrent greenlets (other users)
+    # are not blocked while heavy computation runs.
     tic()
-    chart_df = format_chart_data(features_df, label_category, labels)
-    elapsed = toc()
-    print("Formatting & serializing features took", elapsed)
+    chart_df = eventlet.tpool.execute(format_chart_data, features_df, label_category, labels)
+    logger.debug("format_chart_data (tpool) took %.3fs", toc())
 
-    rounded_df = features_df.round(3)
-    rounded_chart_df = chart_df.round(3)
+    tic()
+    rounded_df, rounded_chart_df = eventlet.tpool.execute(
+        lambda: (features_df.round(3), chart_df.round(3))
+    )
+    logger.debug("DataFrame rounding (tpool) took %.3fs", toc())
+
+    tic()
+    features_csv, chart_csv = eventlet.tpool.execute(
+        lambda: (
+            rounded_df.to_csv(index=False),
+            rounded_chart_df.to_csv(index_label="FeatureID"),
+        )
+    )
+    logger.debug("CSV serialization (tpool) took %.3fs", toc())
 
     m = MultipartEncoder(
         fields={
-            "features_tabular": rounded_df.to_csv(index=False),
-            "features_chart": rounded_chart_df.to_csv(index_label="FeatureID"),
+            "features_tabular": features_csv,
+            "features_chart": chart_csv,
         }
     )
     return Response(m.to_string(), mimetype=m.content_type)
 
 
-def get_features_cache_or_db(extraction, studies):
+def get_features_cache_or_db(extraction, token):
     features_cache_folder = f"extraction-{extraction.id}"
     features_cache_path = f"{FEATURES_CACHE_BASE_DIR}/{features_cache_folder}"
     features_file_name = "features.h5"
@@ -215,25 +239,34 @@ def get_features_cache_or_db(extraction, studies):
 
     # Does the features file exist?
     if Path(features_cache_file_path).exists():
+        # read_hdf is disk-bound — run in tpool so event loop stays responsive
         tic()
-        features_df = pandas.read_hdf(features_cache_file_path, features_key)
+        features_df = eventlet.tpool.execute(
+            pandas.read_hdf, features_cache_file_path, features_key
+        )
         header = features_df.columns
-        elapsed = toc()
-        print("Parsing features from cached HDF5 file took", elapsed)
+        logger.debug("Parsing features from cached HDF5 file (tpool) took %.3fs", toc())
     else:
+        # Cache miss — only now fetch studies from Kheops (avoids the HTTP call on every cached request)
+        tic()
+        studies = get_studies_from_album(extraction.album_id, token)
+        logger.debug("get_studies_from_album (Kheops HTTP, cache miss only) took %.3fs", toc())
+
         header, features_df = transform_studies_features_to_df(extraction, studies)
 
-        # Persist features DataFrame for caching
+        # Persist features DataFrame for caching — to_hdf is disk-bound, run in tpool
         tic()
-        os.makedirs(features_cache_path, exist_ok=True)
-        features_df.to_hdf(
-            features_cache_file_path,
-            features_key,
-            "w",
-            format="fixed",
-        )
-        elapsed = toc()
-        print("Serializing features to HDF5 took", elapsed)
+        _cache_path = features_cache_path
+        _cache_file = features_cache_file_path
+        _key = features_key
+        _df = features_df
+
+        def _write_hdf():
+            os.makedirs(_cache_path, exist_ok=True)
+            _df.to_hdf(_cache_file, _key, "w", format="fixed")
+
+        eventlet.tpool.execute(_write_hdf)
+        logger.debug("Serializing features to HDF5 (tpool) took %.3fs", toc())
 
     return header, features_df
 

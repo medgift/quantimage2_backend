@@ -178,13 +178,18 @@ def save_feature_collection(feature_extraction_id, name, feature_ids):
 def get_feature_collection(feature_collection_id):
     collection = FeatureCollection.find_by_id(feature_collection_id)
 
-    return jsonify(collection.format_collection(with_values=True))
+    if collection is None:
+        return jsonify({"error": "Feature collection not found"}), 404
 
-    # return jsonify(collection.to_dict())
+    return jsonify(collection.format_collection(with_values=True))
 
 
 def update_feature_collection(feature_collection_id):
     collection = FeatureCollection.find_by_id(feature_collection_id)
+
+    if collection is None:
+        return jsonify({"error": "Feature collection not found"}), 404
+
     collection.update(**request.json)
 
     return jsonify(collection.format_collection(with_values=True))
@@ -192,4 +197,8 @@ def update_feature_collection(feature_collection_id):
 
 def delete_feature_collection(feature_collection_id):
     deleted_collection = FeatureCollection.delete_by_id(feature_collection_id)
+
+    if deleted_collection is None:
+        return jsonify({"error": "Feature collection not found"}), 404
+
     return jsonify(deleted_collection.format_collection(with_values=True))

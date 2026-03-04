@@ -16,7 +16,7 @@ import pydevd_pycharm
 import requests
 import warnings
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from flask import jsonify
 from flask_socketio import SocketIO
@@ -638,10 +638,10 @@ def extract_all_features(
     config_path: str,
     rois: list,
     feature_extraction_id: int,
-    feature_extraction_task_id: int = None,
-    current_step: int = None,
-    steps: int = None,
-    album_name: str = None,
+    feature_extraction_task_id: Optional[int] = None,
+    current_step: Optional[int] = None,
+    steps: Optional[int] = None,
+    album_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Update the progress of a feature extraction Task
@@ -658,6 +658,12 @@ def extract_all_features(
     """
     try:
         # Status update - PROCESS
+        if feature_extraction_task_id is None or current_step is None or steps is None:
+            raise ValueError(
+                f"extract_all_features requires feature_extraction_task_id, "
+                f"current_step, and steps (got {feature_extraction_task_id}, "
+                f"{current_step}, {steps})"
+            )
         current_step += 1
         status_message = "Processing data"
         update_progress(
