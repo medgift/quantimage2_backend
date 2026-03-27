@@ -104,5 +104,9 @@ webapp/alembic/versions/*
 shared/build
 shared/*.egg-info
 
+# Monitoring logs & reports
+monitoring/logs/
+monitoring/reports/
+
 # Jupyter notebooks
 */.ipynb_checkpoints/
