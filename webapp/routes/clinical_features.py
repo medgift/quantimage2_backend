@@ -13,7 +13,7 @@ from quantimage2_backend_common.models import ClinicalFeatureTypes
 from service.feature_transformation import PATIENT_ID_FIELD
 
 # Define blueprint
-bp = Blueprint(__name__, "clinical_features")
+bp = Blueprint("clinical_features", __name__)
 
 NA_VALUE = "N/A"
 
@@ -77,9 +77,11 @@ def clinical_features_unique_values():
                 ) * 100
 
                 response[column] = [
-                    f"{value} ({round(percentage, 2)}%)"
-                    if len(value) > 0
-                    else f"{NA_VALUE} ({round(percentage, 2)}%)"
+                    (
+                        f"{value} ({round(percentage, 2)}%)"
+                        if len(value) > 0
+                        else f"{NA_VALUE} ({round(percentage, 2)}%)"
+                    )
                     for value, percentage in frequency_of_occurrence.items()
                 ]
             elif (

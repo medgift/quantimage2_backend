@@ -17,7 +17,7 @@ from service.feature_extraction import (
     get_series_metadata,
 )
 
-bp = Blueprint(__name__, "albums")
+bp = Blueprint("albums", __name__)
 
 
 @bp.before_request

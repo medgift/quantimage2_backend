@@ -24,7 +24,7 @@ from service.feature_transformation import (
 from melampus.feature_ranking import MelampusFeatureRank
 
 # Define blueprint
-bp = Blueprint(__name__, "charts")
+bp = Blueprint("charts", __name__)
 
 
 @bp.before_request

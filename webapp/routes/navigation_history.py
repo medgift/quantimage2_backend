@@ -5,7 +5,7 @@ from quantimage2_backend_common.models import NavigationHistory
 # Define blueprint
 from routes.utils import validate_decorate
 
-bp = Blueprint(__name__, "navigation")
+bp = Blueprint("navigation", __name__)
 
 
 @bp.before_request

@@ -10,14 +10,13 @@ logger = logging.getLogger(__name__)
 from pathlib import Path
 
 import numpy as np
+from numpy import ndarray
 from sklearn.model_selection import RepeatedStratifiedKFold
 from ttictoc import tic, toc
 
 import celery.states as celerystates
 import requests
 from celery import Celery
-from flask import jsonify
-from numpy.core.records import ndarray
 
 from quantimage2_backend_common.models import FeatureExtraction
 
@@ -43,7 +42,7 @@ class CustomException(Exception):
     status_code = 500
 
     def __init__(self, message, status_code=None, payload=None):
-        Exception.__init__(self)
+        super().__init__(message)
         self.message = message
         if status_code is not None:
             self.status_code = status_code
@@ -57,12 +56,12 @@ class CustomException(Exception):
 
 class InvalidUsage(CustomException):
     def __init__(self, message):
-        CustomException.__init__(self, message, 400)
+        super().__init__(message, 400)
 
 
 class ComputationError(CustomException):
     def __init__(self, message):
-        CustomException.__init__(self, message, 500)
+        super().__init__(message, 500)
 
 
 # Socket.IO messages
@@ -116,7 +115,10 @@ def format_feature_tasks(feature_tasks):
                     result_obj.result = None
                 batch_results[task_id] = result_obj
         except Exception as e:
-            logger.warning("Batch task result fetch failed (%s), falling back to per-task requests", e)
+            logger.warning(
+                "Batch task result fetch failed (%s), falling back to per-task requests",
+                e,
+            )
             for task_id in task_ids:
                 batch_results[task_id] = fetch_task_result(task_id)
         elapsed = toc()
@@ -125,8 +127,12 @@ def format_feature_tasks(feature_tasks):
     # 3. Format each task using the pre-fetched result
     feature_task_list = []
     for feature_task in feature_tasks:
-        result_obj = batch_results.get(feature_task.task_id) if feature_task.task_id else None
-        feature_task_list.append(_format_feature_task_with_result(feature_task, result_obj))
+        result_obj = (
+            batch_results.get(feature_task.task_id) if feature_task.task_id else None
+        )
+        feature_task_list.append(
+            _format_feature_task_with_result(feature_task, result_obj)
+        )
 
     return feature_task_list
 
@@ -312,10 +318,12 @@ def send_extraction_status_message(
     feature_extraction_id, celery, socketio, send_extraction=False
 ):
     feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
-    
+
     # If extraction was deleted (cancelled), silently skip status update
     if not feature_extraction:
-        print(f"Feature extraction {feature_extraction_id} not found (likely cancelled)")
+        print(
+            f"Feature extraction {feature_extraction_id} not found (likely cancelled)"
+        )
         return
 
     print("Send extraction is  " + str(send_extraction))
@@ -332,13 +340,8 @@ def send_extraction_status_message(
             feature_extraction_id, vars(extraction_status)
         )
 
-    print(
-        "Emitting EXTRACTION STATUS WITH "
-        + json.dumps(jsonify(socketio_body).get_json())
-    )
-    socketio.emit(
-        MessageType.EXTRACTION_STATUS.value, jsonify(socketio_body).get_json()
-    )
+    print("Emitting EXTRACTION STATUS WITH " + json.dumps(socketio_body, default=str))
+    socketio.emit(MessageType.EXTRACTION_STATUS.value, socketio_body)
 
 
 # Feature Tasks
@@ -419,7 +422,7 @@ class ExtractionStatus:
         pending_tasks=0,
         completed_tasks=0,
         failed_tasks=0,
-        errors=None
+        errors=None,
         # total_steps=0,
         # completed_steps=0,
     ):

@@ -23,7 +23,7 @@ from service.feature_transformation import (
 from .utils import validate_decorate
 
 # Define blueprint
-bp = Blueprint(__name__, "feature_collections")
+bp = Blueprint("feature_collections", __name__)
 
 
 @bp.before_request

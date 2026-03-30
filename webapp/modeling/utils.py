@@ -95,4 +95,4 @@ def corrected_ci(s, n_train, n_test, alpha=0.95):
     n = s.shape[0]
     mean = np.mean(s)
     std = corrected_std(s, n_train, n_test)
-    return t.interval(alpha, n - 1, loc=mean, scale=std)
+    return t.interval(confidence=alpha, df=n - 1, loc=mean, scale=std)

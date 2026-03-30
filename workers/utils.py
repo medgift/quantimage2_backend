@@ -5,7 +5,6 @@ from time import time
 
 import numpy as np
 import pandas as pd
-from flask import jsonify
 from numpy import argmax
 from sklearn.metrics import get_scorer, roc_curve
 from sklearn.utils import resample
@@ -18,7 +17,7 @@ from quantimage2_backend_common.utils import MessageType
 
 def mean_confidence_interval_student(mean, std, n_samples, confidence=0.95):
     inf_value, sup_value = stats.t.interval(
-        alpha=confidence, df=n_samples - 1, loc=mean, scale=std
+        confidence=confidence, df=n_samples - 1, loc=mean, scale=std
     )
 
     return {
@@ -181,9 +180,7 @@ def run_bootstrap(
                     "current": i,
                     "total": n_bootstrap,
                 }
-                socket_io.emit(
-                    MessageType.TRAINING_STATUS.value, jsonify(socketio_body).get_json()
-                )
+                socket_io.emit(MessageType.TRAINING_STATUS.value, socketio_body)
 
     # Final status update
     if training_id and socket_io:
@@ -193,9 +190,7 @@ def run_bootstrap(
             "current": n_bootstrap,
             "total": n_bootstrap,
         }
-        socket_io.emit(
-            MessageType.TRAINING_STATUS.value, jsonify(socketio_body).get_json()
-        )
+        socket_io.emit(MessageType.TRAINING_STATUS.value, socketio_body)
 
     return all_scores, n_bootstrap
 
@@ -204,24 +199,37 @@ def calculate_scores(y_true, y_pred, y_pred_proba, scoring):
     scores = {}
 
     for score_name, scorer in scoring.items():
-        if type(scorer) == str:
+        if isinstance(scorer, str):
             scorer = get_scorer(scorer)
+
+        # Extract the underlying metric function and kwargs from the scorer
+        # Compatible with scikit-learn 1.4+ (uses _score_func and _kwargs)
+        score_func = getattr(scorer, "_score_func", None)
+        score_kwargs = getattr(scorer, "_kwargs", {})
+
+        if score_func is None:
+            # Fallback: scorer may be a callable without _score_func
+            # Use it directly on predictions
+            scores[score_name] = (
+                scorer._score_func(y_true, y_pred)
+                if hasattr(scorer, "_score_func")
+                else 0
+            )
+            continue
 
         if y_pred_proba is not None:
             try:
                 # For metrics that need the probabilities (such as roc_auc_score)
                 # Calculate only with the "greater label" probability
                 # See https://scikit-learn.org/stable/modules/model_evaluation.html#roc-auc-binary
-                scores[score_name] = scorer._score_func(
-                    y_true, y_pred_proba[:, 1], **scorer._kwargs
+                scores[score_name] = score_func(
+                    y_true, y_pred_proba[:, 1], **score_kwargs
                 )
             except ValueError:
                 # For metric that only need the binary predictions
-                scores[score_name] = scorer._score_func(
-                    y_true, y_pred, **scorer._kwargs
-                )
+                scores[score_name] = score_func(y_true, y_pred, **score_kwargs)
         else:
-            scores[score_name] = scorer._score_func(y_true, y_pred, **scorer._kwargs)
+            scores[score_name] = score_func(y_true, y_pred, **score_kwargs)
 
     return scores
 
@@ -255,36 +263,35 @@ def get_optimal_threshold(y, positive_probabilities):
 
 
 def compute_feature_importance(
-        X_test,
-        y_test,
-        model,
-        scoring,
-        label_category,
-        random_seed
-    ):
-    
-    result_dict = permutation_importance(model, 
-                                         X_test, 
-                                         y_test, 
-                                         scoring=scoring, 
-                                         n_repeats=10, 
-                                         random_state=random_seed)
-    
+    X_test, y_test, model, scoring, label_category, random_seed
+):
+
+    result_dict = permutation_importance(
+        model, X_test, y_test, scoring=scoring, n_repeats=10, random_state=random_seed
+    )
+
     # Get feature importance from auc for Classification and c-index for Survival
     if label_category == "Classification":
-        print("Classification model detected, using 'auc' to compute feature importance")
+        print(
+            "Classification model detected, using 'auc' to compute feature importance"
+        )
         if "auc" in result_dict:
             result = result_dict["auc"]
         else:
-            raise ValueError("Expected 'auc' key in scoring result for Classification model")
+            raise ValueError(
+                "Expected 'auc' key in scoring result for Classification model"
+            )
     elif label_category == "Survival":
         print("Survival model detected, using 'c-index' to compute feature importance")
         if "c-index" in result_dict:
             result = result_dict["c-index"]
         else:
-            raise ValueError("Expected 'c-index' key in scoring result for Survival model")
+            raise ValueError(
+                "Expected 'c-index' key in scoring result for Survival model"
+            )
 
     return pd.Series(result.importances_mean, index=X_test.columns).to_dict()
+
 
 def compute_predictions(X, model, patients):
     predictions = {}
@@ -292,28 +299,31 @@ def compute_predictions(X, model, patients):
     model_predictions = model.predict(X)
     model_predictions_probabilities = model.predict_proba(X)
 
-    for patient, pred, prob in zip(patients, model_predictions, model_predictions_probabilities):
+    for patient, pred, prob in zip(
+        patients, model_predictions, model_predictions_probabilities
+    ):
         predictions[patient] = {"prediction": pred.item()}
         predictions_probabilities[patient] = {"probabilities": prob.tolist()}
 
     return predictions, predictions_probabilities
 
+
 def compute_risk_scores(X, model, patients):
     risk_scores = {}
     model_risk_scores = model.predict(X)
-    
+
     # Check if this is an IPCRidge model - these predict survival times, not hazard ratios
-    model_name = model.best_estimator_['analyzer'].__class__.__name__
-    
+    model_name = model.best_estimator_["analyzer"].__class__.__name__
+
     for patient, pred in zip(patients, model_risk_scores):
-        if model_name == 'IPCRidge':
+        if model_name == "IPCRidge":
             # IPCRidge outputs survival times - convert to risk scores by negating
             # Higher survival time = lower risk, so we negate to get risk scores
             risk_score = -pred.item()
         else:
             # CoxPH/Coxnet output log hazard ratios - higher values = higher risk
             risk_score = pred.item()
-            
+
         risk_scores[patient] = {"risk_score": risk_score}
 
     return risk_scores

@@ -17,9 +17,8 @@ from service.feature_extraction import get_album_details
 from service.machine_learning import train_model, model_compare_permuation_test
 from sklearn.metrics import roc_curve
 
-
 # Define blueprint
-bp = Blueprint(__name__, "models")
+bp = Blueprint("models", __name__)
 
 
 @bp.before_request
@@ -110,7 +109,7 @@ def models_by_user():
 
 @bp.route("/models/compare", methods=["POST"])
 def compare_models():
-    
+
     print("file in the models api")
     model_ids = json.loads(request.data)["model_ids"]
     models = [Model.find_by_id(i) for i in model_ids]
@@ -119,7 +118,7 @@ def compare_models():
     csv_filename = f"model_comparisons_{'_'.join(model_ids_string)}.csv"
     # Create a string buffer
     output = io.StringIO()
-    
+
     model_comparison_df.insert(0, "model/model", model_comparison_df.index)
     # Write the DataFrame to the string buffer as CSV
     model_comparison_df.to_csv(output, index=False)
@@ -142,50 +141,54 @@ def compare_models():
         },
     )
 
+
 @bp.route("/models/compare-data", methods=["POST"])
 def compare_models_data():
-    
+
     print("model comparison data endpoint")
     model_ids = json.loads(request.data)["model_ids"]
     models = [Model.find_by_id(i) for i in model_ids]
     model_comparison_df = model_compare_permuation_test(models)
-    
+
     # Convert DataFrame to dictionary for JSON response
     comparison_data = {
         "model_ids": model_ids,
-        "comparison_matrix": model_comparison_df.to_dict('index'),
-        "p_values": {}
+        "comparison_matrix": model_comparison_df.to_dict("index"),
+        "p_values": {},
     }
-    
+
     # Extract p-values for easier frontend access
     for i, model_id_1 in enumerate(model_ids):
         comparison_data["p_values"][f"model_{model_id_1}"] = {}
         for j, model_id_2 in enumerate(model_ids):
             p_value = model_comparison_df.iloc[i, j]
-            comparison_data["p_values"][f"model_{model_id_1}"][f"model_{model_id_2}"] = p_value
-    
+            comparison_data["p_values"][f"model_{model_id_1}"][
+                f"model_{model_id_2}"
+            ] = p_value
+
     print("comparison data:")
     print(comparison_data)
-    
+
     return jsonify(comparison_data)
+
 
 @bp.route("/models/<id>/plot-test-predictions", methods=["GET", "POST"])
 def plot_test_predictions(id):
     if request.method == "POST":
         # Get additional model ID from request body
         print("Request JSON:", request.json)  # Debug print
-        model_ids_data = request.json.get('model_ids', [])
+        model_ids_data = request.json.get("model_ids", [])
         print("Model IDs data:", model_ids_data)  # Debug print
 
         # Handle both string and array formats
         if isinstance(model_ids_data, str):
-            model_ids = [x.strip() for x in model_ids_data.split(',') if x.strip()]
+            model_ids = [x.strip() for x in model_ids_data.split(",") if x.strip()]
         elif isinstance(model_ids_data, list):
             model_ids = [str(x).strip() for x in model_ids_data if str(x).strip()]
         else:
             model_ids = []
     else:
-        model_ids = [x.strip() for x in id.split(',') if x.strip()]
+        model_ids = [x.strip() for x in id.split(",") if x.strip()]
 
     model_ids = [int(mid) for mid in model_ids]
     print("Final model_ids:", model_ids)  # Debug print
@@ -194,12 +197,17 @@ def plot_test_predictions(id):
     first_model = Model.find_by_id(model_ids[0])
     if not first_model:
         return jsonify({"error": f"Model {model_ids[0]} not found"}), 404
-    
+
     label_category = LabelCategory.find_by_id(first_model.label_category_id)
     if not label_category:
-        return jsonify({"error": f"Label category {first_model.label_category_id} not found"}), 404
+        return (
+            jsonify(
+                {"error": f"Label category {first_model.label_category_id} not found"}
+            ),
+            404,
+        )
     is_survival = label_category.label_type == "Survival"
-    
+
     if is_survival:
         return _get_survival_predictions_data(model_ids, "test")
     else:
@@ -211,19 +219,19 @@ def plot_train_predictions(id):
     if request.method == "POST":
         # Get additional model ID from request body
         print("Request JSON:", request.json)  # Debug print
-        model_ids_data = request.json.get('model_ids', [])
+        model_ids_data = request.json.get("model_ids", [])
         print("Model IDs data:", model_ids_data)  # Debug print
 
         # Handle both string and array formats
         if isinstance(model_ids_data, str):
-            model_ids = [x.strip() for x in model_ids_data.split(',') if x.strip()]
+            model_ids = [x.strip() for x in model_ids_data.split(",") if x.strip()]
         elif isinstance(model_ids_data, list):
             model_ids = [str(x).strip() for x in model_ids_data if str(x).strip()]
         else:
             model_ids = []
     else:
         # Handle GET request - split the URL parameter if it contains commas
-        model_ids = [x.strip() for x in id.split(',') if x.strip()]
+        model_ids = [x.strip() for x in id.split(",") if x.strip()]
 
     # Convert model IDs to integers
     model_ids = [int(mid) for mid in model_ids]
@@ -233,38 +241,43 @@ def plot_train_predictions(id):
     first_model = Model.find_by_id(model_ids[0])
     if not first_model:
         return jsonify({"error": f"Model {model_ids[0]} not found"}), 404
-    
+
     label_category = LabelCategory.find_by_id(first_model.label_category_id)
     if not label_category:
-        return jsonify({"error": f"Label category {first_model.label_category_id} not found"}), 404
+        return (
+            jsonify(
+                {"error": f"Label category {first_model.label_category_id} not found"}
+            ),
+            404,
+        )
     is_survival = label_category.label_type == "Survival"
-    
+
     if is_survival:
         return _get_survival_predictions_data(model_ids, "train")
     else:
         return _get_classification_predictions_data(model_ids, "train")
 
 
-def _get_classification_predictions_data(model_ids, data_type='test'):
+def _get_classification_predictions_data(model_ids, data_type="test"):
     """
     Helper function to extract classification prediction data for frontend plotting.
-    
+
     Args:
         model_ids: List of model IDs
         data_type: 'test' or 'train'
-        
+
     Returns:
         JSON response with prediction data for all models
     """
     models_data = []
-    
+
     for model_id in model_ids:
         model = Model.find_by_id(model_id)
         if not model:
             return jsonify({"error": f"Model {model_id} not found"}), 404
-            
+
         # Get the appropriate predictions based on data_type
-        if data_type == 'test':
+        if data_type == "test":
             predictions = model.test_predictions
             probabilities = model.test_predictions_probabilities
             metrics = model.test_metrics
@@ -279,11 +292,13 @@ def _get_classification_predictions_data(model_ids, data_type='test'):
         for label in labels:
             label_value = next(iter(label.label_content.values()))
             # Skip empty or None labels
-            if label_value and label_value != '':
+            if label_value and label_value != "":
                 try:
                     ground_truth[label.patient_id] = int(label_value)
                 except ValueError:
-                    print(f"Warning: Could not convert label value '{label_value}' to int for patient {label.patient_id}")
+                    print(
+                        f"Warning: Could not convert label value '{label_value}' to int for patient {label.patient_id}"
+                    )
                     continue
 
         # Prepare patient data for this model
@@ -294,49 +309,53 @@ def _get_classification_predictions_data(model_ids, data_type='test'):
             gt = ground_truth.get(patient_id, None)
 
             if gt is not None:
-                patients_data.append({
-                    "patient_id": patient_id,
-                    "probability": prob,
-                    "prediction": pred,
-                    "ground_truth": gt
-                })
+                patients_data.append(
+                    {
+                        "patient_id": patient_id,
+                        "probability": prob,
+                        "prediction": pred,
+                        "ground_truth": gt,
+                    }
+                )
 
         # Get AUC value
-        auc_value = metrics.get('auc', {}).get('mean', 0) if metrics else 0
+        auc_value = metrics.get("auc", {}).get("mean", 0) if metrics else 0
 
         # Add model data to response
-        models_data.append({
-            "model_id": model_id,
-            "model_name": f"Model {model_id}",
-            "patients": patients_data,
-            "auc": auc_value,
-            "metrics": metrics,
-            "data_type": data_type
-        })
+        models_data.append(
+            {
+                "model_id": model_id,
+                "model_name": f"Model {model_id}",
+                "patients": patients_data,
+                "auc": auc_value,
+                "metrics": metrics,
+                "data_type": data_type,
+            }
+        )
 
     return jsonify(models_data)
 
 
-def _get_survival_predictions_data(model_ids, data_type='test'):
+def _get_survival_predictions_data(model_ids, data_type="test"):
     """
     Helper function to extract survival prediction data for frontend plotting.
-    
+
     Args:
         model_ids: List of model IDs
         data_type: 'test' or 'train'
-        
+
     Returns:
         JSON response with prediction data for all models
     """
     models_data = []
-    
+
     for model_id in model_ids:
         model = Model.find_by_id(model_id)
         if not model:
             return jsonify({"error": f"Model {model_id} not found"}), 404
-            
+
         # Get the appropriate predictions based on data_type
-        if data_type == 'test':
+        if data_type == "test":
             predictions = model.test_predictions
             metrics = model.test_metrics
         else:  # train
@@ -354,7 +373,7 @@ def _get_survival_predictions_data(model_ids, data_type='test'):
                 try:
                     ground_truth[label.patient_id] = {
                         "time": float(time_value),
-                        "event": int(event_value)
+                        "event": int(event_value),
                     }
                 except (ValueError, TypeError):
                     continue
@@ -366,38 +385,42 @@ def _get_survival_predictions_data(model_ids, data_type='test'):
             gt = ground_truth.get(patient_id)
 
             if gt is not None and risk_score is not None:
-                patients_data.append({
-                    "patient_id": patient_id,
-                    "risk_score": risk_score,
-                    "time": gt["time"],
-                    "event": gt["event"]
-                })
+                patients_data.append(
+                    {
+                        "patient_id": patient_id,
+                        "risk_score": risk_score,
+                        "time": gt["time"],
+                        "event": gt["event"],
+                    }
+                )
 
         # Get C-index value
-        c_index_value = metrics.get('c_index', {}).get('mean', 0) if metrics else 0
+        c_index_value = metrics.get("c_index", {}).get("mean", 0) if metrics else 0
 
         # Add model data to response
-        models_data.append({
-            "model_id": model_id,
-            "model_name": f"Model {model_id}",
-            "patients": patients_data,
-            "c_index": c_index_value,
-            "metrics": metrics,
-            "data_type": data_type,
-            "model_type": "survival"
-        })
+        models_data.append(
+            {
+                "model_id": model_id,
+                "model_name": f"Model {model_id}",
+                "patients": patients_data,
+                "c_index": c_index_value,
+                "metrics": metrics,
+                "data_type": data_type,
+                "model_type": "survival",
+            }
+        )
 
     return jsonify(models_data)
 
 
-def process_single_model_roc(model_id, data_type='test'):
+def process_single_model_roc(model_id, data_type="test"):
     """
     Helper function to process ROC curve for a single model.
-    
+
     Args:
         model_id: Integer model ID
         data_type: 'test' or 'train'
-        
+
     Returns:
         Dictionary with ROC data or None if failed
     """
@@ -407,14 +430,14 @@ def process_single_model_roc(model_id, data_type='test'):
             return None
 
         # Select prediction data based on type
-        if data_type == 'test':
-            predictions = getattr(model, 'test_predictions', None)
-            probabilities = getattr(model, 'test_predictions_probabilities', None)
-            metrics = getattr(model, 'test_metrics', None)
+        if data_type == "test":
+            predictions = getattr(model, "test_predictions", None)
+            probabilities = getattr(model, "test_predictions_probabilities", None)
+            metrics = getattr(model, "test_metrics", None)
         else:  # train
-            predictions = getattr(model, 'train_predictions', None)
-            probabilities = getattr(model, 'train_predictions_probabilities', None)
-            metrics = getattr(model, 'training_metrics', None)
+            predictions = getattr(model, "train_predictions", None)
+            probabilities = getattr(model, "train_predictions_probabilities", None)
+            metrics = getattr(model, "training_metrics", None)
 
         if not predictions or not probabilities:
             return None
@@ -423,13 +446,13 @@ def process_single_model_roc(model_id, data_type='test'):
         labels = Label.find_by_label_category(model.label_category_id)
         if not labels:
             return None
-            
+
         ground_truth = {}
         for label in labels:
             try:
                 label_value = next(iter(label.label_content.values()))
                 # Skip empty or None labels
-                if not label_value or label_value == '':
+                if not label_value or label_value == "":
                     continue
                 gt_value = int(label_value)
                 if gt_value in [0, 1]:
@@ -442,31 +465,31 @@ def process_single_model_roc(model_id, data_type='test'):
 
         # Extract and validate prediction data
         y_true, y_scores = [], []
-        
+
         for patient_id in predictions.keys():
             gt = ground_truth.get(patient_id)
             if gt is None:
                 continue
-            
+
             prob_data = probabilities.get(patient_id, {})
             prob_list = prob_data.get("probabilities", [None, None])
-            
+
             if len(prob_list) < 2:
                 continue
-                
+
             prob_positive = prob_list[1]
-            
+
             try:
                 prob_float = float(prob_positive)
                 if not (0.0 <= prob_float <= 1.0):
                     prob_float = max(0.0, min(1.0, prob_float))
-                
+
                 if not math.isfinite(prob_float):
                     continue
-                    
+
                 y_true.append(gt)
                 y_scores.append(prob_float)
-                
+
             except (ValueError, TypeError):
                 continue
 
@@ -478,16 +501,17 @@ def process_single_model_roc(model_id, data_type='test'):
         try:
             y_true_array = np.array(y_true, dtype=np.int32)
             y_scores_array = np.array(y_scores, dtype=np.float64)
-            
+
             fpr, tpr, thresholds = roc_curve(y_true_array, y_scores_array)
-            
+
             from sklearn.metrics import auc
+
             auc_calculated = auc(fpr, tpr)
-            
+
         except Exception as e:
             print(f"Error calculating ROC for model {model_id}: {e}")
             return None
-        
+
         # Convert to JSON-safe format
         def numpy_to_json_safe(arr):
             result = []
@@ -502,18 +526,18 @@ def process_single_model_roc(model_id, data_type='test'):
                     else:
                         result.append(0.5)
             return result
-        
+
         fpr_points = numpy_to_json_safe(fpr)
         tpr_points = numpy_to_json_safe(tpr)
         thresholds_points = numpy_to_json_safe(thresholds)
-        
+
         # Get AUC from stored metrics if available
         auc_value = auc_calculated
-        if metrics and 'auc' in metrics:
-            stored_auc = metrics['auc'].get('mean', auc_calculated)
+        if metrics and "auc" in metrics:
+            stored_auc = metrics["auc"].get("mean", auc_calculated)
             if 0.0 <= stored_auc <= 1.0:
                 auc_value = stored_auc
-        
+
         return {
             "model_id": model_id,
             "model_name": f"Model {model_id}",
@@ -524,18 +548,19 @@ def process_single_model_roc(model_id, data_type='test'):
             "n_samples": len(y_true),
             "n_positive": int(np.sum(y_true_array)),
             "n_negative": int(len(y_true_array) - np.sum(y_true_array)),
-            "data_type": data_type
+            "data_type": data_type,
         }
-        
+
     except Exception as e:
         print(f"Error in process_single_model_roc for model {model_id}: {e}")
         return None
+
 
 @bp.route("/models/<id>/roc-curve-test-data", methods=["GET", "POST"])
 def get_roc_curve_test_data(id):
     """
     Generate ROC curve data for one or multiple trained radiomics models (test set).
-    
+
     GET: Single model using model ID in URL
     POST: Multiple models using model_ids in request body
     """
@@ -544,25 +569,25 @@ def get_roc_curve_test_data(id):
         if request.method == "POST":
             # Multiple models from request body
             request_data = request.get_json() or {}
-            model_ids_data = request_data.get('model_ids', [])
-            
+            model_ids_data = request_data.get("model_ids", [])
+
             # Handle different input formats
             if isinstance(model_ids_data, str):
-                model_ids = [x.strip() for x in model_ids_data.split(',') if x.strip()]
+                model_ids = [x.strip() for x in model_ids_data.split(",") if x.strip()]
             elif isinstance(model_ids_data, list):
                 model_ids = [str(x).strip() for x in model_ids_data if str(x).strip()]
             else:
                 return jsonify({"error": "Invalid model_ids format"}), 400
-                
+
             # Convert to integers
             try:
                 model_ids = [int(mid) for mid in model_ids]
             except ValueError:
                 return jsonify({"error": "All model IDs must be valid integers"}), 400
-                
+
             if not model_ids:
                 return jsonify({"error": "No valid model IDs provided"}), 400
-                
+
         else:
             # Single model from URL (GET request)
             try:
@@ -575,37 +600,41 @@ def get_roc_curve_test_data(id):
             return jsonify({"error": "Maximum 10 models allowed for comparison"}), 400
 
         roc_data = []
-        
+
         # Process each model using your existing helper function
         for model_id in model_ids:
             try:
-                model_roc = process_single_model_roc(model_id, data_type='test')
+                model_roc = process_single_model_roc(model_id, data_type="test")
                 if model_roc:
                     roc_data.append(model_roc)
                 else:
                     # Add placeholder for failed model
-                    roc_data.append({
+                    roc_data.append(
+                        {
+                            "model_id": model_id,
+                            "model_name": f"Model {model_id}",
+                            "error": "Failed to process model",
+                            "fpr": [0.0, 1.0],
+                            "tpr": [0.0, 1.0],
+                            "thresholds": [1.0, 0.0],
+                            "auc": 0.0,
+                            "n_samples": 0,
+                        }
+                    )
+            except Exception as e:
+                print(f"Error processing model {model_id}: {e}")
+                roc_data.append(
+                    {
                         "model_id": model_id,
                         "model_name": f"Model {model_id}",
-                        "error": "Failed to process model",
+                        "error": str(e),
                         "fpr": [0.0, 1.0],
                         "tpr": [0.0, 1.0],
                         "thresholds": [1.0, 0.0],
                         "auc": 0.0,
-                        "n_samples": 0
-                    })
-            except Exception as e:
-                print(f"Error processing model {model_id}: {e}")
-                roc_data.append({
-                    "model_id": model_id,
-                    "model_name": f"Model {model_id}",
-                    "error": str(e),
-                    "fpr": [0.0, 1.0],
-                    "tpr": [0.0, 1.0], 
-                    "thresholds": [1.0, 0.0],
-                    "auc": 0.0,
-                    "n_samples": 0
-                })
+                        "n_samples": 0,
+                    }
+                )
 
         if not roc_data:
             return jsonify({"error": "No models could be processed"}), 400
@@ -615,6 +644,7 @@ def get_roc_curve_test_data(id):
     except Exception as e:
         print(f"Unexpected error in ROC endpoint: {str(e)}")
         import traceback
+
         traceback.print_exc()
         return jsonify({"error": "Internal server error during ROC calculation"}), 500
 
@@ -626,20 +656,20 @@ def get_roc_curve_train_data(id):
         # Same logic as test data but use 'train' data_type
         if request.method == "POST":
             request_data = request.get_json() or {}
-            model_ids_data = request_data.get('model_ids', [])
-            
+            model_ids_data = request_data.get("model_ids", [])
+
             if isinstance(model_ids_data, str):
-                model_ids = [x.strip() for x in model_ids_data.split(',') if x.strip()]
+                model_ids = [x.strip() for x in model_ids_data.split(",") if x.strip()]
             elif isinstance(model_ids_data, list):
                 model_ids = [str(x).strip() for x in model_ids_data if str(x).strip()]
             else:
                 return jsonify({"error": "Invalid model_ids format"}), 400
-                
+
             try:
                 model_ids = [int(mid) for mid in model_ids]
             except ValueError:
                 return jsonify({"error": "All model IDs must be valid integers"}), 400
-                
+
             if not model_ids:
                 return jsonify({"error": "No valid model IDs provided"}), 400
         else:
@@ -652,35 +682,39 @@ def get_roc_curve_train_data(id):
             return jsonify({"error": "Maximum 10 models allowed for comparison"}), 400
 
         roc_data = []
-        
+
         for model_id in model_ids:
             try:
-                model_roc = process_single_model_roc(model_id, data_type='train')
+                model_roc = process_single_model_roc(model_id, data_type="train")
                 if model_roc:
                     roc_data.append(model_roc)
                 else:
-                    roc_data.append({
+                    roc_data.append(
+                        {
+                            "model_id": model_id,
+                            "model_name": f"Model {model_id}",
+                            "error": "Failed to process model",
+                            "fpr": [0.0, 1.0],
+                            "tpr": [0.0, 1.0],
+                            "thresholds": [1.0, 0.0],
+                            "auc": 0.0,
+                            "n_samples": 0,
+                        }
+                    )
+            except Exception as e:
+                print(f"Error processing model {model_id}: {e}")
+                roc_data.append(
+                    {
                         "model_id": model_id,
                         "model_name": f"Model {model_id}",
-                        "error": "Failed to process model",
+                        "error": str(e),
                         "fpr": [0.0, 1.0],
                         "tpr": [0.0, 1.0],
                         "thresholds": [1.0, 0.0],
                         "auc": 0.0,
-                        "n_samples": 0
-                    })
-            except Exception as e:
-                print(f"Error processing model {model_id}: {e}")
-                roc_data.append({
-                    "model_id": model_id,
-                    "model_name": f"Model {model_id}",
-                    "error": str(e),
-                    "fpr": [0.0, 1.0],
-                    "tpr": [0.0, 1.0],
-                    "thresholds": [1.0, 0.0],
-                    "auc": 0.0,
-                    "n_samples": 0
-                })
+                        "n_samples": 0,
+                    }
+                )
 
         if not roc_data:
             return jsonify({"error": "No models could be processed"}), 400
@@ -690,9 +724,13 @@ def get_roc_curve_train_data(id):
     except Exception as e:
         print(f"Unexpected error in training ROC endpoint: {str(e)}")
         import traceback
+
         traceback.print_exc()
-        return jsonify({"error": "Internal server error during training ROC calculation"}), 500
-    
+        return (
+            jsonify({"error": "Internal server error during training ROC calculation"}),
+            500,
+        )
+
 
 @bp.route("/models/<id>/download-test-bootstrap-values")
 def download_test_bootstrap_values(id):
@@ -749,6 +787,7 @@ def download_test_bootstrap_values(id):
         },
     )
 
+
 @bp.route("/models/<id>/download-test-scores-values")
 def download_test_scores_values(id):
     # Get the model
@@ -761,9 +800,11 @@ def download_test_scores_values(id):
     test_scores_values = model.test_scores_values
 
     # Add header row (based on the number of bootstrap repetitions)
-    header_row = ["Metric", *[f"Repetition {n + 1}" for n in range(len(test_scores_values))]]
-    
-    
+    header_row = [
+        "Metric",
+        *[f"Repetition {n + 1}" for n in range(len(test_scores_values))],
+    ]
+
     df = pd.DataFrame.from_dict(test_scores_values).T.reset_index()
     df.columns = header_row
 
@@ -812,7 +853,13 @@ def download_feature_importances(id):
     test_feature_importance = model.test_feature_importance
 
     if not test_feature_importance:
-        df = pd.DataFrame([{"feature_importance_results": "Feature importance not saved for this model - please retrain."}]).T.reset_index()
+        df = pd.DataFrame(
+            [
+                {
+                    "feature_importance_results": "Feature importance not saved for this model - please retrain."
+                }
+            ]
+        ).T.reset_index()
     else:
         df = pd.DataFrame([model.test_feature_importance]).T.reset_index()
         df.columns = ["feature_name", "feature_importance_value"]
@@ -849,6 +896,7 @@ def download_feature_importances(id):
         },
     )
 
+
 @bp.route("/models/<id>/feature-importances")
 def get_feature_importances(id):
     # Get the model
@@ -861,23 +909,33 @@ def get_feature_importances(id):
     test_feature_importance = model.test_feature_importance
 
     if not test_feature_importance:
-        return jsonify({"error": "Feature importance not saved for this model - please retrain."}), 404
-    
+        return (
+            jsonify(
+                {
+                    "error": "Feature importance not saved for this model - please retrain."
+                }
+            ),
+            404,
+        )
+
     # Convert to list of dictionaries for easier frontend consumption
     feature_importance_data = [
         {"feature_name": feature_name, "importance_value": importance_value}
         for feature_name, importance_value in test_feature_importance.items()
     ]
-    
+
     # Sort by importance value in descending order
     feature_importance_data.sort(key=lambda x: x["importance_value"], reverse=True)
-    
-    return jsonify({
-        "feature_importances": feature_importance_data,
-        "model_id": id,
-        "algorithm": model.best_algorithm,
-        "normalization": model.best_data_normalization
-    })
+
+    return jsonify(
+        {
+            "feature_importances": feature_importance_data,
+            "model_id": id,
+            "algorithm": model.best_algorithm,
+            "normalization": model.best_data_normalization,
+        }
+    )
+
 
 @bp.route("/models/<id>/test-scores-values")
 def get_test_scores_values(id):
@@ -893,9 +951,11 @@ def get_test_scores_values(id):
     if not test_scores_values:
         return jsonify({"error": "Test scores not available for this model"}), 404
 
-    return jsonify({
-        "model_id": id,
-        "algorithm": model.best_algorithm,
-        "normalization": model.best_data_normalization,
-        "test_scores": test_scores_values
-    })
+    return jsonify(
+        {
+            "model_id": id,
+            "algorithm": model.best_algorithm,
+            "normalization": model.best_data_normalization,
+            "test_scores": test_scores_values,
+        }
+    )

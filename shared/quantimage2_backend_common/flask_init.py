@@ -21,7 +21,7 @@ def create_app():
 
     app = Flask(__name__, instance_relative_config=True)
     app.config["SQLALCHEMY_DATABASE_URI"] = (
-        "mysql://"
+        "mysql+mysqldb://"
         + os.environ["DB_USER"]
         + ":"
         + get_docker_secret("db-user-password")
@@ -42,11 +42,11 @@ def create_app():
     # (default 151). If running multiple services against the same MySQL instance,
     # divide the budget accordingly.
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-        "pool_size": 10,        # was default 5
-        "max_overflow": 20,     # extra connections under burst load (total cap: 30)
-        "pool_timeout": 30,     # raise error rather than hang forever
+        "pool_size": 10,  # was default 5
+        "max_overflow": 20,  # extra connections under burst load (total cap: 30)
+        "pool_timeout": 30,  # raise error rather than hang forever
         "pool_pre_ping": True,  # test connection health before each use
-        "pool_recycle": 1800,   # recycle connections every 30min to avoid timeout
+        "pool_recycle": 1800,  # recycle connections every 30min to avoid timeout
     }
 
     app.config["CELERY_BROKER_URL"] = os.environ["CELERY_BROKER_URL"]
@@ -67,8 +67,8 @@ def create_app():
         "multipart/form-data",
     ]
 
-    # Disable key sorting
-    app.config["JSON_SORT_KEYS"] = False
+    # Disable key sorting (Flask 2.2+ uses app.json provider)
+    app.json.sort_keys = False
 
     # Create feature presets folder (if necessary)
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
