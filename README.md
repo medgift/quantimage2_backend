@@ -1,5 +1,16 @@
 # QuantImage v2 - Backend
 
+## Changelog
+
+### 3.2
+
+- **Upgraded to Python 3.12** — Updated base Docker images, dependencies, and fixed compatibility issues with SQLAlchemy 2.0, Pandas 2.x, and Python 3.12 runtime changes.
+- **Added unit tests** — Introduced a `tests/` suite covering shared utilities, ORM models, ML pipeline, REST API routes, Celery worker functions, and feature storage.
+
+### 3.1
+
+- Previous stable release (Python 3.8).
+
 ## Context
 
 This repository is part of the QuantImage v2 platform, which includes the following repositories:
