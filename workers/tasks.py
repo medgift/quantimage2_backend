@@ -325,9 +325,9 @@ def train_model(
         socketio_body = {
             "training-id": training_id,
             "failed": True,
-            "error": traceback.print_exc(),
+            "error": traceback.format_exc(),
         }
-        logging.error(e)
+        logging.error(e, exc_info=True)
     finally:
         socketio.emit(MessageType.TRAINING_STATUS.value, socketio_body)
         db.session.remove()

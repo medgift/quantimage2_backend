@@ -394,8 +394,8 @@ def _get_survival_predictions_data(model_ids, data_type="test"):
                     }
                 )
 
-        # Get C-index value
-        c_index_value = metrics.get("c_index", {}).get("mean", 0) if metrics else 0
+        # Get C-index value (key is "c-index" as defined in survival.py scoring)
+        c_index_value = metrics.get("c-index", {}).get("mean", 0) if metrics else 0
 
         # Add model data to response
         models_data.append(

@@ -130,8 +130,8 @@ def cancel_extraction(id):
         db.session.execute(
             db.text(
                 "DELETE FROM feature_value WHERE feature_extraction_task_id IN :task_ids"
-            ),
-            {"task_ids": tuple(task_ids)},
+            ).bindparams(db.bindparam("task_ids", expanding=True)),
+            {"task_ids": list(task_ids)},
         )
 
         # Delete all extraction tasks
