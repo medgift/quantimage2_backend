@@ -1,6 +1,8 @@
 """
 Celery tasks for running and finalizing feature extractions
 """
+
+import json
 import os
 import logging
 import re
@@ -9,16 +11,18 @@ import socket
 import tempfile
 import traceback
 from multiprocessing import current_process
-import traceback
 
 import joblib
-import pydevd_pycharm
 import requests
 import warnings
 
+try:
+    import debugpy
+except ImportError:
+    debugpy = None
+
 from typing import Dict, Any, Optional
 
-from flask import jsonify
 from flask_socketio import SocketIO
 from celery import Celery
 from celery import states as celerystates
@@ -57,7 +61,7 @@ from utils import (
     get_model_path,
     compute_feature_importance,
     compute_predictions,
-    compute_risk_scores
+    compute_risk_scores,
 )
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
@@ -65,19 +69,11 @@ warnings.filterwarnings("ignore", message="Failed to parse headers")
 from quantimage2_backend_common.kheops_utils import endpoints
 
 # Setup Debugger
-if "DEBUGGER_IP" in os.environ and os.environ["DEBUGGER_IP"] != "":
+if debugpy and "DEBUGGER_IP" in os.environ and os.environ["DEBUGGER_IP"] != "":
     try:
-        pydevd_pycharm.settrace(
-            os.environ["DEBUGGER_IP"],
-            port=int(os.environ["DEBUGGER_PORT"]),
-            suspend=False,
-            stderrToServer=True,
-            stdoutToServer=True,
-        )
-    except ConnectionRefusedError:
-        logging.warning("No debug server running")
-    except socket.timeout:
-        logging.warning("Could not connect to the debugger")
+        debugpy.listen((os.environ["DEBUGGER_IP"], int(os.environ["DEBUGGER_PORT"])))
+    except Exception:
+        logging.warning("Could not start debugpy listener")
 
 
 celery = Celery(
@@ -152,9 +148,7 @@ def train_model(
             "training-id": training_id,
             "phase": TRAINING_PHASES.TRAINING.value,
         }
-        training_socketio.emit(
-            MessageType.TRAINING_STATUS.value, jsonify(socketio_body).get_json()
-        )
+        training_socketio.emit(MessageType.TRAINING_STATUS.value, socketio_body)
         return 0
 
     tic()
@@ -177,9 +171,9 @@ def train_model(
             return_train_score=False,
             verbose=100,
         )
-        
+
         fitted_model = grid.fit(X_train, y_train_encoded)
-        
+
         elapsed = toc()
 
         print(f"Fitting the model took {elapsed}")
@@ -200,7 +194,7 @@ def train_model(
             scoring,
             random_seed,
         )
-        
+
         test_metrics = None
         test_bootstrap_values = None
         test_scores_values = None
@@ -234,9 +228,8 @@ def train_model(
                 fitted_model.best_estimator_,
                 fitted_model.scoring,
                 label_category.label_type,
-                random_seed
+                random_seed,
             )
-
 
         # Save model in the DB
         classifier_class = fitted_model.best_params_[estimator_step]
@@ -262,7 +255,7 @@ def train_model(
         joblib.dump(fitted_model, model_path)
 
         # Generate model name (for now)
-        (file, ext) = os.path.splitext(os.path.basename(model_path))
+        file, ext = os.path.splitext(os.path.basename(model_path))
         model_name = f"{album['name']}_{file}"
 
         # Get all other metadata for the model to be saved in the DB
@@ -270,31 +263,23 @@ def train_model(
         training_validation_params = {"k": cv.cvargs["n_splits"], "n": cv.n_repeats}
         test_validation = "Bootstrap" if is_train_test else None
         test_validation_params = {"n": n_bootstrap} if is_train_test else None
-        
+
         # Get test and train predictions for db
         if label_category.label_type == "Classification":
             test_predictions, test_predictions_probabilities = compute_predictions(
-                X_test,
-                fitted_model,
-                test_patients)
-            
+                X_test, fitted_model, test_patients
+            )
+
             train_predictions, train_predictions_probabilities = compute_predictions(
-                X_train,
-                fitted_model,
-                training_patients)
+                X_train, fitted_model, training_patients
+            )
         else:
             # For survival models, compute hazard values instead of predictions, no compute probabilities
             test_predictions_probabilities = None
             train_predictions_probabilities = None
-            test_predictions = compute_risk_scores(
-                X_test,
-                fitted_model,
-                test_patients
-            )
+            test_predictions = compute_risk_scores(X_test, fitted_model, test_patients)
             train_predictions = compute_risk_scores(
-                X_train,
-                fitted_model,
-                training_patients
+                X_train, fitted_model, training_patients
             )
 
         db_model = Model(
@@ -303,9 +288,11 @@ def train_model(
             data_splitting_type,
             train_test_splitting_type,
             f"{training_validation} ({training_validation_params['k']} folds, {training_validation_params['n']} repetitions)",
-            f"{test_validation} ({test_validation_params['n']} repetitions)"
-            if test_validation
-            else None,
+            (
+                f"{test_validation} ({test_validation_params['n']} repetitions)"
+                if test_validation
+                else None
+            ),
             best_normalization,
             feature_selection,
             feature_names,
@@ -335,12 +322,14 @@ def train_model(
             "model": format_model(db_model),
         }
     except Exception as e:
-        socketio_body = {"training-id": training_id, "failed": True, "error": traceback.print_exc()}
-        logging.error(e)
+        socketio_body = {
+            "training-id": training_id,
+            "failed": True,
+            "error": traceback.format_exc(),
+        }
+        logging.error(e, exc_info=True)
     finally:
-        socketio.emit(
-            MessageType.TRAINING_STATUS.value, jsonify(socketio_body).get_json()
-        )
+        socketio.emit(MessageType.TRAINING_STATUS.value, socketio_body)
         db.session.remove()
 
 

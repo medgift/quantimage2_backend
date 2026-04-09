@@ -88,7 +88,7 @@ def get_features_labels(
 
     # TODO - This will be done in Melampus also in the future
     # Impute mean for NaNs
-    features_df = features_df.fillna(features_df.mean())
+    features_df = features_df.fillna(features_df.mean(numeric_only=True))
 
     return features_df, labels_df_indexed
 
@@ -224,8 +224,10 @@ def train_model(
 def get_clinical_features(
     user_id: str, collection_id: str, radiomics_patient_ids: List[str], album: str
 ):
-    full_clin_feature_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(
-        user_id, album["album_id"]
+    full_clin_feature_definitions = (
+        ClinicalFeatureDefinition.find_by_user_id_and_album_id(
+            user_id, album["album_id"]
+        )
     )
 
     if collection_id:
@@ -242,18 +244,20 @@ def get_clinical_features(
                 selected_clinical_features.append(feature_id)
 
         clin_feature_definitions = [
-            i for i in full_clin_feature_definitions if i.name in selected_clinical_features
+            i
+            for i in full_clin_feature_definitions
+            if i.name in selected_clinical_features
         ]
 
-        # If the front end passes clinical feature names that are not matched by features in the db we should raise an error as the 
+        # If the front end passes clinical feature names that are not matched by features in the db we should raise an error as the
         # frontend may have passed in bad data
         if len(selected_clinical_features) > 0 and len(clin_feature_definitions) == 0:
-            raise ValueError(f"Assumed that the feature collection contained these clinical features {selected_clinical_features} but none where selcted for training. Clin Feature definitions table contains these featurs {[i.name for i in full_clin_feature_definitions]}")
-    
+            raise ValueError(
+                f"Assumed that the feature collection contained these clinical features {selected_clinical_features} but none where selcted for training. Clin Feature definitions table contains these featurs {[i.name for i in full_clin_feature_definitions]}"
+            )
 
-    else: # If collection_id is None we are training with all clinical features
+    else:  # If collection_id is None we are training with all clinical features
         clin_feature_definitions = full_clin_feature_definitions
-
 
     if len(clin_feature_definitions) == 0:
         return pandas.DataFrame()
@@ -297,7 +301,9 @@ def get_clinical_features(
         missing_values_idx = (
             clin_feature_df[clin_feature.name].apply(lambda x: x is None)
             | clin_feature_df[clin_feature.name].isnull()
-            | clin_feature_df[clin_feature.name].apply(lambda x: str(x).lower() in ["n/a", "n(a"])
+            | clin_feature_df[clin_feature.name].apply(
+                lambda x: str(x).lower() in ["n/a", "n(a"]
+            )
         )
 
         non_missing_values = clin_feature_df.loc[~missing_values_idx][clin_feature.name]
@@ -330,7 +336,7 @@ def get_clinical_features(
                         raise ValueError(
                             f"Tried to compute the mode of {clin_feature.name} but failed"
                         )
-                    
+
                 clin_feature_df.loc[missing_values_idx, clin_feature.name] = value
 
             else:  # If we drop the missing values we need to get rid of them before the encoding.
@@ -411,12 +417,18 @@ def model_compare_permuation_test(models: List[Model]) -> DataFrame:
         for j in range(n_models):
             model_i = models[i]
             model_j = models[j]
-            
+
             if "Survival" in model_i.name or "Survival" in model_j.name:
                 c_index_i = [score["c-index"] for score in model_i.test_scores_values]
                 c_index_j = [score["c-index"] for score in model_j.test_scores_values]
-                
-                p_bs_lib = permutation_test_mlxtend(c_index_i, c_index_j, method='approximate', num_rounds=10000, seed=10)
+
+                p_bs_lib = permutation_test_mlxtend(
+                    c_index_i,
+                    c_index_j,
+                    method="approximate",
+                    num_rounds=10000,
+                    seed=10,
+                )
                 comparisons_i.append(p_bs_lib)
                 continue
 
@@ -424,13 +436,14 @@ def model_compare_permuation_test(models: List[Model]) -> DataFrame:
                 auc_i = [score["auc"] for score in model_i.test_scores_values]
                 auc_j = [score["auc"] for score in model_j.test_scores_values]
 
-                p_bs_lib = permutation_test_mlxtend(auc_i, auc_j, method='approximate', num_rounds=10000, seed=10)
+                p_bs_lib = permutation_test_mlxtend(
+                    auc_i, auc_j, method="approximate", num_rounds=10000, seed=10
+                )
                 comparisons_i.append(p_bs_lib)
             else:
                 comparisons_i.append("no test scores saved - please retrain model")
-        
+
         all_comparisons.append(comparisons_i)
-    
 
     df = pd.DataFrame(all_comparisons)
     index_and_columns = [f"model_{i.id}" for i in models]

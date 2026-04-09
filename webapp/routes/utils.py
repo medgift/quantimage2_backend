@@ -67,7 +67,10 @@ def validate_decorate(request):
 
 
 def validate_request(request):
-    authorization = request.headers["Authorization"]
+    authorization = request.headers.get("Authorization")
+
+    if not authorization:
+        return False, "Missing Authorization header"
 
     if not authorization.startswith("Bearer"):
         abort(400)
@@ -81,18 +84,29 @@ def validate_request(request):
 
 
 def decode_token(token):
+    """Decode and validate a Keycloak JWT token.
+
+    Uses python-jose directly for JWT verification. The public key is
+    fetched once from Keycloak via python-keycloak and cached globally.
+    """
     global KEYCLOAK_REALM_PUBLIC_KEY
 
     if KEYCLOAK_REALM_PUBLIC_KEY is None:
-        KEYCLOAK_REALM_PUBLIC_KEY = f"-----BEGIN PUBLIC KEY-----\n{oidc_client.public_key()}\n-----END PUBLIC KEY-----"
+        KEYCLOAK_REALM_PUBLIC_KEY = (
+            "-----BEGIN PUBLIC KEY-----\n"
+            + oidc_client.public_key()
+            + "\n-----END PUBLIC KEY-----"
+        )
 
-    # Verify signature & expiration
-    options = {"verify_signature": True, "verify_exp": True, "verify_aud": False}
-    token_decoded = oidc_client.decode_token(
-        token, key=KEYCLOAK_REALM_PUBLIC_KEY, options=options
+    from jose import jwt as jose_jwt
+
+    # Verify signature & expiration, skip audience check
+    return jose_jwt.decode(
+        token,
+        KEYCLOAK_REALM_PUBLIC_KEY,
+        algorithms=["RS256"],
+        options={"verify_signature": True, "verify_exp": True, "verify_aud": False},
     )
-
-    return token_decoded
 
 
 def userid_from_token(token):
@@ -102,6 +116,7 @@ def userid_from_token(token):
     id = token_decoded["sub"]
 
     return id
+
 
 def adjust_label_positions(x_positions, base_offset, min_distance=0.05):
     """Adjust vertical offsets for overlapping labels by alternating above/below"""
@@ -117,7 +132,10 @@ def adjust_label_positions(x_positions, base_offset, min_distance=0.05):
     groups = []
 
     for i in range(n):
-        if not current_group or abs(x_sorted[i] - x_sorted[current_group[-1]]) < min_distance:
+        if (
+            not current_group
+            or abs(x_sorted[i] - x_sorted[current_group[-1]]) < min_distance
+        ):
             current_group.append(i)
         else:
             if len(current_group) > 1:

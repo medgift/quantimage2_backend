@@ -1,7 +1,10 @@
+import logging
 import os
 import requests
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+logger = logging.getLogger(__name__)
 
 # Backend client
 kheopsBaseURL = os.environ["KHEOPS_BASE_URL"]
@@ -63,10 +66,12 @@ def get_user_token(album_id, token):
     capability_read = "true"
     capability_write = "true"
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     tomorrow = now + timedelta(days=1)
 
-    tomorrow_str = f"{tomorrow.replace(microsecond=0).isoformat()}Z"
+    # Use strftime to produce a clean "Z" suffix (datetime.now(timezone.utc)
+    # is tz-aware, so isoformat() would append "+00:00" instead of "Z").
+    tomorrow_str = tomorrow.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     data = {
         "title": capability_title,
@@ -81,6 +86,13 @@ def get_user_token(album_id, token):
         headers=get_token_header(token),
         data=data,
     )
+
+    if response.status_code != 200:
+        logger.error(
+            f"Kheops capability token request failed "
+            f"(status={response.status_code}): {response.text}"
+        )
+        response.raise_for_status()
 
     response_json = response.json()
 

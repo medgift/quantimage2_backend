@@ -19,8 +19,7 @@ from modeling.utils import (
 )
 
 
-class Modeling:
-    __metaclass__ = abc.ABCMeta
+class Modeling(abc.ABC):
 
     def __init__(
         self,

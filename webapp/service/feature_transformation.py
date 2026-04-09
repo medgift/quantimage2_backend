@@ -93,11 +93,15 @@ def transform_feature_values_to_tabular(values, studies):
         itertools.product(missing_patients, existing_modalities, existing_rois)
     )
 
-    renamed_df = renamed_df.append(
-        pandas.DataFrame(
-            missing_row_combinations,
-            columns=[PATIENT_ID_FIELD, MODALITY_FIELD, ROI_FIELD],
-        )
+    renamed_df = pandas.concat(
+        [
+            renamed_df,
+            pandas.DataFrame(
+                missing_row_combinations,
+                columns=[PATIENT_ID_FIELD, MODALITY_FIELD, ROI_FIELD],
+            ),
+        ],
+        ignore_index=True,
     )
 
     # Sort DataFrame

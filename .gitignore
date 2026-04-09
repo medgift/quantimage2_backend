@@ -97,6 +97,9 @@ node_modules
 # VS Code
 .vscode
 
+# SonarQube
+.sonar/
+
 # DB Migrations
 webapp/alembic/versions/*
 
