@@ -1,4 +1,4 @@
-FROM python:3.8
+FROM python:3.12
 LABEL MAINTAINER="Roger Schaer"
 
 # Define app folder
@@ -13,6 +13,10 @@ COPY ./webapp/requirements*.txt ./
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install test dependencies
+COPY ./tests/requirements-test.txt ./tests/requirements-test.txt
+RUN pip install --no-cache-dir -r tests/requirements-test.txt
 
 # Bust cache if version of melampus has changed
 ADD https://api.github.com/repos/medgift/quantimage-melampus/git/refs/heads/dev-da version-melampus.json

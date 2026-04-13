@@ -12,7 +12,10 @@ import logging
 import socket
 
 # Debugging
-import pydevd_pycharm
+try:
+    import debugpy
+except ImportError:
+    debugpy = None
 
 # Flask
 from flask_cors import CORS
@@ -78,19 +81,13 @@ def start_app():
     print("Creating the app!")
 
     # Setup Debugger
-    if "DEBUGGER_IP" in os.environ and os.environ["DEBUGGER_IP"] != "":
+    if debugpy and "DEBUGGER_IP" in os.environ and os.environ["DEBUGGER_IP"] != "":
         try:
-            pydevd_pycharm.settrace(
-                os.environ["DEBUGGER_IP"],
-                port=int(os.environ["DEBUGGER_PORT"]),
-                suspend=False,
-                stderrToServer=True,
-                stdoutToServer=True,
+            debugpy.listen(
+                (os.environ["DEBUGGER_IP"], int(os.environ["DEBUGGER_PORT"]))
             )
-        except ConnectionRefusedError:
-            logging.warning("No debug server running")
-        except socket.timeout:
-            logging.warning("Could not connect to the debugger")
+        except Exception:
+            logging.warning("Could not start debugpy listener")
 
     # Create the Flask app
     flask_app = create_app()
@@ -110,8 +107,8 @@ def start_app():
 
     print("Running the app through Socket.IO!")
 
-    @flask_app.before_first_request
-    def before_first_request():
+    # Populate presets on startup (replaces @before_first_request removed in Flask 2.3)
+    with flask_app.app_context():
         populate_presets()
 
     # Run the app (through socket.io)
@@ -120,7 +117,8 @@ def start_app():
 
 def setup_app(app):
 
-    db.create_all(app=app)
+    with app.app_context():
+        db.create_all()
 
     # Celery
     # set broker url and result backend from app config

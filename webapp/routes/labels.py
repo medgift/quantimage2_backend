@@ -5,7 +5,7 @@ from quantimage2_backend_common.models import Label, LabelCategory
 # Define blueprint
 from routes.utils import validate_decorate
 
-bp = Blueprint(__name__, "labels")
+bp = Blueprint("labels", __name__)
 
 
 @bp.before_request
@@ -56,7 +56,7 @@ def save_label_category(album_id, label_type, name, user_id):
     new_category = LabelCategory(album_id, label_type, name, user_id)
 
     new_category.save_to_db()
-    
+
     new_category.initialize_empty_labels()
 
     return jsonify(new_category.to_dict())
@@ -75,13 +75,13 @@ def edit_label_category(label_category_id, name):
 def delete_label_category(label_category_id):
     # First, delete all labels associated with this category
     Label.query.filter_by(label_category_id=label_category_id).delete()
-    
+
     # Then delete the category itself
     category = LabelCategory.delete_by_id(label_category_id)
-    
+
     if category is None:
         return jsonify({"error": "Label category not found"}), 404
-    
+
     return jsonify(category.to_dict())
 
 

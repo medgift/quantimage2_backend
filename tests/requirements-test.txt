@@ -1,0 +1,19 @@
+# Test framework
+pytest==8.3.4
+pytest-cov==6.0.0
+pytest-mock==3.14.0
+
+# Flask test client
+pytest-flask==1.3.0
+
+# In-memory SQLite (no MySQL needed for unit tests)
+# mysqlclient is used in production; SQLite works for unit tests
+
+# Freezing time
+freezegun==1.4.0
+
+# HTTP mocking
+responses==0.25.6
+
+# Factory pattern for test data
+factory-boy==3.3.1

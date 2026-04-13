@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import decimal, datetime
+from datetime import timezone
 from typing import List, Dict, Any, Optional
 from enum import Enum
 
@@ -21,6 +22,15 @@ from quantimage2_backend_common.kheops_utils import dicomFields
 db = SQLAlchemy()
 
 
+def _utcnow() -> datetime.datetime:
+    """Return current UTC time as a naive datetime (for MySQL compatibility).
+
+    Uses the non-deprecated ``datetime.now(timezone.utc)`` API instead of the
+    deprecated ``datetime.utcnow()`` (Python 3.12+).
+    """
+    return datetime.datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def alchemyencoder(obj):
     if isinstance(obj, datetime.date):
         return obj.isoformat() + "Z"
@@ -33,10 +43,13 @@ class BaseModel(db.Model):
     __abstract__ = True
 
     id = db.Column(db.Integer, primary_key=True)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
-    )
+    created_at = db.Column(db.DateTime, default=_utcnow)
+    updated_at = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    @staticmethod
+    def _serialize_dt(dt: Optional[datetime.datetime]) -> Optional[str]:
+        """Convert a datetime to an ISO-format string for JSON serialization."""
+        return dt.isoformat() if dt is not None else None
 
     @classmethod
     def find_by_id(cls, id):
@@ -111,10 +124,8 @@ class BaseModel(db.Model):
 
 
 class BaseModelAssociation(object):
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
-    )
+    created_at = db.Column(db.DateTime, default=_utcnow)
+    updated_at = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     def save_to_db(self):
         db.session.add(self)
@@ -164,8 +175,8 @@ class FeaturePreset(BaseModel, db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self._serialize_dt(self.created_at),
+            "updated_at": self._serialize_dt(self.updated_at),
             "name": self.name,
             "config_path": self.config_path,
         }
@@ -233,8 +244,8 @@ class FeatureExtraction(BaseModel, db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self._serialize_dt(self.created_at),
+            "updated_at": self._serialize_dt(self.updated_at),
             "user_id": self.user_id,
             "album_id": self.album_id,
             "feature_definitions": list(
@@ -417,8 +428,8 @@ class FeatureExtractionTask(BaseModel, db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self._serialize_dt(self.created_at),
+            "updated_at": self._serialize_dt(self.updated_at),
             "feature_extraction_id": self.feature_extraction_id,
             "study_uid": self.study_uid,
             "task_id": self.task_id,
@@ -442,8 +453,8 @@ class FeatureDefinition(BaseModel, db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self._serialize_dt(self.created_at),
+            "updated_at": self._serialize_dt(self.updated_at),
             "name": self.name,
         }
 
@@ -554,13 +565,11 @@ class FeatureValue(BaseModel, db.Model):
         compiled = (
             cls.__table__.select()
             .with_only_columns(
-                [
-                    cls.__table__.c.feature_extraction_task_id,
-                    cls.__table__.c.modality_id,
-                    cls.__table__.c.roi_id,
-                    cls.__table__.c.feature_definition_id,
-                    cls.__table__.c.value,
-                ]
+                cls.__table__.c.feature_extraction_task_id,
+                cls.__table__.c.modality_id,
+                cls.__table__.c.roi_id,
+                cls.__table__.c.feature_definition_id,
+                cls.__table__.c.value,
             )
             .where(
                 cls.__table__.c.feature_extraction_task_id.in_(
@@ -602,13 +611,11 @@ class FeatureValue(BaseModel, db.Model):
         compiled = (
             cls.__table__.select()
             .with_only_columns(
-                [
-                    cls.__table__.c.feature_extraction_task_id,
-                    cls.__table__.c.modality_id,
-                    cls.__table__.c.roi_id,
-                    cls.__table__.c.feature_definition_id,
-                    cls.__table__.c.value,
-                ]
+                cls.__table__.c.feature_extraction_task_id,
+                cls.__table__.c.modality_id,
+                cls.__table__.c.roi_id,
+                cls.__table__.c.feature_definition_id,
+                cls.__table__.c.value,
             )
             .where(cls.__table__.c.feature_extraction_task_id.in_(task_ids))
             .where(
@@ -760,7 +767,9 @@ class FeatureValue(BaseModel, db.Model):
             "feature_extraction_task.id", ondelete="CASCADE", onupdate="CASCADE"
         ),
     )
-    feature_extraction_task = db.relationship("FeatureExtractionTask")
+    feature_extraction_task = db.relationship(
+        "FeatureExtractionTask", overlaps="feature_values"
+    )
     modality_id = db.Column(
         db.Integer, ForeignKey("modality.id", ondelete="CASCADE", onupdate="CASCADE")
     )
@@ -872,8 +881,8 @@ class FeatureCollection(BaseModel, db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self._serialize_dt(self.created_at),
+            "updated_at": self._serialize_dt(self.updated_at),
             "name": self.name,
             "feature_extraction_id": self.feature_extraction_id,
             "data_splitting_type": self.data_splitting_type,
@@ -887,7 +896,7 @@ class FeatureCollection(BaseModel, db.Model):
 
         tic()
         if with_values:
-            (modalities, rois, features) = self.get_modalities_rois_features()
+            modalities, rois, features = self.get_modalities_rois_features()
             result = {
                 "collection": self.to_dict(),
                 "modalities": modalities,
@@ -1036,8 +1045,8 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self._serialize_dt(self.created_at),
+            "updated_at": self._serialize_dt(self.updated_at),
             "album_id": self.album_id,
             "user_id": self.user_id,
             "name": self.name,
@@ -1309,8 +1318,8 @@ class Model(BaseModel, db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self._serialize_dt(self.created_at),
+            "updated_at": self._serialize_dt(self.updated_at),
             "name": self.name,
             "best_algorithm": self.best_algorithm,
             "data_splitting_type": self.data_splitting_type,
@@ -1416,8 +1425,8 @@ class LabelCategory(BaseModel, db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self._serialize_dt(self.created_at),
+            "updated_at": self._serialize_dt(self.updated_at),
             "album_id": self.album_id,
             "user_id": self.user_id,
             "label_type": self.label_type,
@@ -1501,8 +1510,8 @@ class Label(BaseModel, db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self._serialize_dt(self.created_at),
+            "updated_at": self._serialize_dt(self.updated_at),
             "patient_id": self.patient_id,
             "label_content": self.label_content,
         }
@@ -1535,8 +1544,8 @@ class NavigationHistory(BaseModel, db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self._serialize_dt(self.created_at),
+            "updated_at": self._serialize_dt(self.updated_at),
             "path": self.path,
             "user_id": self.user_id,
         }
@@ -1560,7 +1569,7 @@ class Album(BaseModel, db.Model):
 
     @classmethod
     def find_by_album_id(cls, album_id):
-        (instance, created) = cls.get_or_create(
+        instance, created = cls.get_or_create(
             criteria={
                 "album_id": album_id,
             },
@@ -1571,8 +1580,8 @@ class Album(BaseModel, db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self._serialize_dt(self.created_at),
+            "updated_at": self._serialize_dt(self.updated_at),
             "album_id": self.album_id,
         }
 
@@ -1598,7 +1607,7 @@ class AlbumOutcome(BaseModel, db.Model):
 
     @classmethod
     def save_current_outcome(cls, album_id, user_id, outcome_id):
-        (instance, created) = cls.get_or_create(
+        instance, created = cls.get_or_create(
             criteria={"album_id": album_id, "user_id": user_id},
             defaults={
                 "album_id": album_id,
@@ -1614,8 +1623,8 @@ class AlbumOutcome(BaseModel, db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self._serialize_dt(self.created_at),
+            "updated_at": self._serialize_dt(self.updated_at),
             "album_id": self.album_id,
             "user_id": self.user_id,
             "outcome_id": self.outcome_id,

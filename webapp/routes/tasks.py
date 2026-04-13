@@ -6,7 +6,7 @@ from .utils import validate_decorate
 import celery.states as celery_states
 
 # Define blueprint
-bp = Blueprint(__name__, "tasks")
+bp = Blueprint("tasks", __name__)
 
 
 @bp.before_request

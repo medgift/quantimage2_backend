@@ -55,9 +55,8 @@ import io
 import os
 import pandas
 
-
 # Define blueprint
-bp = Blueprint(__name__, "features")
+bp = Blueprint("features", __name__)
 
 # Constants
 DATE_FORMAT = "%d.%m.%Y %H:%M"
@@ -86,63 +85,72 @@ def extraction_by_id(id):
 # Cancel a feature extraction in progress
 @bp.route("/extractions/<id>/cancel", methods=["POST"])
 def cancel_extraction(id):
-    from quantimage2_backend_common.models import db, FeatureValue, FeatureExtractionTask
-    
+    from quantimage2_backend_common.models import (
+        db,
+        FeatureValue,
+        FeatureExtractionTask,
+    )
+
     user_id = g.user
-    
+
     # Get the feature extraction to cancel
     feature_extraction = FeatureExtraction.find_by_id(id)
-    
+
     if not feature_extraction:
         return jsonify({"error": "Feature extraction not found"}), 404
-    
+
     # Verify the user owns this extraction
     if feature_extraction.user_id != user_id:
         return jsonify({"error": "Unauthorized"}), 403
-    
+
     # Store information needed for cleanup before deletion
     extraction_id = feature_extraction.id
     album_id = feature_extraction.album_id
     task_ids = [task.id for task in feature_extraction.tasks]
-    celery_task_ids = [task.task_id for task in feature_extraction.tasks if task.task_id]
-    
+    celery_task_ids = [
+        task.task_id for task in feature_extraction.tasks if task.task_id
+    ]
+
     # Find the previous extraction BEFORE deleting the current one
     previous_extraction = (
-        FeatureExtraction.query
-        .filter(
+        FeatureExtraction.query.filter(
             FeatureExtraction.user_id == user_id,
             FeatureExtraction.album_id == album_id,
-            FeatureExtraction.id < extraction_id
+            FeatureExtraction.id < extraction_id,
         )
         .order_by(db.desc(FeatureExtraction.id))
         .first()
     )
-    
+
     # STEP 1: Delete the extraction from DB FIRST
     # This ensures any queued/future tasks will immediately exit when they check for the extraction
     # Delete in correct order: FeatureValues first, then Tasks, then Extraction
     if task_ids:
         # Delete all feature values associated with these tasks
         db.session.execute(
-            db.text("DELETE FROM feature_value WHERE feature_extraction_task_id IN :task_ids"),
-            {"task_ids": tuple(task_ids)}
+            db.text(
+                "DELETE FROM feature_value WHERE feature_extraction_task_id IN :task_ids"
+            ).bindparams(db.bindparam("task_ids", expanding=True)),
+            {"task_ids": list(task_ids)},
         )
-        
+
         # Delete all extraction tasks
         db.session.execute(
-            db.text("DELETE FROM feature_extraction_task WHERE feature_extraction_id = :extraction_id"),
-            {"extraction_id": extraction_id}
+            db.text(
+                "DELETE FROM feature_extraction_task WHERE feature_extraction_id = :extraction_id"
+            ),
+            {"extraction_id": extraction_id},
         )
-    
+
     # Delete the feature extraction itself
     db.session.execute(
         db.text("DELETE FROM feature_extraction WHERE id = :extraction_id"),
-        {"extraction_id": extraction_id}
+        {"extraction_id": extraction_id},
     )
-    
+
     db.session.commit()
     current_app.logger.info(f"Deleted feature extraction {extraction_id} from database")
-    
+
     # STEP 2: Revoke all Celery tasks (running and queued)
     # Tasks already running will be terminated
     # Tasks not yet started will be prevented from starting
@@ -154,24 +162,31 @@ def cancel_extraction(id):
             current_app.logger.info(f"Revoked Celery task {task_id}")
         except Exception as e:
             current_app.logger.error(f"Error revoking task {task_id}: {e}")
-    
+
     # STEP 3: Clean up cached features file if it exists
     features_cache_folder = f"extraction-{extraction_id}"
     features_cache_path = f"{FEATURES_CACHE_BASE_DIR}/{features_cache_folder}"
     if Path(features_cache_path).exists():
         try:
             import shutil
+
             shutil.rmtree(features_cache_path)
             current_app.logger.info(f"Deleted cached features at {features_cache_path}")
         except Exception as e:
             current_app.logger.error(f"Error deleting cached features: {e}")
-    
+
     # Return success with previous extraction if available
-    return jsonify({
-        "cancelled": True,
-        "message": f"Feature extraction {extraction_id} cancelled and deleted",
-        "previous_extraction": format_extraction(previous_extraction, tasks=True) if previous_extraction else None
-    })
+    return jsonify(
+        {
+            "cancelled": True,
+            "message": f"Feature extraction {extraction_id} cancelled and deleted",
+            "previous_extraction": (
+                format_extraction(previous_extraction, tasks=True)
+                if previous_extraction
+                else None
+            ),
+        }
+    )
 
 
 # Get feature details for a given extraction
@@ -203,7 +218,9 @@ def extraction_features_by_id(extraction_id):
     # This yields the eventlet hub so other concurrent greenlets (other users)
     # are not blocked while heavy computation runs.
     tic()
-    chart_df = eventlet.tpool.execute(format_chart_data, features_df, label_category, labels)
+    chart_df = eventlet.tpool.execute(
+        format_chart_data, features_df, label_category, labels
+    )
     logger.debug("format_chart_data (tpool) took %.3fs", toc())
 
     tic()
@@ -250,7 +267,9 @@ def get_features_cache_or_db(extraction, token):
         # Cache miss — only now fetch studies from Kheops (avoids the HTTP call on every cached request)
         tic()
         studies = get_studies_from_album(extraction.album_id, token)
-        logger.debug("get_studies_from_album (Kheops HTTP, cache miss only) took %.3fs", toc())
+        logger.debug(
+            "get_studies_from_album (Kheops HTTP, cache miss only) took %.3fs", toc()
+        )
 
         header, features_df = transform_studies_features_to_df(extraction, studies)
 
