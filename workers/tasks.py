@@ -62,6 +62,7 @@ from utils import (
     compute_feature_importance,
     compute_predictions,
     compute_risk_scores,
+    validate_metrics_no_nan,
 )
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
@@ -280,6 +281,16 @@ def train_model(
             test_predictions = compute_risk_scores(X_test, fitted_model, test_patients)
             train_predictions = compute_risk_scores(
                 X_train, fitted_model, training_patients
+            )
+
+        # Validate metrics before saving — NaN values indicate the test set
+        # was too small for survival bootstrap (all-censored resamples).
+        if is_train_test:
+            validate_metrics_no_nan(
+                test_metrics,
+                test_bootstrap_values,
+                test_scores_values,
+                n_test_patients=len(test_patients) if test_patients else 0,
             )
 
         db_model = Model(

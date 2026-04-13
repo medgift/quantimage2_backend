@@ -1,7 +1,9 @@
 import os
 import math
 import re
+import logging
 from time import time
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -13,6 +15,65 @@ from scipy import stats
 
 from config_workers import MODELS_BASE_DIR
 from quantimage2_backend_common.utils import MessageType
+
+logger = logging.getLogger(__name__)
+
+
+def _count_nan(obj: Any) -> int:
+    """Recursively count NaN values in a nested dict/list structure."""
+    if obj is None:
+        return 0
+    if isinstance(obj, dict):
+        return sum(_count_nan(v) for v in obj.values())
+    if isinstance(obj, (list, tuple)):
+        return sum(_count_nan(v) for v in obj)
+    if isinstance(obj, (float, np.floating)):
+        return 1 if math.isnan(float(obj)) else 0
+    return 0
+
+
+def validate_metrics_no_nan(
+    test_metrics: Any,
+    test_bootstrap_values: Any,
+    test_scores_values: Any,
+    n_test_patients: int,
+) -> None:
+    """Validate that computed metrics do not contain NaN values.
+
+    NaN values appear when the test set is too small for survival analysis:
+    bootstrap resamples can draw subsets where all patients are censored,
+    leaving zero comparable pairs for the concordance index.
+
+    Raises
+    ------
+    ValueError
+        With a descriptive message explaining the likely cause and suggesting
+        the user increase the test set size.
+    """
+    nan_metrics = _count_nan(test_metrics)
+    nan_bootstrap = _count_nan(test_bootstrap_values)
+    nan_scores = _count_nan(test_scores_values)
+    total_nan = nan_metrics + nan_bootstrap + nan_scores
+
+    if total_nan > 0:
+        details = []
+        if nan_metrics:
+            details.append(f"test_metrics ({nan_metrics} NaN values)")
+        if nan_bootstrap:
+            details.append(f"test_bootstrap_values ({nan_bootstrap} NaN values)")
+        if nan_scores:
+            details.append(f"test_scores_values ({nan_scores} NaN values)")
+
+        msg = (
+            f"Model training produced NaN values in: {', '.join(details)}. "
+            f"This typically happens when the test set is too small "
+            f"(current size: {n_test_patients} patients) for survival analysis "
+            f"— bootstrap resamples can contain only censored patients, making "
+            f"the c-index impossible to compute. "
+            f"Please increase the test set size and try again."
+        )
+        logger.error(msg)
+        raise ValueError(msg)
 
 
 def mean_confidence_interval_student(mean, std, n_samples, confidence=0.95):
