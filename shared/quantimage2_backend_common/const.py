@@ -25,6 +25,7 @@ class ESTIMATOR_STEP(Enum):
 class TRAINING_PHASES(Enum):
     TRAINING = "training"
     TESTING = "testing"
+    SAVING = "saving"
 
 
 RIESZ_FEATURE_PREFIXES = ["tex"]

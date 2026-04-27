@@ -243,15 +243,6 @@ def run_bootstrap(
                 }
                 socket_io.emit(MessageType.TRAINING_STATUS.value, socketio_body)
 
-    # Final status update
-    if training_id and socket_io:
-        socketio_body = {
-            "training-id": training_id,
-            "phase": "testing",
-            "current": n_bootstrap,
-            "total": n_bootstrap,
-        }
-        socket_io.emit(MessageType.TRAINING_STATUS.value, socketio_body)
 
     return all_scores, n_bootstrap
 
@@ -326,30 +317,32 @@ def get_optimal_threshold(y, positive_probabilities):
 def compute_feature_importance(
     X_test, y_test, model, scoring, label_category, random_seed
 ):
-
-    result_dict = permutation_importance(
-        model, X_test, y_test, scoring=scoring, n_repeats=10, random_state=random_seed
-    )
-
-    # Get feature importance from auc for Classification and c-index for Survival
+    # Only pass the single relevant scorer to permutation_importance instead
+    # of the full scoring dict — computing importance for unused metrics is
+    # extremely expensive (each extra metric multiplies the total time).
     if label_category == "Classification":
+        importance_scoring = scoring.get("auc", "roc_auc")
         print(
             "Classification model detected, using 'auc' to compute feature importance"
         )
-        if "auc" in result_dict:
-            result = result_dict["auc"]
-        else:
-            raise ValueError(
-                "Expected 'auc' key in scoring result for Classification model"
-            )
     elif label_category == "Survival":
-        print("Survival model detected, using 'c-index' to compute feature importance")
-        if "c-index" in result_dict:
-            result = result_dict["c-index"]
-        else:
+        importance_scoring = scoring.get("c-index")
+        if importance_scoring is None:
             raise ValueError(
-                "Expected 'c-index' key in scoring result for Survival model"
+                "Expected 'c-index' key in scoring dict for Survival model"
             )
+        print("Survival model detected, using 'c-index' to compute feature importance")
+    else:
+        raise ValueError(f"Unknown label_category: {label_category}")
+
+    result = permutation_importance(
+        model,
+        X_test,
+        y_test,
+        scoring=importance_scoring,
+        n_repeats=5,
+        random_state=random_seed,
+    )
 
     return pd.Series(result.importances_mean, index=X_test.columns).to_dict()
 

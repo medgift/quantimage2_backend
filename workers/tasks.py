@@ -217,12 +217,25 @@ def train_model(
             elapsed = toc()
             print(f"Running bootstrap took {elapsed}")
 
+            # Emit "saving" phase IMMEDIATELY after bootstrap so the frontend
+            # shows "Saving Model..." during the remaining post-bootstrap work
+            # (feature importance, model dump, DB save) instead of being stuck
+            # at "Testing Model (100%)".
+            socket_io.emit(
+                MessageType.TRAINING_STATUS.value,
+                {
+                    "training-id": training_id,
+                    "phase": TRAINING_PHASES.SAVING.value,
+                },
+            )
+
             test_metrics, test_bootstrap_values = calculate_test_metrics(
                 scores, scoring, random_seed
             )
 
             test_scores_values = scores
 
+            tic()
             test_feature_importances = compute_feature_importance(
                 X_test,
                 y_test_encoded,
@@ -231,6 +244,8 @@ def train_model(
                 label_category.label_type,
                 random_seed,
             )
+            elapsed = toc()
+            print(f"[TIMING] Computing feature importance took {elapsed:.2f}s")
 
         # Save model in the DB
         classifier_class = fitted_model.best_params_[estimator_step]
@@ -252,8 +267,11 @@ def train_model(
         )
 
         # Persist model in DB and on disk (pickle it)
+        tic()
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         joblib.dump(fitted_model, model_path)
+        elapsed = toc()
+        print(f"[TIMING] joblib.dump (model to disk) took {elapsed:.2f}s")
 
         # Generate model name (for now)
         file, ext = os.path.splitext(os.path.basename(model_path))
@@ -266,22 +284,33 @@ def train_model(
         test_validation_params = {"n": n_bootstrap} if is_train_test else None
 
         # Get test and train predictions for db
+        tic()
         if label_category.label_type == "Classification":
             test_predictions, test_predictions_probabilities = compute_predictions(
                 X_test, fitted_model, test_patients
             )
 
-            train_predictions, train_predictions_probabilities = compute_predictions(
-                X_train, fitted_model, training_patients
-            )
+
+            # NOTE: train_predictions computation commented out for performance
+            # (saving large JSON to DB was causing slowness at 100% test phase).
+            # Kept for reference in case we need to re-enable it in the future.
+            # train_predictions, train_predictions_probabilities = compute_predictions(
+            #     X_train, fitted_model, training_patients
+            # )
+            train_predictions = None
+            train_predictions_probabilities = None
         else:
             # For survival models, compute hazard values instead of predictions, no compute probabilities
             test_predictions_probabilities = None
             train_predictions_probabilities = None
             test_predictions = compute_risk_scores(X_test, fitted_model, test_patients)
-            train_predictions = compute_risk_scores(
-                X_train, fitted_model, training_patients
-            )
+            # NOTE: train risk scores computation commented out for performance
+            # train_predictions = compute_risk_scores(
+            #     X_train, fitted_model, training_patients
+            # )
+            train_predictions = None
+        elapsed = toc()
+        print(f"[TIMING] compute_predictions/risk_scores took {elapsed:.2f}s")
 
         # Validate metrics before saving — NaN values indicate the test set
         # was too small for survival bootstrap (all-censored resamples).
@@ -325,13 +354,19 @@ def train_model(
             feature_extraction_id,
             collection_id,
         )
+        tic()
         db_model.save_to_db()
+        elapsed = toc()
+        print(f"[TIMING] save_to_db took {elapsed:.2f}s")
 
+        tic()
         socketio_body = {
             "training-id": training_id,
             "complete": True,
             "model": format_model(db_model),
         }
+        elapsed = toc()
+        print(f"[TIMING] format_model took {elapsed:.2f}s")
     except Exception as e:
         socketio_body = {
             "training-id": training_id,
