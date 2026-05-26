@@ -3,9 +3,14 @@ services:
     build:
       context: .
       dockerfile: ./webapp/Dockerfile
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
+      redis-socket:
+        condition: service_started
     image: quantimage2_backend:3.2
     env_file:
       - env_files/common.env
@@ -19,6 +24,12 @@ services:
     build:
       context: .
       dockerfile: ./workers/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     image: quantimage2_backend_celery:3.2
     env_file:
       - env_files/common.env
@@ -32,6 +43,12 @@ services:
 
   celery_training:
     image: quantimage2_backend_celery:3.2
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     env_file:
       - env_files/common.env
       - env_files/workers.env
@@ -45,11 +62,16 @@ services:
   flower:
     build: ./flower
     image: quantimage2_flower:3.2
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_started
     env_file:
       - env_files/common.env
 
   db:
     image: mysql:5.7
+    restart: unless-stopped
     env_file:
       - env_files/common.env
     secrets:
@@ -65,21 +87,25 @@ services:
 
   phpmyadmin:
     image: phpmyadmin
+    restart: unless-stopped
     env_file:
       - env_files/phpmyadmin.env
     volumes:
       - pma-sessions:/sessions
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   redis:
     image: redis:7.4.1
+    restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - tasks-db:/data
 
   redis-socket:
     image: redis:7.4.1
+    restart: unless-stopped
 
   keycloak:
     profiles:
@@ -117,6 +143,7 @@ services:
 
   ohif:
     image: ohif/viewer:v4.12.35.19437
+    restart: unless-stopped
     volumes:
       - ./ohif/ohif-config.js:/usr/share/nginx/html/app-config.js
 
