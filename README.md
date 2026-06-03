@@ -41,7 +41,6 @@ The project uses Docker for easy build & deployment, using the following files :
 - `docker-compose.override.yml` : Override file for local development, exposing ports & mapping source directories to containers.
 - `docker-compose.local.yml` : Exports ports but does not map the source code directly
 - `docker-compose.vm.yml` : File for the [QuantImage v2 VM](https://medgift.github.io/quantimage-v2-info/#getting-started), restarting containers automatically on reboot or crash
-- `docker-compose.zrad.yml` : File to include the [ZRad](https://medical-physics-usz.github.io) feature extraction library (currently not publicly available)
 - `docker-compose.prod.yml` : Production file for use with Traefik
 
 Below is an overview of the various containers that constitute the backend:
@@ -69,6 +68,49 @@ To run the python code locally without being in the web app use the following st
 - install dependencies with `uv pip install -r requirements.txt`
 - for jupyter notebook development - run (after having activated the environment with `ßource .venv/bin/activate`) - `python -m ipykernel install --user --name webapp --display-name "Webapp python environment"`
 - in the notebook subfolder we provide example scrips on how to interact with the db via pandas or a local flask context.
+
+### Database migrations
+
+Schema changes are managed with [Alembic](https://alembic.sqlalchemy.org/). **Important:** the
+migration files under `webapp/alembic/versions/` are **git-ignored**, and the dev container only
+**applies** migrations on startup — it no longer auto-generates them.
+
+What this means in practice:
+
+- **On container start (dev/local only):** when `DB_AUTOMIGRATE=1` (set in `env_files/debug.env`
+  / `docker-compose.local.yml`), the entrypoint runs `alembic upgrade head` to apply any pending
+  migrations. It does **not** create migrations — that previously produced an empty revision file
+  on every boot.
+- **When you change a model** (`shared/quantimage2_backend_common/models.py`) you must generate the
+  migration yourself and apply it:
+  ```bash
+  docker compose exec backend alembic revision --autogenerate -m "describe change"
+  # review the generated file. Autogenerate only emits schema DDL (CREATE TABLE / ADD COLUMN);
+  # if existing rows need values for a new NOT NULL column, add the data backfill SQL by hand.
+  docker compose exec backend alembic upgrade head
+  ```
+- **Migrations do not reach other machines or prod via git** (they are ignored). A migration that
+  must be shared — especially one with a hand-written data backfill — has to be **force-added**
+  (`git add -f webapp/alembic/versions/<file>.py`) or applied to the target database manually.
+- **Production** does not set `DB_AUTOMIGRATE`, so it never runs Alembic automatically. After a
+  deploy that includes a schema change, apply it manually (take a DB backup first):
+  ```bash
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend alembic upgrade head
+  ```
+  This requires the migration file to be present on the prod server (see the git-ignore note above).
+
+### Radiomics feature prefixes (legacy ZRAD / Riesz)
+
+Radiomics feature IDs are `{modality}‑{roi}‑{feature_name}` (the separator is U+2011, a
+non-breaking hyphen) and the `{feature_name}` must start with a known prefix listed in
+`shared/quantimage2_backend_common/const.py` (`prefixes`, used by `featureIDMatcher`).
+
+`ZRAD_FEATURE_PREFIXES = ["zrad"]` and `RIESZ_FEATURE_PREFIXES = ["tex"]` are kept **for
+parsing only**. We no longer compute ZRAD or Riesz features (the ZRAD build/extraction
+support was removed), but these prefixes must stay so that feature IDs already stored in the
+database continue to parse. Removing a prefix makes `featureIDMatcher` silently drop or
+misclassify existing rows with that prefix — do not remove them without first confirming no
+such features exist in the database and updating the frontend + a data migration accordingly.
 
 ### Code Structure
 
