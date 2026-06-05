@@ -2,6 +2,19 @@
 
 ## Changelog
 
+### 3.3
+
+- **Multi-file clinical features** — Clinical feature definitions are now scoped to an uploaded CSV file (new `ClinicalFeatureFile` model + `clinical_feature_file_id` foreign key on definitions), so several clinical-data files can coexist per album. New REST endpoints: `GET/POST /clinical-features-files` and `PATCH/DELETE /clinical-features-files/<id>` to list, upload, rename and delete files.
+- **Clinical features correctness & security fixes**:
+  - Re-uploading a clinical-data file now **replaces** its values per file instead of appending, so duplicate `(patient, definition)` value rows are no longer created.
+  - Legacy `FeatureCollection`s referencing clinical feature IDs resolve to a single definition (lowest file id / "Legacy" file), so old collections don't pull the same feature from multiple files.
+  - `PATCH /clinical-features-definitions` enforces ownership (prevents IDOR via client-supplied ids) and returns 400/404 on malformed bodies instead of 500.
+  - `/clinical-features/unique-values` skips columns with no matching definition instead of failing with a 500.
+  - Added regression tests (`tests/test_clinical_features_routes.py`), including an `ON DELETE CASCADE` test.
+- **Dropped MATLAB/ZRAD build** — Removed the dead MATLAB/MCR environment and ZRAD build steps from `workers/Dockerfile` and deleted `docker-compose.zrad.yml`. The `zrad`/`tex` feature-ID prefixes are kept for **parsing only** (see [Radiomics feature prefixes](#radiomics-feature-prefixes-legacy-zrad--riesz)).
+- **Docker Compose improvements** — Services restart automatically (`restart: unless-stopped`) and `depends_on` uses the MySQL healthcheck so backend/workers wait for the database to be ready.
+- **Migration workflow change** — On startup the dev/local entrypoint only **applies** migrations (`alembic upgrade head`); it no longer auto-generates them (see [Database migrations](#database-migrations)). ⚠️ Upgrading to 3.3 requires applying the `clinical_feature_file` migration to existing databases — migration files are git-ignored, so it must be present on (or recreated on) the target machine.
+
 ### 3.2
 
 - **Upgraded to Python 3.12** — Updated base Docker images, dependencies, and fixed compatibility issues with SQLAlchemy 2.0, Pandas 2.x, and Python 3.12 runtime changes.
