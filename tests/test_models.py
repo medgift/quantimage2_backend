@@ -541,9 +541,17 @@ class TestAlbum:
 
 
 class TestClinicalFeatures:
+    def _make_file(self, user_id="u-clin", album_id="alb-clin", name="Cohort A"):
+        from quantimage2_backend_common.models import ClinicalFeatureFile
+
+        f = ClinicalFeatureFile(name=name, album_id=album_id, user_id=user_id)
+        f.save_to_db()
+        return f
+
     def test_definition_create(self, app, db_session):
         from quantimage2_backend_common.models import ClinicalFeatureDefinition
 
+        f = self._make_file()
         cfd = ClinicalFeatureDefinition(
             name="Age",
             album_id="alb-clin",
@@ -551,18 +559,27 @@ class TestClinicalFeatures:
             feat_type="Number",
             encoding="Normalization",
             missing_values="Mean",
+            clinical_feature_file_id=f.id,
         )
         cfd.save_to_db()
         assert cfd.id is not None
+        assert cfd.clinical_feature_file_id == f.id
 
     def test_definition_find_by_user_and_album(self, app, db_session):
         from quantimage2_backend_common.models import ClinicalFeatureDefinition
 
+        f = self._make_file(user_id="u-f", album_id="alb-f", name="Cohort F")
         ClinicalFeatureDefinition(
-            "Weight", "alb-f", "u-f", "Number", "None", "Drop"
+            "Weight", "alb-f", "u-f", "Number", "None", "Drop", f.id
         ).save_to_db()
         ClinicalFeatureDefinition(
-            "Smoking", "alb-f", "u-f", "Categorical", "One-Hot Encoding", "Mode"
+            "Smoking",
+            "alb-f",
+            "u-f",
+            "Categorical",
+            "One-Hot Encoding",
+            "Mode",
+            f.id,
         ).save_to_db()
 
         found = ClinicalFeatureDefinition.find_by_user_id_and_album_id("u-f", "alb-f")
@@ -574,8 +591,9 @@ class TestClinicalFeatures:
             ClinicalFeatureValue,
         )
 
+        f = self._make_file(user_id="u-cv", album_id="alb-cv", name="Cohort CV")
         cfd = ClinicalFeatureDefinition(
-            "Height", "alb-cv", "u-cv", "Number", "None", "Drop"
+            "Height", "alb-cv", "u-cv", "Number", "None", "Drop", f.id
         )
         cfd.save_to_db()
 
@@ -583,6 +601,48 @@ class TestClinicalFeatures:
         cfv.save_to_db()
         assert cfv.id is not None
         assert cfv.value == "175"
+
+    def test_two_files_can_share_column_names(self, app, db_session):
+        """Two ClinicalFeatureFile rows in the same (user, album) can each
+        own a ClinicalFeatureDefinition with the same `name` — that's the
+        whole point of the multi-CSV change."""
+        from quantimage2_backend_common.models import (
+            ClinicalFeatureDefinition,
+            ClinicalFeatureFile,
+        )
+
+        f_a = ClinicalFeatureFile(name="A", album_id="alb-x", user_id="u-x")
+        f_a.save_to_db()
+        f_b = ClinicalFeatureFile(name="B", album_id="alb-x", user_id="u-x")
+        f_b.save_to_db()
+
+        ClinicalFeatureDefinition(
+            "Age", "alb-x", "u-x", "Number", "Normalization", "Mean", f_a.id
+        ).save_to_db()
+        ClinicalFeatureDefinition(
+            "Age", "alb-x", "u-x", "Number", "Normalization", "Mean", f_b.id
+        ).save_to_db()
+
+        all_defs = ClinicalFeatureDefinition.find_by_user_id_and_album_id(
+            "u-x", "alb-x"
+        )
+        assert len(all_defs) == 2
+        a_only = ClinicalFeatureDefinition.find_by_user_id_album_id_and_file_id(
+            "u-x", "alb-x", f_a.id
+        )
+        assert len(a_only) == 1 and a_only[0].clinical_feature_file_id == f_a.id
+
+    def test_file_unique_name_within_user_album(self, app, db_session):
+        from quantimage2_backend_common.models import ClinicalFeatureFile
+        from sqlalchemy.exc import IntegrityError
+
+        ClinicalFeatureFile(
+            name="Same name", album_id="alb-u", user_id="u-u"
+        ).save_to_db()
+        with pytest.raises(IntegrityError):
+            ClinicalFeatureFile(
+                name="Same name", album_id="alb-u", user_id="u-u"
+            ).save_to_db()
 
 
 # ---------------------------------------------------------------------------
