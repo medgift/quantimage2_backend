@@ -10,7 +10,7 @@ Both the training paths (``service.machine_learning``) and the advisory route
 shown to the user can never drift from what training actually does.
 """
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from quantimage2_backend_common.models import (
     ClinicalFeatureDefinition,
@@ -29,7 +29,7 @@ STATUS_CONFLICT = "conflict"
 MISSING_STRINGS = {"", "n/a", "n(a", "none", "nan"}
 
 
-def is_missing_value(value) -> bool:
+def is_missing_value(value: Optional[str]) -> bool:
     """True if a stored clinical feature value counts as missing for training."""
     if value is None:
         return True
@@ -66,11 +66,20 @@ def _values_equal(a: str, b: str) -> bool:
         return False
 
 
-def _non_missing_values_by_patient(definition_id: int) -> Dict[str, str]:
+def _non_missing_values_by_patient(
+    definition_ids: List[int],
+) -> Dict[int, Dict[str, str]]:
+    """Batch-load values for many definitions: {definition_id: {patient: value}}."""
     values = ClinicalFeatureValue.find_by_clinical_feature_definition_ids(
-        [definition_id]
+        definition_ids
     )
-    return {v.patient_id: v.value for v in values if not is_missing_value(v.value)}
+    by_definition: Dict[int, Dict[str, str]] = {}
+    for v in values:
+        if not is_missing_value(v.value):
+            by_definition.setdefault(v.clinical_feature_definition_id, {})[
+                v.patient_id
+            ] = v.value
+    return by_definition
 
 
 def compute_clinical_duplicate_advisories(user_id: str, album_id: str) -> List[Dict]:
@@ -99,21 +108,29 @@ def compute_clinical_duplicate_advisories(user_id: str, album_id: str) -> List[D
     for definition in definitions:
         definitions_by_name.setdefault(definition.name, []).append(definition)
 
-    advisories = []
-    for name, name_definitions in definitions_by_name.items():
-        if len(name_definitions) < 2:
-            continue
+    duplicated = {
+        name: name_definitions
+        for name, name_definitions in definitions_by_name.items()
+        if len(name_definitions) >= 2
+    }
 
+    # One query for every duplicated definition's values, compared in memory.
+    values_by_definition = _non_missing_values_by_patient(
+        [d.id for name_definitions in duplicated.values() for d in name_definitions]
+    )
+
+    advisories = []
+    for name, name_definitions in duplicated.items():
         kept = max(name_definitions, key=lambda d: d.clinical_feature_file_id)
         dropped = [d for d in name_definitions if d.id != kept.id]
 
-        kept_values = _non_missing_values_by_patient(kept.id)
+        kept_values = values_by_definition.get(kept.id, {})
 
         conflict_patients = set()
         coverage_loss_patients = set()
         for dropped_definition in dropped:
-            for patient_id, value in _non_missing_values_by_patient(
-                dropped_definition.id
+            for patient_id, value in values_by_definition.get(
+                dropped_definition.id, {}
             ).items():
                 kept_value = kept_values.get(patient_id)
                 if kept_value is None:

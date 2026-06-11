@@ -232,8 +232,11 @@ def clinical_features():
             # Saving values for a file is a replace, not an append: drop any
             # existing values for these definitions first so re-uploading the
             # same file does not accumulate duplicate (patient, definition) rows.
+            # commit=False keeps the delete pending until insert_values commits,
+            # so a failed insert rolls back the delete too instead of leaving
+            # the file wiped.
             ClinicalFeatureValue.delete_by_clinical_feature_definition_ids(
-                [feature.id for feature in present_definitions]
+                [feature.id for feature in present_definitions], commit=False
             )
             saved_features = ClinicalFeatureValue.insert_values(values_to_insert)
 
@@ -432,7 +435,7 @@ def clinical_feature_file_detail(file_id: int):
         new_name = (request.json or {}).get("name")
         if not new_name or not isinstance(new_name, str):
             return {"message": "`name` is required"}, 400
-        # Reject silently if a sibling file already has the requested name
+        # Reject with 409 if a sibling file already has the requested name
         existing = ClinicalFeatureFile.find_by_user_id_album_id_and_name(
             g.user, f.album_id, new_name
         )

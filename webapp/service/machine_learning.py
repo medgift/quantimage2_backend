@@ -223,7 +223,10 @@ def train_model(
     return model.create_model()
 
 
-def resolve_collection_clinical_definitions(feature_ids, full_clin_feature_definitions):
+def resolve_collection_clinical_definitions(
+    feature_ids: List[str],
+    full_clin_feature_definitions: List[ClinicalFeatureDefinition],
+) -> List[ClinicalFeatureDefinition]:
     """Map a feature collection's clinical feature_ids to definition rows.
 
     A clinical feature ID is anything in ``feature_ids`` that does not contain

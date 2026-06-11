@@ -1185,20 +1185,25 @@ class ClinicalFeatureValue(BaseModel, db.Model):
 
     @classmethod
     def delete_by_clinical_feature_definition_ids(
-        cls, clinical_feature_definition_ids: List[int]
+        cls, clinical_feature_definition_ids: List[int], commit: bool = True
     ):
+        # commit=False leaves the delete pending so a caller can commit it
+        # together with replacement inserts in one transaction.
         if not clinical_feature_definition_ids:
             return
         cls.query.filter(
             cls.clinical_feature_definition_id.in_(clinical_feature_definition_ids)
         ).delete(synchronize_session=False)
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
     @classmethod
     def insert_values(cls, values_to_insert: List[Dict[str, Any]]):
         if len(values_to_insert) > 0:
             db.session.bulk_insert_mappings(cls, values_to_insert)
-            db.session.commit()
+        # Commit even when empty: a replace-upload may have a pending delete
+        # (see delete_by_clinical_feature_definition_ids(commit=False)).
+        db.session.commit()
 
         return values_to_insert
 
