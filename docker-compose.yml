@@ -11,7 +11,7 @@ services:
         condition: service_started
       redis-socket:
         condition: service_started
-    image: quantimage2_backend:3.2
+    image: quantimage2_backend:3.3
     env_file:
       - env_files/common.env
       - env_files/webapp.env
@@ -30,7 +30,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-    image: quantimage2_backend_celery:3.2
+    image: quantimage2_backend_celery:3.3
     env_file:
       - env_files/common.env
       - env_files/workers.env
@@ -42,7 +42,7 @@ services:
     command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=prefork", "--hostname=extraction@%h", "--queues=extraction"]
 
   celery_training:
-    image: quantimage2_backend_celery:3.2
+    image: quantimage2_backend_celery:3.3
     restart: unless-stopped
     depends_on:
       db:
@@ -61,7 +61,7 @@ services:
 
   flower:
     build: ./flower
-    image: quantimage2_flower:3.2
+    image: quantimage2_flower:3.3
     restart: unless-stopped
     depends_on:
       redis:

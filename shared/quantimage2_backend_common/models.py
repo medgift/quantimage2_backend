@@ -958,17 +958,84 @@ class ClinicalFeatureMissingValues(Enum):
     NONE = "None"
 
 
+class ClinicalFeatureFile(BaseModel, db.Model):
+    """A clinical-features CSV uploaded by a user for an album.
+
+    Multiple files can coexist for the same (user_id, album_id); each one owns
+    its own ClinicalFeatureDefinition rows. The file is identified externally
+    by integer id; `name` is a human-friendly label (defaults to filename).
+    """
+
+    __tablename__ = "clinical_feature_file"
+
+    def __init__(self, name: str, album_id: str, user_id: str):
+        self.name = name
+        self.album_id = album_id
+        self.user_id = user_id
+
+    name = db.Column(db.String(255), nullable=False, unique=False)
+    album_id = db.Column(db.String(255), nullable=False, unique=False)
+    user_id = db.Column(db.String(255), nullable=False, unique=False)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id",
+            "album_id",
+            "name",
+            name="uq_clinical_feature_file_user_album_name",
+        ),
+    )
+
+    @classmethod
+    def find_by_user_id_and_album_id(
+        cls, user_id: str, album_id: str
+    ) -> List[ClinicalFeatureFile]:
+        return (
+            cls.query.filter(cls.user_id == user_id, cls.album_id == album_id)
+            .order_by(cls.created_at.asc())
+            .all()
+        )
+
+    @classmethod
+    def find_by_user_id_album_id_and_name(
+        cls, user_id: str, album_id: str, name: str
+    ) -> Optional[ClinicalFeatureFile]:
+        return cls.query.filter(
+            cls.user_id == user_id, cls.album_id == album_id, cls.name == name
+        ).one_or_none()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "created_at": self._serialize_dt(self.created_at),
+            "updated_at": self._serialize_dt(self.updated_at),
+            "name": self.name,
+            "album_id": self.album_id,
+            "user_id": self.user_id,
+        }
+
+
 class ClinicalFeatureDefinition(BaseModel, db.Model):
 
     __tablename__ = "clinical_feature_definition"
 
-    def __init__(self, name, album_id, user_id, feat_type, encoding, missing_values):
+    def __init__(
+        self,
+        name,
+        album_id,
+        user_id,
+        feat_type,
+        encoding,
+        missing_values,
+        clinical_feature_file_id=None,
+    ):
         self.name = name
         self.album_id = album_id
         self.user_id = user_id
         self.feat_type = feat_type
         self.encoding = encoding
         self.missing_values = missing_values
+        self.clinical_feature_file_id = clinical_feature_file_id
 
     # Name of the feature
     name = db.Column(db.String(255), nullable=False, unique=False)
@@ -985,6 +1052,14 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
     # User who created the clinical feature category
     user_id = db.Column(db.String(255), nullable=False, unique=False)
 
+    # File this definition was uploaded from
+    clinical_feature_file_id = db.Column(
+        db.Integer,
+        ForeignKey("clinical_feature_file.id", ondelete="CASCADE", onupdate="CASCADE"),
+        nullable=False,
+    )
+    clinical_feature_file = db.relationship("ClinicalFeatureFile")
+
     @classmethod
     def find_by_name(cls, clinical_feature_names, user_id):
         clinical_feature_definitions = cls.query.filter(
@@ -1000,14 +1075,14 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         return cls.query.filter(cls.user_id == user_id, cls.album_id == album_id).all()
 
     @classmethod
-    def find_by_user_id_and_album_id_and_name(
-        cls, user_id, album_id, name
-    ) -> ClinicalFeatureDefinition:
-        clinical_feature_definition = cls.query.filter(
-            cls.user_id == user_id, cls.album_id == album_id, cls.name == name
+    def find_by_user_id_album_id_and_file_id(
+        cls, user_id: str, album_id: str, clinical_feature_file_id: int
+    ) -> List[ClinicalFeatureDefinition]:
+        return cls.query.filter(
+            cls.user_id == user_id,
+            cls.album_id == album_id,
+            cls.clinical_feature_file_id == clinical_feature_file_id,
         ).all()
-        assert len(clinical_feature_definition) == 1
-        return clinical_feature_definition[0]
 
     @classmethod
     def insert_values(cls, definitions_to_insert):
@@ -1018,28 +1093,35 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
         return definitions_to_insert
 
     @classmethod
-    def update_values(cls, definitions_to_update):
+    def find_owned_ids(cls, user_id, ids) -> set:
+        """Return the subset of `ids` that belong to `user_id`."""
+        if not ids:
+            return set()
+        rows = (
+            cls.query.with_entities(cls.id)
+            .filter(cls.user_id == user_id, cls.id.in_(ids))
+            .all()
+        )
+        return {row.id for row in rows}
 
-        definitions_to_update_without_dates = [
+    @classmethod
+    def update_values(cls, definitions_to_update):
+        # bulk_update_mappings needs the primary key. The frontend ships `id`
+        # back from to_dict(), so use it directly — looking it up by name is
+        # ambiguous now that the same name can exist in two files.
+        cleaned = [
             {
                 key: val
                 for key, val in definition.items()
-                if key not in ["created_at", "updated_at"]
+                if key not in ("created_at", "updated_at")
             }
             for definition in definitions_to_update
         ]
-
-        # adding the clin feature id
-        # the bulk update mappings only work if we provide the primary key which is the id column.
-        definitions_with_id = []
-        for i in definitions_to_update_without_dates:
-            id = ClinicalFeatureDefinition.find_by_user_id_and_album_id_and_name(
-                user_id=i["user_id"], album_id=i["album_id"], name=i["name"]
-            ).id
-            i["id"] = id
-            definitions_with_id.append(i)
-
-        db.session.bulk_update_mappings(cls, definitions_with_id)
+        if any("id" not in d for d in cleaned):
+            raise ValueError(
+                "ClinicalFeatureDefinition.update_values requires `id` on every row"
+            )
+        db.session.bulk_update_mappings(cls, cleaned)
         db.session.commit()
 
     def to_dict(self):
@@ -1053,12 +1135,14 @@ class ClinicalFeatureDefinition(BaseModel, db.Model):
             "feat_type": self.feat_type,
             "encoding": self.encoding,
             "missing_values": self.missing_values,
+            "clinical_feature_file_id": self.clinical_feature_file_id,
         }
 
     @classmethod
-    def delete_by_user_id_and_album_id(cls, user_id: str, album_id: str):
-        results = cls.query.filter(cls.user_id == user_id, cls.album_id == album_id)
-        results.delete()
+    def delete_by_file_id(cls, clinical_feature_file_id: int):
+        cls.query.filter(
+            cls.clinical_feature_file_id == clinical_feature_file_id
+        ).delete()
         db.session.commit()
 
 
@@ -1100,10 +1184,26 @@ class ClinicalFeatureValue(BaseModel, db.Model):
         ).all()
 
     @classmethod
+    def delete_by_clinical_feature_definition_ids(
+        cls, clinical_feature_definition_ids: List[int], commit: bool = True
+    ):
+        # commit=False leaves the delete pending so a caller can commit it
+        # together with replacement inserts in one transaction.
+        if not clinical_feature_definition_ids:
+            return
+        cls.query.filter(
+            cls.clinical_feature_definition_id.in_(clinical_feature_definition_ids)
+        ).delete(synchronize_session=False)
+        if commit:
+            db.session.commit()
+
+    @classmethod
     def insert_values(cls, values_to_insert: List[Dict[str, Any]]):
         if len(values_to_insert) > 0:
             db.session.bulk_insert_mappings(cls, values_to_insert)
-            db.session.commit()
+        # Commit even when empty: a replace-upload may have a pending delete
+        # (see delete_by_clinical_feature_definition_ids(commit=False)).
+        db.session.commit()
 
         return values_to_insert
 

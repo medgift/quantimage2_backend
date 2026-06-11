@@ -13,6 +13,7 @@ from modeling.survival import Survival
 from modeling.utils import get_random_seed
 from quantimage2_backend_common.const import (
     FEATURE_ID_SEPARATOR,
+    CLINICAL_FEATURE_ID_SEPARATOR,
     MODEL_TYPES,
     ESTIMATOR_STEP,
 )
@@ -27,6 +28,7 @@ from quantimage2_backend_common.models import (
     Model,
 )
 from quantimage2_backend_common.utils import get_training_id
+from service.clinical_features_dedup import dedupe_definitions_by_name
 from service.feature_transformation import (
     OUTCOME_FIELD_CLASSIFICATION,
     OUTCOME_FIELD_SURVIVAL_EVENT,
@@ -221,6 +223,65 @@ def train_model(
     return model.create_model()
 
 
+def resolve_collection_clinical_definitions(
+    feature_ids: List[str],
+    full_clin_feature_definitions: List[ClinicalFeatureDefinition],
+) -> List[ClinicalFeatureDefinition]:
+    """Map a feature collection's clinical feature_ids to definition rows.
+
+    A clinical feature ID is anything in ``feature_ids`` that does not contain
+    the radiomics U+2011 separator. Two formats are accepted:
+      - "<file_id>::<name>" (post multi-CSV change)
+      - "<name>"            (legacy collections from before multi-CSV)
+
+    Returns a list of matched ClinicalFeatureDefinition rows, deduplicated by
+    id so the same feature is never pulled in twice.
+    """
+    exact_pairs = set()  # {(file_id, name)} from the namespaced format
+    legacy_names = set()  # {name} from the bare format (file unspecified)
+    for feature_id in feature_ids:
+        if FEATURE_ID_SEPARATOR in feature_id:
+            continue  # radiomics ID, skip
+        if CLINICAL_FEATURE_ID_SEPARATOR in feature_id:
+            fpart, nm = feature_id.split(CLINICAL_FEATURE_ID_SEPARATOR, 1)
+            try:
+                exact_pairs.add((int(fpart), nm))
+            except ValueError:
+                legacy_names.add(feature_id)
+        else:
+            legacy_names.add(feature_id)
+
+    selected = {}
+    for d in full_clin_feature_definitions:
+        if (d.clinical_feature_file_id, d.name) in exact_pairs:
+            selected[d.id] = d
+
+    # A legacy bare name can now match definitions in several files. Resolve the
+    # ambiguity deterministically to a single column: the definition in the
+    # lowest file_id, which is the migration-backfilled "Legacy" file (created
+    # before any later uploads) — i.e. the original the collection referred to.
+    # This avoids silently doubling the feature set.
+    for name in legacy_names:
+        candidates = [d for d in full_clin_feature_definitions if d.name == name]
+        if candidates:
+            chosen = min(candidates, key=lambda d: d.clinical_feature_file_id)
+            selected[chosen.id] = chosen
+
+    # Even if the collection explicitly selected the same name from several
+    # files (e.g. "1::CenterID" and "2::CenterID"), the feature must only enter
+    # the model once: keep the newest file's copy.
+    clin_feature_definitions = dedupe_definitions_by_name(selected.values())
+
+    if (exact_pairs or legacy_names) and not clin_feature_definitions:
+        raise ValueError(
+            f"Assumed that the feature collection contained these clinical features "
+            f"{sorted(exact_pairs)} / {sorted(legacy_names)} but none were matched. "
+            f"Definitions present: {[(d.clinical_feature_file_id, d.name) for d in full_clin_feature_definitions]}"
+        )
+
+    return clin_feature_definitions
+
+
 def get_clinical_features(
     user_id: str, collection_id: str, radiomics_patient_ids: List[str], album: str
 ):
@@ -232,32 +293,16 @@ def get_clinical_features(
 
     if collection_id:
         feature_collection = FeatureCollection.find_by_id(collection_id)
-
-        selected_clinical_features = []
-        for feature_id in feature_collection.feature_ids:
-            if FEATURE_ID_SEPARATOR in feature_id:
-                # In the front end - clinical features are saved with no nesting - and the FEATURE_ID_SEPARATOR is used
-                # to save nesting levels from the radiomics feature - https://github.com/medgift/quantimage2-frontend/blob/34e393867c2ecd364409a4aabaac5fe42dcd4172/src/Visualisation.js#L66
-                # if not present it means it's a clinical feature.
-                continue
-            else:
-                selected_clinical_features.append(feature_id)
-
-        clin_feature_definitions = [
-            i
-            for i in full_clin_feature_definitions
-            if i.name in selected_clinical_features
-        ]
-
-        # If the front end passes clinical feature names that are not matched by features in the db we should raise an error as the
-        # frontend may have passed in bad data
-        if len(selected_clinical_features) > 0 and len(clin_feature_definitions) == 0:
-            raise ValueError(
-                f"Assumed that the feature collection contained these clinical features {selected_clinical_features} but none where selcted for training. Clin Feature definitions table contains these featurs {[i.name for i in full_clin_feature_definitions]}"
-            )
+        clin_feature_definitions = resolve_collection_clinical_definitions(
+            feature_collection.feature_ids, full_clin_feature_definitions
+        )
 
     else:  # If collection_id is None we are training with all clinical features
-        clin_feature_definitions = full_clin_feature_definitions
+        # A name present in several uploaded files must only be used once:
+        # keep the newest file's copy (see service.clinical_features_dedup).
+        clin_feature_definitions = dedupe_definitions_by_name(
+            full_clin_feature_definitions
+        )
 
     if len(clin_feature_definitions) == 0:
         return pandas.DataFrame()
@@ -269,6 +314,10 @@ def get_clinical_features(
     print("names of clin feat def", [i.name for i in clin_feature_definitions])
     print(user_id)
     for clin_feature in clin_feature_definitions:
+        # Namespace the column by file_id so the same column name in two
+        # uploaded CSVs lands in two distinct columns in the merged matrix.
+        col_name = f"{clin_feature.clinical_feature_file_id}{CLINICAL_FEATURE_ID_SEPARATOR}{clin_feature.name}"
+
         clin_feature_values = (
             ClinicalFeatureValue.find_by_clinical_feature_definition_ids(
                 [clin_feature.id]
@@ -278,7 +327,7 @@ def get_clinical_features(
             [i.to_dict() for i in clin_feature_values]
         )
         clin_feature_df.rename(
-            columns={"value": clin_feature.name, "patient_id": "PatientID"},
+            columns={"value": col_name, "patient_id": "PatientID"},
             inplace=True,
         )
         clin_feature_df.set_index("PatientID", inplace=True)
@@ -299,18 +348,18 @@ def get_clinical_features(
         clin_missing_values = ClinicalFeatureMissingValues(clin_feature.missing_values)
 
         missing_values_idx = (
-            clin_feature_df[clin_feature.name].apply(lambda x: x is None)
-            | clin_feature_df[clin_feature.name].isnull()
-            | clin_feature_df[clin_feature.name].apply(
+            clin_feature_df[col_name].apply(lambda x: x is None)
+            | clin_feature_df[col_name].isnull()
+            | clin_feature_df[col_name].apply(
                 lambda x: str(x).lower() in ["n/a", "n(a"]
             )
         )
 
-        non_missing_values = clin_feature_df.loc[~missing_values_idx][clin_feature.name]
+        non_missing_values = clin_feature_df.loc[~missing_values_idx][col_name]
         if (
             missing_values_idx.sum() > 0
         ):  # only apply missing values logic if there are actually missing values
-            print("missing values for", clin_feature.name, clin_missing_values)
+            print("missing values for", col_name, clin_missing_values)
             if clin_missing_values != ClinicalFeatureMissingValues.DROP:
                 if clin_missing_values == ClinicalFeatureMissingValues.NONE:
                     pass
@@ -319,7 +368,7 @@ def get_clinical_features(
                         value = non_missing_values.astype(float).median()
                     except:
                         raise ValueError(
-                            f"Tried to compute the median of {clin_feature.name} but failed"
+                            f"Tried to compute the median of {col_name} but failed"
                         )
 
                 elif clin_missing_values == ClinicalFeatureMissingValues.MEAN:
@@ -327,17 +376,17 @@ def get_clinical_features(
                         value = non_missing_values.astype(float).mean()
                     except:
                         raise ValueError(
-                            f"Tried to compute the mean of {clin_feature.name} but failed"
+                            f"Tried to compute the mean of {col_name} but failed"
                         )
                 elif clin_missing_values == ClinicalFeatureMissingValues.MODE:
                     try:
                         value = non_missing_values.mode().values[0]
                     except:
                         raise ValueError(
-                            f"Tried to compute the mode of {clin_feature.name} but failed"
+                            f"Tried to compute the mode of {col_name} but failed"
                         )
 
-                clin_feature_df.loc[missing_values_idx, clin_feature.name] = value
+                clin_feature_df.loc[missing_values_idx, col_name] = value
 
             else:  # If we drop the missing values we need to get rid of them before the encoding.
                 clin_feature_df = clin_feature_df.loc[~missing_values_idx]
@@ -345,29 +394,27 @@ def get_clinical_features(
         if clin_feature_type == ClinicalFeatureTypes.CATEGORICAL:
             if clin_feature_encoding == ClinicalFeatureEncodings.ONE_HOT_ENCODING:
                 enc = OneHotEncoder(handle_unknown="ignore")
-                enc.fit(clin_feature_df[[clin_feature.name]])
-                transformed = enc.transform(
-                    clin_feature_df[[clin_feature.name]]
-                ).toarray()
+                enc.fit(clin_feature_df[[col_name]])
+                transformed = enc.transform(clin_feature_df[[col_name]]).toarray()
                 clin_feature_df = pandas.DataFrame(
                     data=transformed,
                     index=index,
-                    columns=enc.get_feature_names_out([clin_feature.name]),
+                    columns=enc.get_feature_names_out([col_name]),
                 )
             elif clin_feature_encoding == ClinicalFeatureEncodings.ORDERED_CATEGORIES:
                 ordered_categories_encoder = OrdinalEncoder()
-                ordered_categories_encoder.fit(clin_feature_df[[clin_feature.name]])
+                ordered_categories_encoder.fit(clin_feature_df[[col_name]])
                 ordered_categories_order = "_".join(
                     ordered_categories_encoder.categories_[0]
                 )
 
                 transformed = ordered_categories_encoder.transform(
-                    clin_feature_df[[clin_feature.name]]
+                    clin_feature_df[[col_name]]
                 )
                 clin_feature_df = pandas.DataFrame(
                     data=transformed,
                     index=index,
-                    columns=[f"{clin_feature.name}_{ordered_categories_order}"],
+                    columns=[f"{col_name}_{ordered_categories_order}"],
                 )
             else:
                 raise ValueError(
@@ -376,18 +423,18 @@ def get_clinical_features(
         elif clin_feature_type == ClinicalFeatureTypes.NUMBER:
             if clin_feature_encoding == ClinicalFeatureEncodings.NORMALIZATION:
                 scaler = MinMaxScaler()
-                transformed = scaler.fit_transform(clin_feature_df[[clin_feature.name]])
+                transformed = scaler.fit_transform(clin_feature_df[[col_name]])
                 clin_feature_df = pandas.DataFrame(
-                    data=transformed, index=index, columns=[clin_feature.name]
+                    data=transformed, index=index, columns=[col_name]
                 )
 
             elif clin_feature_encoding == ClinicalFeatureEncodings.NONE:
                 try:
-                    clin_feature_df[[clin_feature.name]] = clin_feature_df[
-                        [clin_feature.name]
-                    ].astype(float)
+                    clin_feature_df[[col_name]] = clin_feature_df[[col_name]].astype(
+                        float
+                    )
                 except ValueError as e:
-                    print("Error with feature", clin_feature.name)
+                    print("Error with feature", col_name)
                     raise e
             else:
                 raise ValueError(
