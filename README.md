@@ -13,7 +13,7 @@
   - Added regression tests (`tests/test_clinical_features_routes.py`), including an `ON DELETE CASCADE` test.
 - **Dropped MATLAB/ZRAD build** — Removed the dead MATLAB/MCR environment and ZRAD build steps from `workers/Dockerfile` and deleted `docker-compose.zrad.yml`. The `zrad`/`tex` feature-ID prefixes are kept for **parsing only** (see [Radiomics feature prefixes](#radiomics-feature-prefixes-legacy-zrad--riesz)).
 - **Docker Compose improvements** — Services restart automatically (`restart: unless-stopped`) and `depends_on` uses the MySQL healthcheck so backend/workers wait for the database to be ready.
-- **Migration workflow change** — On startup the dev/local entrypoint only **applies** migrations (`alembic upgrade head`); it no longer auto-generates them (see [Database migrations](#database-migrations)). ⚠️ Upgrading to 3.3 requires applying the `clinical_feature_file` migration to existing databases — migration files are git-ignored, so it must be present on (or recreated on) the target machine.
+- **Migration workflow change** — On startup the dev/local entrypoint only **applies** migrations (`alembic upgrade head`); it no longer auto-generates them (see [Database migrations](#database-migrations)). ⚠️ Upgrading to 3.3 requires applying the `clinical_feature_file` migration to existing databases — migration files are git-ignored, so it must be present on (or recreated on) the target machine. On the HEVS production server this was done with the hand-written backfill in [`docs/fix_clinical_feature_file_id_backfill.sql`](docs/fix_clinical_feature_file_id_backfill.sql) (creates one `clinical_feature_file` per existing `(user_id, album_id)` group, links existing definitions, then enforces the `NOT NULL` FK). Apply the same script to any other database still on the pre-3.3 schema.
 
 ### 3.2
 
@@ -111,6 +111,21 @@ What this means in practice:
   docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend alembic upgrade head
   ```
   This requires the migration file to be present on the prod server (see the git-ignore note above).
+- **Worked example (3.3 `clinical_feature_file`):** because the migration file never reached the
+  HEVS prod server, the new code ran against the old schema and every `ClinicalFeatureDefinition`
+  query failed with `Unknown column 'clinical_feature_definition.clinical_feature_file_id'`. The new
+  `clinical_feature_file` table had been auto-created (SQLAlchemy creates missing tables but never
+  alters existing ones), but the `NOT NULL` FK column was never added to the pre-existing
+  `clinical_feature_definition` table. The fix — applied directly as SQL since no migration file was
+  available — is checked in at
+  [`docs/fix_clinical_feature_file_id_backfill.sql`](docs/fix_clinical_feature_file_id_backfill.sql):
+  add the column nullable, create one `clinical_feature_file` per existing `(user_id, album_id)`
+  group, backfill the FK on every definition, then switch the column to `NOT NULL` + add the FK.
+  Take a DB backup first (`mysqldump`), then run it as root:
+  ```bash
+  docker compose exec -T db mysqldump -u root -p quantimage2 > backup_before_cff_fix.sql
+  docker compose exec -T db mysql -u root -p quantimage2 < docs/fix_clinical_feature_file_id_backfill.sql
+  ```
 
 ### Radiomics feature prefixes (legacy ZRAD / Riesz)
 
