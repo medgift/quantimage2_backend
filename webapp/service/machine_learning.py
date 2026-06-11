@@ -28,6 +28,7 @@ from quantimage2_backend_common.models import (
     Model,
 )
 from quantimage2_backend_common.utils import get_training_id
+from service.clinical_features_dedup import dedupe_definitions_by_name
 from service.feature_transformation import (
     OUTCOME_FIELD_CLASSIFICATION,
     OUTCOME_FIELD_SURVIVAL_EVENT,
@@ -263,7 +264,10 @@ def resolve_collection_clinical_definitions(feature_ids, full_clin_feature_defin
             chosen = min(candidates, key=lambda d: d.clinical_feature_file_id)
             selected[chosen.id] = chosen
 
-    clin_feature_definitions = list(selected.values())
+    # Even if the collection explicitly selected the same name from several
+    # files (e.g. "1::CenterID" and "2::CenterID"), the feature must only enter
+    # the model once: keep the newest file's copy.
+    clin_feature_definitions = dedupe_definitions_by_name(selected.values())
 
     if (exact_pairs or legacy_names) and not clin_feature_definitions:
         raise ValueError(
@@ -291,7 +295,11 @@ def get_clinical_features(
         )
 
     else:  # If collection_id is None we are training with all clinical features
-        clin_feature_definitions = full_clin_feature_definitions
+        # A name present in several uploaded files must only be used once:
+        # keep the newest file's copy (see service.clinical_features_dedup).
+        clin_feature_definitions = dedupe_definitions_by_name(
+            full_clin_feature_definitions
+        )
 
     if len(clin_feature_definitions) == 0:
         return pandas.DataFrame()

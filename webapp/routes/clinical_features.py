@@ -13,6 +13,7 @@ from quantimage2_backend_common.models import (
 from quantimage2_backend_common.const import CLINICAL_FEATURE_ID_SEPARATOR
 from routes.utils import validate_decorate
 from quantimage2_backend_common.models import ClinicalFeatureTypes
+from service.clinical_features_dedup import compute_clinical_duplicate_advisories
 
 from service.feature_transformation import PATIENT_ID_FIELD
 
@@ -258,6 +259,19 @@ def clinical_features():
                 output[value_dict["patient_id"]][key] = value_dict["value"]
 
             return jsonify(output)
+
+
+@bp.route("/clinical-features/duplicates", methods=["GET"])
+def clinical_features_duplicates():
+    """Advisory for feature names duplicated across an album's clinical files.
+
+    Training uses each feature name only once (newest file wins); this returns
+    what that dedup means for the data: per duplicated name, which file is
+    kept, which are dropped, and whether the drop is harmless (identical) or
+    loses/overrides patient values (coverage_loss / conflict).
+    """
+    album_id = get_album_id_from_request(request)
+    return jsonify(compute_clinical_duplicate_advisories(g.user, album_id))
 
 
 @bp.route("/clinical-features-definitions", methods=("GET", "POST", "PATCH", "DELETE"))
