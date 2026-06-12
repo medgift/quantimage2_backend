@@ -59,6 +59,32 @@ class TestDedupeDefinitionsByName:
         ]
         assert len(dedupe_definitions_by_name(defs)) == 2
 
+    def test_definition_with_values_beats_newer_empty_one(self):
+        """An orphan (newer file, no values) must not shadow real older data."""
+        from service.clinical_features_dedup import dedupe_definitions_by_name
+
+        defs = [
+            SimpleNamespace(id=10, name="Age", clinical_feature_file_id=1),  # data
+            SimpleNamespace(id=11, name="Age", clinical_feature_file_id=3),  # orphan
+        ]
+        # Only definition 10 (older file) has values.
+        result = dedupe_definitions_by_name(defs, ids_with_values={10})
+        assert len(result) == 1
+        assert result[0].id == 10  # older-but-populated wins over newer-but-empty
+
+    def test_newest_with_values_wins_when_several_have_data(self):
+        from service.clinical_features_dedup import dedupe_definitions_by_name
+
+        defs = [
+            SimpleNamespace(id=10, name="Age", clinical_feature_file_id=1),
+            SimpleNamespace(id=11, name="Age", clinical_feature_file_id=2),
+            SimpleNamespace(id=12, name="Age", clinical_feature_file_id=3),  # empty
+        ]
+        # 10 and 11 have data, 12 (newest) is empty -> newest-with-data (11) wins.
+        result = dedupe_definitions_by_name(defs, ids_with_values={10, 11})
+        assert len(result) == 1
+        assert result[0].id == 11
+
 
 class TestResolveCollectionDedup:
     """A collection explicitly selecting the same name from two files must
@@ -244,3 +270,48 @@ class TestGetClinicalFeaturesNoDuplicateColumns:
         age_columns = [c for c in features_df.columns if "Age" in c]
         assert len(age_columns) == 1
         assert age_columns[0].startswith(f"{f2}::")
+
+    def test_value_less_orphan_does_not_shadow_real_data(self, app, db_session):
+        """A newer file with a definition but no values must not hide an older
+        file that has the same feature with real values."""
+        from service.machine_learning import get_clinical_features
+
+        old_file, _ = _create_file_with_values(app, "Old", {"P1": "30", "P2": "40"})
+        # Orphan: newer file, same name "Age", but zero values saved.
+        new_file, _ = _create_file_with_values(app, "Orphan", {})
+
+        with app.app_context():
+            features_df = get_clinical_features(
+                USER, None, ["P1", "P2"], {"album_id": ALBUM}
+            )
+
+        age_columns = [c for c in features_df.columns if "Age" in c]
+        assert len(age_columns) == 1
+        # The older, populated file is used; the newer empty one is not.
+        assert age_columns[0].startswith(f"{old_file}::")
+        assert not age_columns[0].startswith(f"{new_file}::")
+        assert len(features_df) == 2
+
+    def test_value_less_orphan_with_unique_name_is_skipped(self, app, db_session):
+        """The distances-file scenario: an orphan file's unique-named definition
+        with no values must be skipped, not crash set_index('PatientID')."""
+        from service.machine_learning import get_clinical_features
+
+        good_file, _ = _create_file_with_values(app, "Good", {"P1": "30", "P2": "40"})
+        # Orphan with a name that exists nowhere else and has no values.
+        orphan_file, _ = _create_file_with_values(
+            app, "Distances", {}, feature_name="distance_x"
+        )
+
+        with app.app_context():
+            # Previously raised: "None of ['PatientID'] are in the columns".
+            features_df = get_clinical_features(
+                USER, None, ["P1", "P2"], {"album_id": ALBUM}
+            )
+
+        assert not features_df.empty
+        assert len(features_df) == 2
+        assert any(str(c).startswith(f"{good_file}::") for c in features_df.columns)
+        assert not any(
+            str(c).startswith(f"{orphan_file}::") for c in features_df.columns
+        )

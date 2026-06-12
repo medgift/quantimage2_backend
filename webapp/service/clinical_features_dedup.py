@@ -38,19 +38,36 @@ def is_missing_value(value: Optional[str]) -> bool:
 
 def dedupe_definitions_by_name(
     definitions: List[ClinicalFeatureDefinition],
+    ids_with_values: Optional[set] = None,
 ) -> List[ClinicalFeatureDefinition]:
-    """Keep one definition per name: the one from the newest file.
+    """Keep one definition per name: the newest file that actually has data.
 
     "Newest" is the highest ``clinical_feature_file_id`` (auto-increment, so
     higher id == more recently created file).
+
+    A failed or partial upload can leave a newer definition with **no values**
+    (e.g. a file whose patients didn't match the album); preferring it would
+    shadow an older file that does have data — and feed training an empty
+    column. So when ``ids_with_values`` (the set of definition ids that have at
+    least one non-missing value, see :func:`definition_ids_with_values`) is
+    provided, a definition that has values always beats one that doesn't; ties
+    fall back to newest file. When it is ``None`` the function stays pure
+    (no DB access) and applies plain newest-file-wins.
     """
+
+    def has_values(definition):
+        return ids_with_values is None or definition.id in ids_with_values
+
+    def is_better(candidate, current):
+        cand_has, cur_has = has_values(candidate), has_values(current)
+        if cand_has != cur_has:
+            return cand_has
+        return candidate.clinical_feature_file_id > current.clinical_feature_file_id
+
     by_name: Dict[str, ClinicalFeatureDefinition] = {}
     for definition in definitions:
         current = by_name.get(definition.name)
-        if (
-            current is None
-            or definition.clinical_feature_file_id > current.clinical_feature_file_id
-        ):
+        if current is None or is_better(definition, current):
             by_name[definition.name] = definition
     return list(by_name.values())
 
@@ -64,6 +81,18 @@ def _values_equal(a: str, b: str) -> bool:
         return float(a_str) == float(b_str)
     except ValueError:
         return False
+
+
+def definition_ids_with_values(definition_ids: List[int]) -> set:
+    """Subset of ``definition_ids`` that have at least one non-missing value.
+
+    Requires an app context (it queries the DB). Pass the result to
+    :func:`dedupe_definitions_by_name` so a value-less definition can't shadow
+    one that has data.
+    """
+    if not definition_ids:
+        return set()
+    return set(_non_missing_values_by_patient(definition_ids).keys())
 
 
 def _non_missing_values_by_patient(
@@ -121,7 +150,13 @@ def compute_clinical_duplicate_advisories(user_id: str, album_id: str) -> List[D
 
     advisories = []
     for name, name_definitions in duplicated.items():
-        kept = max(name_definitions, key=lambda d: d.clinical_feature_file_id)
+        # Mirror dedupe_definitions_by_name: a definition that has values beats
+        # one that doesn't, then newest file wins. (values_by_definition only
+        # holds definitions that have at least one non-missing value.)
+        kept = max(
+            name_definitions,
+            key=lambda d: (d.id in values_by_definition, d.clinical_feature_file_id),
+        )
         dropped = [d for d in name_definitions if d.id != kept.id]
 
         kept_values = values_by_definition.get(kept.id, {})

@@ -1,6 +1,6 @@
 import pandas as pd
 
-from typing import Dict
+from typing import Dict, Optional
 from collections import defaultdict
 from flask import Blueprint, jsonify, request, g
 from werkzeug.exceptions import BadRequest, NotFound
@@ -11,9 +11,11 @@ from quantimage2_backend_common.models import (
     db,
 )
 from quantimage2_backend_common.const import CLINICAL_FEATURE_ID_SEPARATOR
+from quantimage2_backend_common.kheops_utils import dicomFields
 from routes.utils import validate_decorate
 from quantimage2_backend_common.models import ClinicalFeatureTypes
 from service.clinical_features_dedup import compute_clinical_duplicate_advisories
+from service.feature_extraction import get_studies_from_album
 
 from service.feature_transformation import PATIENT_ID_FIELD
 
@@ -70,6 +72,21 @@ def get_album_id_from_request(request):
         raise ValueError("album_id is required for this request")
 
     return album_id
+
+
+def get_album_patient_ids(album_id: str) -> set:
+    """Return the set of patient IDs that belong to an album (from Kheops).
+
+    Clinical-feature CSVs are often exported from a wider cohort and carry
+    patients that aren't part of this album. We use this set to keep only the
+    rows that actually belong to the album.
+    """
+    studies = get_studies_from_album(album_id, g.token)
+    return {
+        study[dicomFields.PATIENT_ID][dicomFields.VALUE][0]
+        for study in studies
+        if study.get(dicomFields.PATIENT_ID, {}).get(dicomFields.VALUE)
+    }
 
 
 @bp.route("/clinical-features/unique-values", methods=["POST"])
@@ -214,10 +231,41 @@ def clinical_features():
                 if feature.name in clinical_features_df.columns
             ]
 
+            # Keep only rows whose patient actually belongs to the album.
+            # Uploaded CSVs frequently include patients from other datasets;
+            # persisting those rows pollutes the table and later breaks training
+            # (the PatientID merge in machine_learning.py can't reconcile them).
+            album_patient_ids = get_album_patient_ids(album_id)
+            if PATIENT_ID_FIELD in clinical_features_df.columns:
+                matched_df = clinical_features_df[
+                    clinical_features_df[PATIENT_ID_FIELD].isin(album_patient_ids)
+                ]
+            else:
+                matched_df = clinical_features_df.iloc[0:0]
+
+            # Zero matches means the file doesn't correspond to this album at
+            # all — reject it instead of saving an empty set silently. A partial
+            # match (e.g. 1/102) is allowed; the frontend warns about coverage.
+            # Return JSON (not werkzeug's HTML error page) so the SPA's fetch
+            # wrapper can surface the message instead of choking on "<!doctype".
+            if len(matched_df) == 0:
+                return (
+                    jsonify(
+                        {
+                            "error": (
+                                "No patients in this clinical features file match "
+                                "the patients in the album. Check that the "
+                                "PatientID column matches the album's patients."
+                            )
+                        }
+                    ),
+                    400,
+                )
+
             # Save clinical feature values to database
             values_to_insert = []
 
-            for idx, row in clinical_features_df.iterrows():
+            for idx, row in matched_df.iterrows():
                 for feature in present_definitions:
                     values_to_insert.append(
                         {
@@ -393,8 +441,12 @@ def guess_clinical_feature_definitions():
         return response
 
 
-def _unique_file_name(user_id: str, album_id: str, base_name: str) -> str:
-    """Return a name unique within (user_id, album_id), suffixing ' (n)' if needed."""
+def _unique_file_name(user_id: str, album_id: str, base_name: Optional[str]) -> str:
+    """Return a name unique within (user_id, album_id), suffixing ' (n)' if needed.
+
+    ``base_name`` may be ``None``/empty (the request body might omit "name"); it
+    falls back to ``DEFAULT_CLINICAL_FILE_NAME``.
+    """
     name = base_name or DEFAULT_CLINICAL_FILE_NAME
     existing = {
         f.name

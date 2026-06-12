@@ -28,7 +28,10 @@ from quantimage2_backend_common.models import (
     Model,
 )
 from quantimage2_backend_common.utils import get_training_id
-from service.clinical_features_dedup import dedupe_definitions_by_name
+from service.clinical_features_dedup import (
+    dedupe_definitions_by_name,
+    definition_ids_with_values,
+)
 from service.feature_transformation import (
     OUTCOME_FIELD_CLASSIFICATION,
     OUTCOME_FIELD_SURVIVAL_EVENT,
@@ -226,6 +229,7 @@ def train_model(
 def resolve_collection_clinical_definitions(
     feature_ids: List[str],
     full_clin_feature_definitions: List[ClinicalFeatureDefinition],
+    ids_with_values: set = None,
 ) -> List[ClinicalFeatureDefinition]:
     """Map a feature collection's clinical feature_ids to definition rows.
 
@@ -269,8 +273,10 @@ def resolve_collection_clinical_definitions(
 
     # Even if the collection explicitly selected the same name from several
     # files (e.g. "1::CenterID" and "2::CenterID"), the feature must only enter
-    # the model once: keep the newest file's copy.
-    clin_feature_definitions = dedupe_definitions_by_name(selected.values())
+    # the model once: keep the newest file's copy (that actually has values).
+    clin_feature_definitions = dedupe_definitions_by_name(
+        selected.values(), ids_with_values
+    )
 
     if (exact_pairs or legacy_names) and not clin_feature_definitions:
         raise ValueError(
@@ -291,17 +297,26 @@ def get_clinical_features(
         )
     )
 
+    # Which definitions actually have data: a failed/partial upload can leave a
+    # newer definition with no values, and that empty definition must neither
+    # shadow an older file's data (dedup) nor crash the build loop below.
+    ids_with_values = definition_ids_with_values(
+        [d.id for d in full_clin_feature_definitions]
+    )
+
     if collection_id:
         feature_collection = FeatureCollection.find_by_id(collection_id)
         clin_feature_definitions = resolve_collection_clinical_definitions(
-            feature_collection.feature_ids, full_clin_feature_definitions
+            feature_collection.feature_ids,
+            full_clin_feature_definitions,
+            ids_with_values,
         )
 
     else:  # If collection_id is None we are training with all clinical features
         # A name present in several uploaded files must only be used once:
         # keep the newest file's copy (see service.clinical_features_dedup).
         clin_feature_definitions = dedupe_definitions_by_name(
-            full_clin_feature_definitions
+            full_clin_feature_definitions, ids_with_values
         )
 
     if len(clin_feature_definitions) == 0:
@@ -323,6 +338,14 @@ def get_clinical_features(
                 [clin_feature.id]
             )
         )
+        if not clin_feature_values:
+            # A definition can exist with no stored values — e.g. an upload whose
+            # patients didn't match the album leaves the file's definitions but
+            # saves no values. Building a frame from an empty list and calling
+            # set_index("PatientID") raises "None of ['PatientID'] are in the
+            # columns" and crashes training. Such a definition carries no data,
+            # so skip it.
+            continue
         clin_feature_df = pandas.DataFrame.from_dict(
             [i.to_dict() for i in clin_feature_values]
         )
@@ -444,6 +467,11 @@ def get_clinical_features(
             raise ValueError("Feature type not supported yet.")
 
         all_features.append(clin_feature_df)
+
+    # Every definition may have been skipped above (all value-less); concat of an
+    # empty list raises, so return an empty frame the caller already handles.
+    if not all_features:
+        return pandas.DataFrame()
 
     return pandas.concat(all_features, axis=1, join="outer")
 

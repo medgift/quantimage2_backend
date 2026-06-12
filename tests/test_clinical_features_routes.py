@@ -35,6 +35,14 @@ def _patch_decode_token():
     )
 
 
+def _patch_album_patients(*patient_ids):
+    """Stub the album's Kheops patient list used by the save endpoint."""
+    return patch(
+        "routes.clinical_features.get_album_patient_ids",
+        return_value=set(patient_ids),
+    )
+
+
 ALBUM = "alb-multi"
 
 
@@ -229,7 +237,9 @@ class TestClinicalFeaturesValuesRoutes:
         return file_id
 
     def test_save_and_read_namespaces_by_file(self, client, app, db_session):
-        with _patch_validate_decorate(), _patch_decode_token():
+        with _patch_validate_decorate(), _patch_decode_token(), _patch_album_patients(
+            "P1"
+        ):
             f1 = self._setup_file_and_defs(client, "Cohort 1", ["Age"])
             f2 = self._setup_file_and_defs(client, "Cohort 2", ["Age"])
 
@@ -269,7 +279,9 @@ class TestClinicalFeaturesValuesRoutes:
         """Re-uploading values for the same file replaces, not appends (fix #3)."""
         from quantimage2_backend_common.models import ClinicalFeatureValue
 
-        with _patch_validate_decorate(), _patch_decode_token():
+        with _patch_validate_decorate(), _patch_decode_token(), _patch_album_patients(
+            "P1"
+        ):
             f1 = self._setup_file_and_defs(client, "Cohort X", ["Age"])
             for value in ("10", "20"):
                 client.post(
@@ -302,6 +314,86 @@ class TestClinicalFeaturesValuesRoutes:
                 [d.id for d in defs]
             )
             assert len(values) == 1
+
+    def test_save_rejects_file_with_no_matching_patients(self, client, app, db_session):
+        """A file whose patients are none of the album's patients is rejected."""
+        from quantimage2_backend_common.models import ClinicalFeatureValue
+
+        with _patch_validate_decorate(), _patch_decode_token(), _patch_album_patients(
+            "P1"
+        ):
+            f1 = self._setup_file_and_defs(client, "Wrong cohort", ["Age"])
+            r = client.post(
+                f"/clinical-features?album_id={ALBUM}",
+                data=json.dumps(
+                    {
+                        # None of these patients belong to the album (only P1 does).
+                        "clinical_feature_map": {"X9": {"Age": "30"}},
+                        "clinical_feature_file_id": f1,
+                    }
+                ),
+                content_type="application/json",
+            )
+
+        assert r.status_code == 400
+        # The rejection reason is surfaced to the user (werkzeug renders the
+        # BadRequest description into the response body).
+        assert b"match" in r.data.lower()
+        with app.app_context():
+            from quantimage2_backend_common.models import ClinicalFeatureDefinition
+
+            defs = ClinicalFeatureDefinition.find_by_user_id_album_id_and_file_id(
+                "test-user-uuid-1234", ALBUM, f1
+            )
+            values = ClinicalFeatureValue.find_by_clinical_feature_definition_ids(
+                [d.id for d in defs]
+            )
+            assert len(values) == 0
+
+    def test_save_keeps_only_album_patients(self, client, app, db_session):
+        """A partial-match file saves only the rows that belong to the album."""
+        from quantimage2_backend_common.models import ClinicalFeatureValue
+
+        with _patch_validate_decorate(), _patch_decode_token(), _patch_album_patients(
+            "P1"
+        ):
+            f1 = self._setup_file_and_defs(client, "Partial cohort", ["Age"])
+            r = client.post(
+                f"/clinical-features?album_id={ALBUM}",
+                data=json.dumps(
+                    {
+                        # P1 is in the album, FOREIGN is not.
+                        "clinical_feature_map": {
+                            "P1": {"Age": "30"},
+                            "FOREIGN": {"Age": "99"},
+                        },
+                        "clinical_feature_file_id": f1,
+                    }
+                ),
+                content_type="application/json",
+            )
+            assert r.status_code == 200
+
+            read = client.post(
+                f"/clinical-features?album_id={ALBUM}",
+                data=json.dumps({"patient_ids": ["P1", "FOREIGN"]}),
+                content_type="application/json",
+            )
+
+        out = read.get_json()
+        assert out["P1"][f"{f1}::Age"] == "30"
+        assert "FOREIGN" not in out
+        with app.app_context():
+            from quantimage2_backend_common.models import ClinicalFeatureDefinition
+
+            defs = ClinicalFeatureDefinition.find_by_user_id_album_id_and_file_id(
+                "test-user-uuid-1234", ALBUM, f1
+            )
+            values = ClinicalFeatureValue.find_by_clinical_feature_definition_ids(
+                [d.id for d in defs]
+            )
+            assert len(values) == 1
+            assert values[0].patient_id == "P1"
 
 
 class TestClinicalFeatureFileCascade:
