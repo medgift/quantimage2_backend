@@ -32,13 +32,13 @@ RUN pip install --no-cache-dir --no-deps git+https://github.com/AIM-Harvard/pyra
 RUN pip install --no-cache-dir PyWavelets pykwalify
 
 # Bust cache if version of okapy has changed
-ADD https://api.github.com/repos/voreille/okapy/git/refs/heads/quantimage2 version-okapy.json
+ADD https://api.github.com/repos/voreille/okapy/git/refs/heads/refactor/major-restructure version-okapy.json
 
 # Install okapy manually
 # Pre-install okapy's deps (pydicom-seg, scikit-image need numpy at build time)
 # then install okapy with --no-deps to avoid rebuilding pyradiomics
 RUN pip install --no-cache-dir pydicom-seg scikit-image termcolor tqdm
-RUN pip install --no-cache-dir --no-deps git+https://github.com/voreille/okapy.git@quantimage2
+RUN pip install --no-cache-dir git+https://github.com/voreille/okapy.git@refactor/major-restructure
 
 # Copy source code
 COPY ./workers .
