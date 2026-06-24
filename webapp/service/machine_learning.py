@@ -526,3 +526,51 @@ def model_compare_permuation_test(models: List[Model]) -> DataFrame:
     df.columns = index_and_columns
 
     return df
+
+
+def compute_fdr(
+    extraction_id,
+    collection_id,
+    album,
+    studies,
+    label_category,
+    gt,
+    training_patients,
+    test_patients,
+    user_id,
+    selected_feature_ids,
+    fdr_threshold,
+):
+
+    features_df, labels_df = assemble_features_for_collection(
+        extraction_id,
+        collection_id,
+        album,
+        studies,
+        label_category,
+        gt,
+        training_patients,
+        test_patients,
+        user_id,
+    )
+
+    print("feature_df and labels_df")
+    print(features_df)
+    print(labels_df)
+
+    return
+
+
+def assemble_features_for_collection(
+    extraction_id,
+    collection_id,
+    album,
+    studies,
+    label_category,
+    gt,
+    training_patients,
+    test_patients,
+    user_id,
+):
+
+    return "features_df_test", "labels_df_test2"
