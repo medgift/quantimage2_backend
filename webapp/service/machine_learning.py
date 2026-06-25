@@ -542,6 +542,8 @@ def compute_fdr(
     fdr_threshold,
 ):
 
+    # TODO if they want to reuse this without doing FDR, maybe use it on the route
+    # of simpleFDR BEFORE calling compute_fdr !!! (maybe not possible)
     features_df, labels_df = assemble_features_for_collection(
         extraction_id,
         collection_id,
@@ -554,9 +556,20 @@ def compute_fdr(
         user_id,
     )
 
-    print("feature_df and labels_df")
+    print("Features_df and labels_df after assemble method")
     print(features_df)
+    print(features_df.columns)
     print(labels_df)
+
+    missing = set(selected_feature_ids) - set(features_df.columns)
+
+    if missing:
+        raise ValueError(f"Selected features not found in dataset: {missing}")
+
+    features_df = features_df[selected_feature_ids]
+
+    print("Features_df after filtering via selected_features_ids")
+    print(features_df)
 
     return
 
@@ -573,4 +586,149 @@ def assemble_features_for_collection(
     user_id,
 ):
 
-    return "features_df_test", "labels_df_test2"
+    if MODEL_TYPES(label_category.label_type) == MODEL_TYPES.CLASSIFICATION:
+        outcome_columns = [OUTCOME_FIELD_CLASSIFICATION]
+    elif MODEL_TYPES(label_category.label_type) == MODEL_TYPES.SURVIVAL:
+        outcome_columns = [OUTCOME_FIELD_SURVIVAL_TIME, OUTCOME_FIELD_SURVIVAL_EVENT]
+    else:
+        raise NotImplementedError()
+
+    features_df, labels_df_indexed = get_features_labels(
+        extraction_id, collection_id, studies, gt, outcome_columns=outcome_columns
+    )
+
+    labels_df_indexed = labels_df_indexed.apply(pandas.to_numeric)
+
+    all_patients = (
+        training_patients + test_patients if test_patients else training_patients
+    )
+
+    clinical_features = get_clinical_features_raw(
+        user_id, collection_id, all_patients, album
+    )
+
+    if len(clinical_features) > 0 and len(features_df) > 0:
+        features_df = pandas.merge(
+            features_df,
+            clinical_features,
+            left_index=True,
+            right_index=True,
+            how="left",
+        )
+    elif len(features_df) > 0:
+        features_df = features_df
+    elif len(clinical_features) > 0:
+        features_df = clinical_features
+        features_df["PatientID"] = features_df.index
+    else:
+        raise ValueError("Neither clinical nore imaging features where selected")
+
+    return features_df, labels_df_indexed
+
+
+def get_clinical_features_raw(
+    user_id: str, collection_id: str, radiomics_patient_ids: List[str], album
+):
+    # load all definitions
+    full_clin_feature_definitions = (
+        ClinicalFeatureDefinition.find_by_user_id_and_album_id(
+            user_id, album["album_id"]
+        )
+    )
+
+    # keep only definitions that actually have values
+    ids_with_values = definition_ids_with_values(
+        [d.id for d in full_clin_feature_definitions]
+    )
+
+    if collection_id:
+        feature_collection = FeatureCollection.find_by_id(collection_id)
+
+        clin_feature_definitions = resolve_collection_clinical_definitions(
+            feature_collection.feature_ids,
+            full_clin_feature_definitions,
+            ids_with_values,
+        )
+    else:
+        clin_feature_definitions = dedupe_definitions_by_name(
+            full_clin_feature_definitions, ids_with_values
+        )
+
+    feature_strategies = {
+        f"{f.clinical_feature_file_id}{CLINICAL_FEATURE_ID_SEPARATOR}{f.name}": ClinicalFeatureMissingValues(
+            f.missing_values
+        )
+        for f in clin_feature_definitions
+    }
+
+    if not clin_feature_definitions:
+        return pd.DataFrame()
+
+    # build per-feature columns
+    feature_frames = []
+
+    radiomics_index = pd.Index(radiomics_patient_ids, name="PatientID")
+
+    for clin_feature in clin_feature_definitions:
+        col_name = f"{clin_feature.clinical_feature_file_id}{CLINICAL_FEATURE_ID_SEPARATOR}{clin_feature.name}"
+
+        values = ClinicalFeatureValue.find_by_clinical_feature_definition_ids(
+            [clin_feature.id]
+        )
+
+        if not values:
+            continue
+
+        df = pd.DataFrame.from_dict([v.to_dict() for v in values])
+
+        if df.empty:
+            continue
+
+        df = df.rename(columns={"value": col_name, "patient_id": "PatientID"})
+        df = df.set_index("PatientID")
+
+        df = df.reindex(radiomics_index)
+
+        strategy = feature_strategies.get(col_name, ClinicalFeatureMissingValues.NONE)
+
+        df[col_name] = apply_missing_value_strategy(df[col_name], strategy)
+
+        feature_frames.append(df)
+
+    if not feature_frames:
+        return pd.DataFrame(index=radiomics_index)
+
+    raw_df = pd.concat(feature_frames, axis=1)
+
+    # ensure correct index name
+    raw_df.index.name = "PatientID"
+
+    return raw_df
+
+
+def apply_missing_value_strategy(series, strategy):
+    missing_mask = (
+        series.isnull()
+        | series.apply(lambda x: x is None)
+        | series.astype(str).str.lower().isin(["n/a", "n(a"])
+    )
+
+    valid = series[~missing_mask]
+
+    series = series.copy()
+
+    if strategy == ClinicalFeatureMissingValues.MEAN:
+        value = valid.astype(float).mean()
+
+    elif strategy == ClinicalFeatureMissingValues.MEDIAN:
+        value = valid.astype(float).median()
+
+    elif strategy == ClinicalFeatureMissingValues.MODE:
+        value = valid.mode().iloc[0]
+
+    else:
+        value = valid.mode().iloc[0] if not valid.empty else 0
+
+    series = series.copy()
+    series.loc[missing_mask] = value
+    return series
