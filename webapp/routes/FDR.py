@@ -3,7 +3,7 @@ import json
 from flask import Blueprint, jsonify, request, Response, g
 from routes.utils import validate_decorate
 from quantimage2_backend_common.models import LabelCategory
-from service.machine_learning import compute_fdr
+from service.FDR import compute_fdr
 
 # Define blueprint
 bp = Blueprint("fdr", __name__)
