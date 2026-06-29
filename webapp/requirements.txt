@@ -71,7 +71,7 @@ scikit-survival==0.24.0
 pandas==2.2.3
 
 # FDR
-scipy==1.17.1
+statsmodels==0.14.6
 
 # Iteration
 more-itertools==10.5.0
