@@ -72,6 +72,7 @@ pandas==2.2.3
 
 # FDR
 statsmodels==0.14.6
+scipy==1.17.1
 
 # Iteration
 more-itertools==10.5.0

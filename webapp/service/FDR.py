@@ -79,7 +79,10 @@ def compute_fdr(
         features_df, labels_df, full_feature_metadata
     )
 
-    # compute fdr
+    print("univariate results")
+    print(univariate_results)
+
+    # FDR correction
 
     return
 
