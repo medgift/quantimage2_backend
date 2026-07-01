@@ -36,6 +36,8 @@ from scipy.stats import (
     fisher_exact,
 )
 
+from statsmodels.stats.multitest import multipletests
+
 
 def compute_fdr(
     extraction_id,
@@ -48,7 +50,7 @@ def compute_fdr(
     test_patients,
     user_id,
     selected_feature_ids,
-    fdr_threshold,
+    fdr_threshold_list,
 ):
 
     features_df, labels_df, full_feature_metadata = assemble_features_for_collection(
@@ -75,16 +77,29 @@ def compute_fdr(
         if feature in selected_feature_ids
     }
 
-    univariate_results = compute_univariate_tests(
+    univariate_results_df = compute_univariate_tests(
         features_df, labels_df, full_feature_metadata
     )
 
-    print("univariate results")
-    print(univariate_results)
+    _, pvals_adjusted, _, _ = multipletests(
+        univariate_results_df["pvalue"], method="fdr_bh"
+    )
+    univariate_results_df["pval_adj"] = pvals_adjusted
 
-    # FDR correction
+    results_by_qvalues = []
+    for thresholds in fdr_threshold_list:
+        selected_features_df = univariate_results_df[
+            univariate_results_df["pval_adj"] < thresholds
+        ]
+        results_by_qvalues.append(
+            {
+                "qvalue": thresholds,
+                "featureCount": len(selected_features_df.index),
+                "features": selected_features_df.index.tolist(),
+            }
+        )
 
-    return
+    return results_by_qvalues
 
 
 def assemble_features_for_collection(

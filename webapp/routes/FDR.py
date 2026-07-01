@@ -27,14 +27,14 @@ def simpleFDR():
     feature_extraction_id = body["extraction_id"]
     selected_feature_ids = body["selected_feature_ids"]
     collection_id = body["collection_id"]
-    fdr_threshold = body["fdr_threshold"]
+    fdr_threshold_list = body["fdr_threshold_list"]
     album = body["album"]
     album_studies = body["album_studies"]
     gt = body["labels"]
     training_patients = body["training_patients"]
     test_patients = body["test_patients"]
 
-    compute_fdr(
+    results_by_qvalues = compute_fdr(
         feature_extraction_id,
         collection_id,
         album,
@@ -45,7 +45,7 @@ def simpleFDR():
         test_patients,
         user_id,
         selected_feature_ids,
-        fdr_threshold,
+        fdr_threshold_list,
     )
 
-    return jsonify(["toDropTest", "toDropTest2"])
+    return jsonify(results_by_qvalues)
