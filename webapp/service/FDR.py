@@ -47,7 +47,6 @@ def compute_fdr(
     label_category,
     gt,
     training_patients,
-    test_patients,
     user_id,
     selected_feature_ids,
     fdr_threshold_list,
@@ -61,7 +60,6 @@ def compute_fdr(
         label_category,
         gt,
         training_patients,
-        test_patients,
         user_id,
     )
 
@@ -95,7 +93,12 @@ def compute_fdr(
             {
                 "qvalue": thresholds,
                 "featureCount": len(selected_features_df.index),
-                "features": selected_features_df.index.tolist(),
+                "features": [
+                    {"feature": feature_name, "pval_adj": pval_adj}
+                    for feature_name, pval_adj in zip(
+                        selected_features_df.index, selected_features_df["pval_adj"]
+                    )
+                ],
             }
         )
 
@@ -110,7 +113,6 @@ def assemble_features_for_collection(
     label_category,
     gt,
     training_patients,
-    test_patients,
     user_id,
 ):
 
@@ -125,6 +127,11 @@ def assemble_features_for_collection(
         extraction_id, collection_id, studies, gt, outcome_columns=outcome_columns
     )
 
+    features_df = features_df.loc[features_df.index.isin(training_patients)]
+    labels_df_indexed = labels_df_indexed.loc[
+        labels_df_indexed.index.isin(training_patients)
+    ]
+
     labels_df_indexed = labels_df_indexed.apply(pandas.to_numeric)
 
     radiomics_feature_metadata = {}
@@ -134,12 +141,8 @@ def assemble_features_for_collection(
             "univariate_category": "continuous",
         }
 
-    all_patients = (
-        training_patients + test_patients if test_patients else training_patients
-    )
-
     clinical_features, clinical_feature_metadata = get_clinical_features(
-        user_id, collection_id, all_patients, album
+        user_id, collection_id, training_patients, album
     )
 
     full_feature_metadata = radiomics_feature_metadata | clinical_feature_metadata
@@ -156,7 +159,6 @@ def assemble_features_for_collection(
         features_df = features_df
     elif len(clinical_features) > 0:
         features_df = clinical_features
-        # features_df["PatientID"] = features_df.index
     else:
         raise ValueError("Neither clinical nore imaging features where selected")
 
@@ -338,15 +340,10 @@ def select_and_run_univariate_test(series, targets, feature_value_category, alph
         if not is_normal:
             stat, pvalue = mannwhitneyu(group0, group1)
             test_used = "mannwhitneyu"
-
-        equal_variance = levene(group0, group1).pvalue > alpha
-
-        if equal_variance:
-            stat, pvalue = ttest_ind(group0, group1, equal_var=equal_variance)
-            test_used = "ttest_ind"
         else:
+            equal_variance = levene(group0, group1).pvalue > alpha
             stat, pvalue = ttest_ind(group0, group1, equal_var=equal_variance)
-            test_used = "ttest_welch"
+            test_used = "ttest_ind" if equal_variance else "ttest_welch"
 
     elif feature_value_category in ("binary", "nominal"):
         contingency = pd.crosstab(series, targets_series)

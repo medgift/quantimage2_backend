@@ -21,7 +21,6 @@ def simpleFDR():
 
     label_category = LabelCategory.find_by_id(body["label_category_id"])
     print(label_category)
-    # print(label_category.label_type) -->gives Classification, here (REMEMBER FOR LATER)
     user_id = g.user
 
     feature_extraction_id = body["extraction_id"]
@@ -32,7 +31,6 @@ def simpleFDR():
     album_studies = body["album_studies"]
     gt = body["labels"]
     training_patients = body["training_patients"]
-    test_patients = body["test_patients"]
 
     results_by_qvalues = compute_fdr(
         feature_extraction_id,
@@ -42,7 +40,6 @@ def simpleFDR():
         label_category,
         gt,
         training_patients,
-        test_patients,
         user_id,
         selected_feature_ids,
         fdr_threshold_list,
