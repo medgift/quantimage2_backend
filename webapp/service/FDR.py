@@ -29,7 +29,6 @@ from service.feature_transformation import (
 
 from scipy.stats import (
     shapiro,
-    levene,
     ttest_ind,
     mannwhitneyu,
     chi2_contingency,
@@ -341,9 +340,8 @@ def select_and_run_univariate_test(series, targets, feature_value_category, alph
             stat, pvalue = mannwhitneyu(group0, group1)
             test_used = "mannwhitneyu"
         else:
-            equal_variance = levene(group0, group1).pvalue > alpha
-            stat, pvalue = ttest_ind(group0, group1, equal_var=equal_variance)
-            test_used = "ttest_ind" if equal_variance else "ttest_welch"
+            stat, pvalue = ttest_ind(group0, group1, equal_var=False)
+            test_used = "ttest_welch"
 
     elif feature_value_category in ("binary", "nominal"):
         contingency = pd.crosstab(series, targets_series)
