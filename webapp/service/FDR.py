@@ -346,7 +346,10 @@ def select_and_run_univariate_test(series, targets, feature_value_category, alph
     elif feature_value_category in ("binary", "nominal"):
         contingency = pd.crosstab(series, targets_series)
         chi2, p_chi2, dof, expected = chi2_contingency(contingency)
-        if (expected < 5).any():
+
+        proportion_low_expected = (expected < 5).mean()
+
+        if proportion_low_expected > 0.2:
             stat, pvalue = fisher_exact(contingency)
             test_used = "fisher-exact"
         else:
