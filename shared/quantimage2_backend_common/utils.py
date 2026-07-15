@@ -149,7 +149,9 @@ def _format_feature_task_with_result(feature_task, result_obj):
             if status != celerystates.FAILURE:
                 status_message = task_status_message_from_result(result)
             else:
-                status_message = result
+                # result may be a raw exception object (e.g. BadZipFile) that is
+                # not JSON serializable — stringify it like fetch_extraction_result does
+                status_message = str(result)
 
     return {
         "id": feature_task.id,
@@ -182,7 +184,9 @@ def format_feature_task(feature_task):
             if status != celerystates.FAILURE:
                 status_message = task_status_message_from_result(result)
             else:
-                status_message = result
+                # result may be a raw exception object (e.g. BadZipFile) that is
+                # not JSON serializable — stringify it like fetch_extraction_result does
+                status_message = str(result)
 
     return {
         "id": feature_task.id,
