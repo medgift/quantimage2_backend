@@ -43,6 +43,7 @@ def run_feature_extraction(
     print(f"---------------------------------------------------------")
 
     task_signatures = []
+    feature_extraction_tasks = []
 
     tic()
 
@@ -71,6 +72,7 @@ def run_feature_extraction(
             None,
         )
         feature_extraction_task.save_to_db()
+        feature_extraction_tasks.append(feature_extraction_task)
 
         # Create new task signature
         task_signature = current_app.my_celery.signature(
@@ -118,6 +120,17 @@ def run_feature_extraction(
     # Start the tasks as a chord
     job = chord(task_signatures, body=finalize_signature).apply_async(countdown=1)
     job.parent.save()
+
+    # Record the Celery task IDs right away, in the same order as the signatures
+    # they were built from. The task itself also sets task_id, but only once it
+    # starts running - which leaves queued tasks with a NULL task_id and makes
+    # them invisible to the revoke() call when the extraction is cancelled.
+    for feature_extraction_task, async_result in zip(
+        feature_extraction_tasks, job.parent.results
+    ):
+        feature_extraction_task.task_id = async_result.id
+
+    db.session.commit()
 
     # Persist group result manually, because by default it's using 24 hours
     # (not clear why, it should respect the result_expires setting used for normal results)

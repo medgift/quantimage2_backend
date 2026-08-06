@@ -7,7 +7,6 @@ import eventlet.tpool
 from flask import Blueprint, jsonify, request, g, current_app, Response
 
 logger = logging.getLogger(__name__)
-from celery.result import AsyncResult
 from quantimage2_backend_common.const import (
     FIRSTORDER_REPLACEMENT_SUV,
     PET_MODALITY,
@@ -106,6 +105,7 @@ def cancel_extraction(id):
     # Store information needed for cleanup before deletion
     extraction_id = feature_extraction.id
     album_id = feature_extraction.album_id
+    result_id = feature_extraction.result_id
     task_ids = [task.id for task in feature_extraction.tasks]
     celery_task_ids = [
         task.task_id for task in feature_extraction.tasks if task.task_id
@@ -151,19 +151,38 @@ def cancel_extraction(id):
     db.session.commit()
     current_app.logger.info(f"Deleted feature extraction {extraction_id} from database")
 
-    # STEP 2: Revoke all Celery tasks (running and queued)
-    # Tasks already running will be terminated
-    # Tasks not yet started will be prevented from starting
-    # Tasks that started after deletion will exit immediately when they check for the extraction
-    for task_id in celery_task_ids:
+    # STEP 2: Revoke all Celery tasks (running and queued) in a single broadcast.
+    # Queued tasks are discarded by the worker without ever being executed.
+    # Running tasks get SIGUSR1, which raises SoftTimeLimitExceeded inside the
+    # task rather than killing the worker process outright, so the task still
+    # runs its own cleanup (removing the downloaded DICOM files). The hard
+    # time_limit on the task remains the backstop if it refuses to stop.
+    if celery_task_ids:
         try:
-            # terminate=True kills running tasks, and marks queued tasks as revoked
-            AsyncResult(task_id, app=current_app.my_celery).revoke(terminate=True)
-            current_app.logger.info(f"Revoked Celery task {task_id}")
+            current_app.my_celery.control.revoke(
+                celery_task_ids, terminate=True, signal="SIGUSR1"
+            )
+            current_app.logger.info(
+                f"Revoked {len(celery_task_ids)} Celery tasks for extraction {extraction_id}"
+            )
         except Exception as e:
-            current_app.logger.error(f"Error revoking task {task_id}: {e}")
+            current_app.logger.error(
+                f"Error revoking tasks for extraction {extraction_id}: {e}"
+            )
 
-    # STEP 3: Clean up cached features file if it exists
+    # STEP 3: Drop the chord's group result. It is explicitly persisted (never
+    # expires) when the extraction starts, and now that the header tasks are
+    # revoked the chord callback will not fire to consume it.
+    if result_id:
+        try:
+            current_app.my_celery.backend.client.delete(
+                current_app.my_celery.backend.get_key_for_group(result_id)
+            )
+            current_app.logger.info(f"Deleted group result {result_id}")
+        except Exception as e:
+            current_app.logger.error(f"Error deleting group result {result_id}: {e}")
+
+    # STEP 4: Clean up cached features file if it exists
     features_cache_folder = f"extraction-{extraction_id}"
     features_cache_path = f"{FEATURES_CACHE_BASE_DIR}/{features_cache_folder}"
     if Path(features_cache_path).exists():
