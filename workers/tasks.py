@@ -86,6 +86,14 @@ celery = Celery(
 )
 celery.conf.accept_content = ["pickle", "json"]
 
+# Study download tuning. The read timeout applies between chunks rather than to
+# the whole transfer, so it can stay well under the task's own time limits: it
+# is there to release a worker slot held by a stalled PACS connection, not to
+# cap how long a large study may take.
+DOWNLOAD_CONNECT_TIMEOUT = 30
+DOWNLOAD_READ_TIMEOUT = 300
+DOWNLOAD_CHUNK_SIZE = 1024 * 1024
+
 
 @celeryd_after_setup.connect
 def setup(sender, instance, **kwargs):
@@ -520,18 +528,22 @@ def run_extraction(
             "completed": steps,
             "status_message": status_message,
         }
-    except SoftTimeLimitExceeded:
-        # Raised in the task when it is revoked with terminate=True (SIGUSR1),
-        # i.e. the user cancelled the extraction, or when the soft time limit is
-        # reached. Nothing to report - the extraction row is already gone - but
-        # the finally block still gets to clean up the downloaded study.
-        print(
-            f"Feature extraction task {feature_extraction_task_id} terminated "
-            f"(cancelled or timed out)"
-        )
-        raise
-
     except Exception as e:
+
+        # A cancelled extraction arrives here as SoftTimeLimitExceeded, because
+        # the task was revoked with SIGUSR1, and its row has already been
+        # deleted - there is nothing left to report a failure against. The same
+        # exception is raised when the task's own soft_time_limit is reached,
+        # and that extraction does still exist, so it is reported like any other
+        # failure. The finally block cleans up the download either way.
+        if isinstance(e, SoftTimeLimitExceeded):
+            db.session.rollback()
+            if FeatureExtraction.find_by_id(feature_extraction_id) is None:
+                print(
+                    f"Feature extraction task {feature_extraction_task_id} "
+                    f"terminated (extraction cancelled)"
+                )
+                raise
 
         logging.error(e)
 
@@ -670,26 +682,36 @@ def download_study(token: str, study_uid: str, album_id: str) -> str:
     :returns: Path to the directory of downloaded files
     """
     tmp_dir = tempfile.mkdtemp()
-    tmp_file = tempfile.mktemp(".zip")
+    zip_fd, tmp_file = tempfile.mkstemp(suffix=".zip")
 
     # Both temp paths exist before the caller ever sees them, so a failure or a
     # cancellation in the middle of the download has to be cleaned up here - the
     # caller has nothing to clean up yet.
     try:
-        study_download_url = (
-            f"{endpoints.studies}/{study_uid}?accept=application/zip&album={album_id}"
-        )
+        # fdopen takes ownership of the descriptor returned by mkstemp, so the
+        # file is closed on every path out of this block.
+        with os.fdopen(zip_fd, "wb") as zip_file:
+            study_download_url = f"{endpoints.studies}/{study_uid}?accept=application/zip&album={album_id}"
 
-        access_token = get_token_header(token)
+            access_token = get_token_header(token)
 
-        response = requests.get(
-            study_download_url,
-            headers=access_token,
-        )
+            # Stream the study to disk rather than holding it in memory: a
+            # single study is easily hundreds of MB, and the extraction worker
+            # runs several of these at once. Writing it chunk by chunk also
+            # gives the task somewhere to be interrupted when the extraction is
+            # cancelled - a single read of the whole body cannot be.
+            with requests.get(
+                study_download_url,
+                headers=access_token,
+                stream=True,
+                timeout=(DOWNLOAD_CONNECT_TIMEOUT, DOWNLOAD_READ_TIMEOUT),
+            ) as response:
+                # Without this, an HTTP error body is written to the ZIP and
+                # only resurfaces later as a BadZipFile, hiding the real cause.
+                response.raise_for_status()
 
-        # Save to ZIP file
-        with open(tmp_file, "wb") as f:
-            f.write(response.content)
+                for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                    zip_file.write(chunk)
 
         # Unzip ZIP file
         with ZipFile(tmp_file, "r") as zipObj:
@@ -793,11 +815,12 @@ def extract_all_features(
         return features
 
     except SoftTimeLimitExceeded:
-        # The task was revoked because the extraction was cancelled (or it hit
-        # its soft time limit). Let it propagate untouched - reporting it as a
-        # failed extraction emits a bogus failure for an extraction that no
-        # longer exists, and the status lookup it does on the way would fail
-        # anyway now that the group result is gone.
+        # The task was revoked because the extraction was cancelled, or it hit
+        # its own soft time limit. Either way, let it propagate untouched: for a
+        # cancellation the reporting below would emit a failure for an
+        # extraction that no longer exists, and its status lookup would fail on
+        # the deleted group result. run_extraction tells the two cases apart and
+        # reports a real timeout from there.
         raise
 
     except Exception:
