@@ -26,6 +26,7 @@ from typing import Dict, Any, Optional
 from flask_socketio import SocketIO
 from celery import Celery
 from celery import states as celerystates
+from celery.exceptions import SoftTimeLimitExceeded
 from celery.signals import celeryd_after_setup
 from zipfile import ZipFile
 
@@ -398,6 +399,10 @@ def run_extraction(
     config_path,
     rois,
 ):
+    # Tracked outside the try block so that the finally can always remove the
+    # downloaded study, including when the task is terminated by a cancellation.
+    dicom_dir = None
+
     try:
 
         current_step = 1
@@ -461,6 +466,22 @@ def run_extraction(
         # Download study and write files to directory
         dicom_dir = download_study(album_token, study_uid, album_id)
 
+        # Downloading a study can take a while on a large album, so check once
+        # more before starting the extraction itself - that is the expensive
+        # part, and the only cancellation check left after it is the revoke.
+        feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
+        if not feature_extraction:
+            print(
+                f"Feature extraction {feature_extraction_id} not found (cancelled), aborting after download"
+            )
+            return {
+                "feature_extraction_task_id": feature_extraction_task_id,
+                "current": steps,
+                "total": steps,
+                "completed": steps,
+                "status_message": "Cancelled",
+            }
+
         # Extract all the features
         features = extract_all_features(
             self,
@@ -473,9 +494,6 @@ def run_extraction(
             steps=steps,
             album_name=album_name,
         )
-
-        # Delete download DIR
-        shutil.rmtree(dicom_dir, True)
 
         # Save the features
         store_features(
@@ -501,6 +519,17 @@ def run_extraction(
             "completed": steps,
             "status_message": status_message,
         }
+    except SoftTimeLimitExceeded:
+        # Raised in the task when it is revoked with terminate=True (SIGUSR1),
+        # i.e. the user cancelled the extraction, or when the soft time limit is
+        # reached. Nothing to report - the extraction row is already gone - but
+        # the finally block still gets to clean up the downloaded study.
+        print(
+            f"Feature extraction task {feature_extraction_task_id} terminated "
+            f"(cancelled or timed out)"
+        )
+        raise
+
     except Exception as e:
 
         logging.error(e)
@@ -527,6 +556,12 @@ def run_extraction(
         raise e
 
     finally:
+        # Always remove the downloaded study. It used to be deleted only on the
+        # success path, so every failed or cancelled task leaked an unzipped
+        # DICOM study into the worker's temp directory.
+        if dicom_dir:
+            shutil.rmtree(dicom_dir, True)
+
         db.session.remove()
 
 
