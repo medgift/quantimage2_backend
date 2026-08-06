@@ -671,29 +671,38 @@ def download_study(token: str, study_uid: str, album_id: str) -> str:
     tmp_dir = tempfile.mkdtemp()
     tmp_file = tempfile.mktemp(".zip")
 
-    study_download_url = (
-        f"{endpoints.studies}/{study_uid}?accept=application/zip&album={album_id}"
-    )
+    # Both temp paths exist before the caller ever sees them, so a failure or a
+    # cancellation in the middle of the download has to be cleaned up here - the
+    # caller has nothing to clean up yet.
+    try:
+        study_download_url = (
+            f"{endpoints.studies}/{study_uid}?accept=application/zip&album={album_id}"
+        )
 
-    access_token = get_token_header(token)
+        access_token = get_token_header(token)
 
-    response = requests.get(
-        study_download_url,
-        headers=access_token,
-    )
+        response = requests.get(
+            study_download_url,
+            headers=access_token,
+        )
 
-    # Save to ZIP file
-    with open(tmp_file, "wb") as f:
-        f.write(response.content)
+        # Save to ZIP file
+        with open(tmp_file, "wb") as f:
+            f.write(response.content)
 
-    # Unzip ZIP file
-    with ZipFile(tmp_file, "r") as zipObj:
-        for file in zipObj.namelist():
-            if file.startswith("DICOM/"):
-                zipObj.extract(file, tmp_dir)
-
-    # Remove the ZIP file
-    os.unlink(tmp_file)
+        # Unzip ZIP file
+        with ZipFile(tmp_file, "r") as zipObj:
+            for file in zipObj.namelist():
+                if file.startswith("DICOM/"):
+                    zipObj.extract(file, tmp_dir)
+    except BaseException:
+        shutil.rmtree(tmp_dir, True)
+        raise
+    finally:
+        # The ZIP is never needed once it has been extracted (or once the
+        # download has failed), so drop it on every path.
+        if os.path.exists(tmp_file):
+            os.unlink(tmp_file)
 
     return tmp_dir
 
@@ -756,6 +765,14 @@ def extract_all_features(
         result = conversion_result
 
         return result
+
+    except SoftTimeLimitExceeded:
+        # The task was revoked because the extraction was cancelled (or it hit
+        # its soft time limit). Let it propagate untouched - reporting it as a
+        # failed extraction emits a bogus failure for an extraction that no
+        # longer exists, and the status lookup it does on the way would fail
+        # anyway now that the group result is gone.
+        raise
 
     except Exception as e:
 
