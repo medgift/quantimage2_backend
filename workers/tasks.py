@@ -26,6 +26,7 @@ from typing import Dict, Any, Optional
 from flask_socketio import SocketIO
 from celery import Celery
 from celery import states as celerystates
+from celery.exceptions import SoftTimeLimitExceeded
 from celery.signals import celeryd_after_setup
 from zipfile import ZipFile
 
@@ -42,10 +43,7 @@ from quantimage2_backend_common.models import (
     FeatureExtraction,
     Model,
 )
-from quantimage2_backend_common.kheops_utils import (
-    KHEOPS_HTTP_TIMEOUT,
-    get_token_header,
-)
+from quantimage2_backend_common.kheops_utils import get_token_header
 from quantimage2_backend_common.utils import (
     get_socketio_body_feature_task,
     MessageType,
@@ -86,6 +84,14 @@ celery = Celery(
     broker=os.environ["CELERY_BROKER_URL"],
 )
 celery.conf.accept_content = ["pickle", "json"]
+
+# Study download tuning. The read timeout applies between chunks rather than to
+# the whole transfer, so it can stay well under the task's own time limits: it
+# is there to release a worker slot held by a stalled PACS connection, not to
+# cap how long a large study may take.
+DOWNLOAD_CONNECT_TIMEOUT = 30
+DOWNLOAD_READ_TIMEOUT = 300
+DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 
 
 @celeryd_after_setup.connect
@@ -400,6 +406,10 @@ def run_extraction(
     config_path,
     rois,
 ):
+    # Tracked outside the try block so that the finally can always remove the
+    # downloaded study, including when the task is terminated by a cancellation.
+    dicom_dir = None
+
     try:
 
         current_step = 1
@@ -463,6 +473,22 @@ def run_extraction(
         # Download study and write files to directory
         dicom_dir = download_study(album_token, study_uid, album_id)
 
+        # Downloading a study can take a while on a large album, so check once
+        # more before starting the extraction itself - that is the expensive
+        # part, and the only cancellation check left after it is the revoke.
+        feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
+        if not feature_extraction:
+            print(
+                f"Feature extraction {feature_extraction_id} not found (cancelled), aborting after download"
+            )
+            return {
+                "feature_extraction_task_id": feature_extraction_task_id,
+                "current": steps,
+                "total": steps,
+                "completed": steps,
+                "status_message": "Cancelled",
+            }
+
         # Extract all the features
         features = extract_all_features(
             self,
@@ -475,9 +501,6 @@ def run_extraction(
             steps=steps,
             album_name=album_name,
         )
-
-        # Delete download DIR
-        shutil.rmtree(dicom_dir, True)
 
         # Save the features
         store_features(
@@ -505,6 +528,21 @@ def run_extraction(
         }
     except Exception as e:
 
+        # A cancelled extraction arrives here as SoftTimeLimitExceeded, because
+        # the task was revoked with SIGUSR1, and its row has already been
+        # deleted - there is nothing left to report a failure against. The same
+        # exception is raised when the task's own soft_time_limit is reached,
+        # and that extraction does still exist, so it is reported like any other
+        # failure. The finally block cleans up the download either way.
+        if isinstance(e, SoftTimeLimitExceeded):
+            db.session.rollback()
+            if FeatureExtraction.find_by_id(feature_extraction_id) is None:
+                print(
+                    f"Feature extraction task {feature_extraction_task_id} "
+                    f"terminated (extraction cancelled)"
+                )
+                raise
+
         logging.error(e)
 
         current_step = 0
@@ -529,6 +567,12 @@ def run_extraction(
         raise e
 
     finally:
+        # Always remove the downloaded study. It used to be deleted only on the
+        # success path, so every failed or cancelled task leaked an unzipped
+        # DICOM study into the worker's temp directory.
+        if dicom_dir:
+            shutil.rmtree(dicom_dir, True)
+
         db.session.remove()
 
 
@@ -636,32 +680,50 @@ def download_study(token: str, study_uid: str, album_id: str) -> str:
     :returns: Path to the directory of downloaded files
     """
     tmp_dir = tempfile.mkdtemp()
-    tmp_file = tempfile.mktemp(".zip")
+    zip_fd, tmp_file = tempfile.mkstemp(suffix=".zip")
 
-    study_download_url = (
-        f"{endpoints.studies}/{study_uid}?accept=application/zip&album={album_id}"
-    )
+    # Both temp paths exist before the caller ever sees them, so a failure or a
+    # cancellation in the middle of the download has to be cleaned up here - the
+    # caller has nothing to clean up yet.
+    try:
+        # fdopen takes ownership of the descriptor returned by mkstemp, so the
+        # file is closed on every path out of this block.
+        with os.fdopen(zip_fd, "wb") as zip_file:
+            study_download_url = f"{endpoints.studies}/{study_uid}?accept=application/zip&album={album_id}"
 
-    access_token = get_token_header(token)
+            access_token = get_token_header(token)
 
-    response = requests.get(
-        study_download_url,
-        headers=access_token,
-        timeout=KHEOPS_HTTP_TIMEOUT,
-    )
+            # Stream the study to disk rather than holding it in memory: a
+            # single study is easily hundreds of MB, and the extraction worker
+            # runs several of these at once. Writing it chunk by chunk also
+            # gives the task somewhere to be interrupted when the extraction is
+            # cancelled - a single read of the whole body cannot be.
+            with requests.get(
+                study_download_url,
+                headers=access_token,
+                stream=True,
+                timeout=(DOWNLOAD_CONNECT_TIMEOUT, DOWNLOAD_READ_TIMEOUT),
+            ) as response:
+                # Without this, an HTTP error body is written to the ZIP and
+                # only resurfaces later as a BadZipFile, hiding the real cause.
+                response.raise_for_status()
 
-    # Save to ZIP file
-    with open(tmp_file, "wb") as f:
-        f.write(response.content)
+                for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                    zip_file.write(chunk)
 
-    # Unzip ZIP file
-    with ZipFile(tmp_file, "r") as zipObj:
-        for file in zipObj.namelist():
-            if file.startswith("DICOM/"):
-                zipObj.extract(file, tmp_dir)
-
-    # Remove the ZIP file
-    os.unlink(tmp_file)
+        # Unzip ZIP file
+        with ZipFile(tmp_file, "r") as zipObj:
+            for file in zipObj.namelist():
+                if file.startswith("DICOM/"):
+                    zipObj.extract(file, tmp_dir)
+    except BaseException:
+        shutil.rmtree(tmp_dir, True)
+        raise
+    finally:
+        # The ZIP is never needed once it has been extracted (or once the
+        # download has failed), so drop it on every path.
+        if os.path.exists(tmp_file):
+            os.unlink(tmp_file)
 
     return tmp_dir
 
@@ -724,6 +786,15 @@ def extract_all_features(
         result = conversion_result
 
         return result
+
+    except SoftTimeLimitExceeded:
+        # The task was revoked because the extraction was cancelled, or it hit
+        # its own soft time limit. Either way, let it propagate untouched: for a
+        # cancellation the reporting below would emit a failure for an
+        # extraction that no longer exists, and its status lookup would fail on
+        # the deleted group result. run_extraction tells the two cases apart and
+        # reports a real timeout from there.
+        raise
 
     except Exception as e:
 

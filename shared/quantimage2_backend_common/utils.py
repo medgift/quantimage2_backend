@@ -213,6 +213,14 @@ def fetch_extraction_result(celery_app, result_id, tasks=None):
         elapsed = toc()
         print(f"Getting result for extraction result {result_id} took", elapsed)
 
+        # restore() returns None once the group result is gone - which is the
+        # case for a cancelled extraction, and for any task still in flight when
+        # it was cancelled. Report an empty status instead of raising, otherwise
+        # every caller has to guard against it.
+        if result is None:
+            print(f"Group result {result_id} no longer exists")
+            return status
+
         # Make an inventory of errors (if tasks are provided)
         if tasks is not None:
 
