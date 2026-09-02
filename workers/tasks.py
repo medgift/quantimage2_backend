@@ -42,7 +42,10 @@ from quantimage2_backend_common.models import (
     FeatureExtraction,
     Model,
 )
-from quantimage2_backend_common.kheops_utils import get_token_header
+from quantimage2_backend_common.kheops_utils import (
+    KHEOPS_HTTP_TIMEOUT,
+    get_token_header,
+)
 from quantimage2_backend_common.utils import (
     get_socketio_body_feature_task,
     MessageType,
@@ -289,7 +292,6 @@ def train_model(
             test_predictions, test_predictions_probabilities = compute_predictions(
                 X_test, fitted_model, test_patients
             )
-
 
             # NOTE: train_predictions computation commented out for performance
             # (saving large JSON to DB was causing slowness at 100% test phase).
@@ -645,6 +647,7 @@ def download_study(token: str, study_uid: str, album_id: str) -> str:
     response = requests.get(
         study_download_url,
         headers=access_token,
+        timeout=KHEOPS_HTTP_TIMEOUT,
     )
 
     # Save to ZIP file

@@ -10,7 +10,12 @@ from flask import current_app
 from config import EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR
 from quantimage2_backend_common.const import QUEUE_EXTRACTION
 
-from quantimage2_backend_common.kheops_utils import endpoints, get_token_header, dicomFields
+from quantimage2_backend_common.kheops_utils import (
+    KHEOPS_HTTP_TIMEOUT,
+    endpoints,
+    get_token_header,
+    dicomFields,
+)
 from quantimage2_backend_common.utils import (
     MessageType,
     get_socketio_body_extraction,
@@ -162,7 +167,9 @@ def get_album_details(album_id, token):
 
     access_token = get_token_header(token)
 
-    album_details = requests.get(album_url, headers=access_token).json()
+    album_details = requests.get(
+        album_url, headers=access_token, timeout=KHEOPS_HTTP_TIMEOUT
+    ).json()
 
     return album_details
 
@@ -172,7 +179,9 @@ def get_studies_from_album(album_id, token):
 
     access_token = get_token_header(token)
 
-    album_studies = requests.get(album_studies_url, headers=access_token).json()
+    album_studies = requests.get(
+        album_studies_url, headers=access_token, timeout=KHEOPS_HTTP_TIMEOUT
+    ).json()
 
     return album_studies
 
@@ -190,7 +199,9 @@ def get_series_from_study(study_uid, modalities, album_id, token):
 
     access_token = get_token_header(token)
 
-    study_series = requests.get(study_series_url, headers=access_token).json()
+    study_series = requests.get(
+        study_series_url, headers=access_token, timeout=KHEOPS_HTTP_TIMEOUT
+    ).json()
 
     return study_series
 
@@ -202,7 +213,9 @@ def get_series_metadata(study_uid, series_uid, album_id, token):
 
     access_token = get_token_header(token)
 
-    series_metadata = requests.get(series_metadata_url, headers=access_token).json()
+    series_metadata = requests.get(
+        series_metadata_url, headers=access_token, timeout=KHEOPS_HTTP_TIMEOUT
+    ).json()
 
     return series_metadata
 
