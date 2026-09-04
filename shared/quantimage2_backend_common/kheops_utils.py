@@ -11,6 +11,11 @@ kheopsBaseURL = os.environ["KHEOPS_BASE_URL"]
 
 kheopsBaseEndpoint = kheopsBaseURL + "/api"
 
+# (connect, read) timeout for all Kheops HTTP calls. The read timeout bounds
+# the wait between received chunks, not the whole transfer, so large study
+# downloads still work while a hung connection can no longer block forever.
+KHEOPS_HTTP_TIMEOUT = (10, 120)
+
 
 class KheopsEndpoints(object):
     pass
@@ -85,6 +90,7 @@ def get_user_token(album_id, token):
         f"{kheopsBaseEndpoint}{endpoints.capabilities}",
         headers=get_token_header(token),
         data=data,
+        timeout=KHEOPS_HTTP_TIMEOUT,
     )
 
     if response.status_code != 200:

@@ -92,8 +92,11 @@ pytest tests/test_models.py::TestFeatureExtraction::test_save  # one test
 pytest -k "feature_storage and not slow"   # by keyword
 pytest --cov=shared --cov=webapp           # with coverage
 
-# Inside the running backend container:
-docker compose exec backend pytest
+# Inside the running backend container — note `python -m pytest`, not bare
+# `pytest`: the container's working directory holds the webapp packages
+# (`routes/`, `service/`, `modeling/`), and only `python -m` puts it on
+# sys.path. Bare `pytest` fails to collect with `No module named 'routes'`.
+docker compose exec backend python -m pytest
 ```
 
 Markers: `unit`, `integration`, `slow`, `ml` (declared in `pytest.ini`).

@@ -111,6 +111,7 @@ services:
     profiles:
       - dev
     image: quay.io/keycloak/keycloak:16.1.1
+    restart: unless-stopped
     env_file:
       - env_files/common.env
       - env_files/keycloak.env
@@ -134,6 +135,7 @@ services:
     profiles:
       - dev
     image: postgres:17.6
+    restart: unless-stopped
     env_file:
       - env_files/keycloak.env
     secrets:

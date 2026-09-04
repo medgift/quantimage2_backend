@@ -10,7 +10,12 @@ from flask import current_app
 from config import EXTRACTIONS_BASE_DIR, CONFIGS_SUBDIR
 from quantimage2_backend_common.const import QUEUE_EXTRACTION
 
-from quantimage2_backend_common.kheops_utils import endpoints, get_token_header, dicomFields
+from quantimage2_backend_common.kheops_utils import (
+    KHEOPS_HTTP_TIMEOUT,
+    endpoints,
+    get_token_header,
+    dicomFields,
+)
 from quantimage2_backend_common.utils import (
     MessageType,
     get_socketio_body_extraction,
@@ -43,6 +48,7 @@ def run_feature_extraction(
     print(f"---------------------------------------------------------")
 
     task_signatures = []
+    feature_extraction_tasks = []
 
     tic()
 
@@ -71,6 +77,7 @@ def run_feature_extraction(
             None,
         )
         feature_extraction_task.save_to_db()
+        feature_extraction_tasks.append(feature_extraction_task)
 
         # Create new task signature
         task_signature = current_app.my_celery.signature(
@@ -119,6 +126,17 @@ def run_feature_extraction(
     job = chord(task_signatures, body=finalize_signature).apply_async(countdown=1)
     job.parent.save()
 
+    # Record the Celery task IDs right away, in the same order as the signatures
+    # they were built from. The task itself also sets task_id, but only once it
+    # starts running - which leaves queued tasks with a NULL task_id and makes
+    # them invisible to the revoke() call when the extraction is cancelled.
+    for feature_extraction_task, async_result in zip(
+        feature_extraction_tasks, job.parent.results
+    ):
+        feature_extraction_task.task_id = async_result.id
+
+    db.session.commit()
+
     # Persist group result manually, because by default it's using 24 hours
     # (not clear why, it should respect the result_expires setting used for normal results)
     current_app.my_celery.backend.client.persist(
@@ -162,7 +180,9 @@ def get_album_details(album_id, token):
 
     access_token = get_token_header(token)
 
-    album_details = requests.get(album_url, headers=access_token).json()
+    album_details = requests.get(
+        album_url, headers=access_token, timeout=KHEOPS_HTTP_TIMEOUT
+    ).json()
 
     return album_details
 
@@ -172,7 +192,9 @@ def get_studies_from_album(album_id, token):
 
     access_token = get_token_header(token)
 
-    album_studies = requests.get(album_studies_url, headers=access_token).json()
+    album_studies = requests.get(
+        album_studies_url, headers=access_token, timeout=KHEOPS_HTTP_TIMEOUT
+    ).json()
 
     return album_studies
 
@@ -190,7 +212,9 @@ def get_series_from_study(study_uid, modalities, album_id, token):
 
     access_token = get_token_header(token)
 
-    study_series = requests.get(study_series_url, headers=access_token).json()
+    study_series = requests.get(
+        study_series_url, headers=access_token, timeout=KHEOPS_HTTP_TIMEOUT
+    ).json()
 
     return study_series
 
@@ -202,7 +226,9 @@ def get_series_metadata(study_uid, series_uid, album_id, token):
 
     access_token = get_token_header(token)
 
-    series_metadata = requests.get(series_metadata_url, headers=access_token).json()
+    series_metadata = requests.get(
+        series_metadata_url, headers=access_token, timeout=KHEOPS_HTTP_TIMEOUT
+    ).json()
 
     return series_metadata
 

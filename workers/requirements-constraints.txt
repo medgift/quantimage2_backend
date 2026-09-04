@@ -1,0 +1,12 @@
+# Global pip constraint file.
+#
+# Hold numpy at the last 1.x release. pyradiomics v3.1.0 (the last stable release)
+# uses the numpy 1.x C API and does NOT build against numpy 2.x. Several unpinned
+# transitive deps (scikit-image >= 0.25, recent PyWavelets, okapy's own
+# install_requires) will otherwise drag numpy up to 2.x, which both breaks the
+# pyradiomics build and makes some features come back as complex numbers (`+0j`),
+# causing "Data truncated for column 'value'" on insert.
+#
+# Applied via `pip install -c requirements-constraints.txt ...` to every install
+# that can resolve numpy transitively.
+numpy==1.26.4

@@ -42,7 +42,7 @@ volume_preprocessing:
   CT:
     bspline_resampler:
       resampling_spacing: [1.0, 1.0, 1.0]
-      order: 3
+      order: 1
   default:
 
 mask_preprocessing:

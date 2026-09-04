@@ -31,8 +31,11 @@ services:
       - ./pytest.ini:/usr/src/app/pytest.ini
       - ${QUANTIMAGE2_DATA_MOUNT_DIRECTORY}:/quantimage2-data
     <<: *host-mappings
-    # Uncomment for debugging celery worker tasks
-    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=extraction@%h", "--queues=extraction"]
+    # Uncomment for debugging celery worker tasks (single process, breakpoints
+    # work). Leave it commented otherwise: the solo pool cannot terminate a
+    # running task, so cancelling an extraction behaves differently than in
+    # production, which uses the prefork pool from docker-compose.yml.
+    # command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=extraction@%h", "--queues=extraction"]
 
   celery_training:
     env_file:
@@ -45,8 +48,8 @@ services:
       - ./pytest.ini:/usr/src/app/pytest.ini
       - ${QUANTIMAGE2_DATA_MOUNT_DIRECTORY}:/quantimage2-data
     <<: *host-mappings
-    # Uncomment for debugging celery worker tasks
-    command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=training@%h", "--queues=training"]
+    # Uncomment for debugging celery worker tasks (see note above)
+    # command: ["celery", "--app=tasks", "worker", "--loglevel=INFO", "--pool=solo", "--hostname=training@%h", "--queues=training"]
 
   flower:
     ports:

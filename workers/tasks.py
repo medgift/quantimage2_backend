@@ -11,7 +11,7 @@ import socket
 import tempfile
 import traceback
 from multiprocessing import current_process
-
+from pathlib import Path
 import joblib
 import requests
 import warnings
@@ -26,6 +26,7 @@ from typing import Dict, Any, Optional
 from flask_socketio import SocketIO
 from celery import Celery
 from celery import states as celerystates
+from celery.exceptions import SoftTimeLimitExceeded
 from celery.signals import celeryd_after_setup
 from zipfile import ZipFile
 
@@ -52,7 +53,8 @@ from quantimage2_backend_common.utils import (
     format_model,
 )
 
-from okapy.dicomconverter.converter import ExtractorConverter
+from okapy.config import load_config, migrate_legacy_config
+from okapy.pipeline import build_extraction_pipeline
 
 from utils import (
     calculate_training_metrics,
@@ -83,6 +85,14 @@ celery = Celery(
     broker=os.environ["CELERY_BROKER_URL"],
 )
 celery.conf.accept_content = ["pickle", "json"]
+
+# Study download tuning. The read timeout applies between chunks rather than to
+# the whole transfer, so it can stay well under the task's own time limits: it
+# is there to release a worker slot held by a stalled PACS connection, not to
+# cap how long a large study may take.
+DOWNLOAD_CONNECT_TIMEOUT = 30
+DOWNLOAD_READ_TIMEOUT = 300
+DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 
 
 @celeryd_after_setup.connect
@@ -290,7 +300,6 @@ def train_model(
                 X_test, fitted_model, test_patients
             )
 
-
             # NOTE: train_predictions computation commented out for performance
             # (saving large JSON to DB was causing slowness at 100% test phase).
             # Kept for reference in case we need to re-enable it in the future.
@@ -398,6 +407,10 @@ def run_extraction(
     config_path,
     rois,
 ):
+    # Tracked outside the try block so that the finally can always remove the
+    # downloaded study, including when the task is terminated by a cancellation.
+    dicom_dir = None
+
     try:
 
         current_step = 1
@@ -461,6 +474,22 @@ def run_extraction(
         # Download study and write files to directory
         dicom_dir = download_study(album_token, study_uid, album_id)
 
+        # Downloading a study can take a while on a large album, so check once
+        # more before starting the extraction itself - that is the expensive
+        # part, and the only cancellation check left after it is the revoke.
+        feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
+        if not feature_extraction:
+            print(
+                f"Feature extraction {feature_extraction_id} not found (cancelled), aborting after download"
+            )
+            return {
+                "feature_extraction_task_id": feature_extraction_task_id,
+                "current": steps,
+                "total": steps,
+                "completed": steps,
+                "status_message": "Cancelled",
+            }
+
         # Extract all the features
         features = extract_all_features(
             self,
@@ -473,9 +502,6 @@ def run_extraction(
             steps=steps,
             album_name=album_name,
         )
-
-        # Delete download DIR
-        shutil.rmtree(dicom_dir, True)
 
         # Save the features
         store_features(
@@ -503,6 +529,21 @@ def run_extraction(
         }
     except Exception as e:
 
+        # A cancelled extraction arrives here as SoftTimeLimitExceeded, because
+        # the task was revoked with SIGUSR1, and its row has already been
+        # deleted - there is nothing left to report a failure against. The same
+        # exception is raised when the task's own soft_time_limit is reached,
+        # and that extraction does still exist, so it is reported like any other
+        # failure. The finally block cleans up the download either way.
+        if isinstance(e, SoftTimeLimitExceeded):
+            db.session.rollback()
+            if FeatureExtraction.find_by_id(feature_extraction_id) is None:
+                print(
+                    f"Feature extraction task {feature_extraction_task_id} "
+                    f"terminated (extraction cancelled)"
+                )
+                raise
+
         logging.error(e)
 
         current_step = 0
@@ -527,6 +568,12 @@ def run_extraction(
         raise e
 
     finally:
+        # Always remove the downloaded study. It used to be deleted only on the
+        # success path, so every failed or cancelled task leaked an unzipped
+        # DICOM study into the worker's temp directory.
+        if dicom_dir:
+            shutil.rmtree(dicom_dir, True)
+
         db.session.remove()
 
 
@@ -634,31 +681,50 @@ def download_study(token: str, study_uid: str, album_id: str) -> str:
     :returns: Path to the directory of downloaded files
     """
     tmp_dir = tempfile.mkdtemp()
-    tmp_file = tempfile.mktemp(".zip")
+    zip_fd, tmp_file = tempfile.mkstemp(suffix=".zip")
 
-    study_download_url = (
-        f"{endpoints.studies}/{study_uid}?accept=application/zip&album={album_id}"
-    )
+    # Both temp paths exist before the caller ever sees them, so a failure or a
+    # cancellation in the middle of the download has to be cleaned up here - the
+    # caller has nothing to clean up yet.
+    try:
+        # fdopen takes ownership of the descriptor returned by mkstemp, so the
+        # file is closed on every path out of this block.
+        with os.fdopen(zip_fd, "wb") as zip_file:
+            study_download_url = f"{endpoints.studies}/{study_uid}?accept=application/zip&album={album_id}"
 
-    access_token = get_token_header(token)
+            access_token = get_token_header(token)
 
-    response = requests.get(
-        study_download_url,
-        headers=access_token,
-    )
+            # Stream the study to disk rather than holding it in memory: a
+            # single study is easily hundreds of MB, and the extraction worker
+            # runs several of these at once. Writing it chunk by chunk also
+            # gives the task somewhere to be interrupted when the extraction is
+            # cancelled - a single read of the whole body cannot be.
+            with requests.get(
+                study_download_url,
+                headers=access_token,
+                stream=True,
+                timeout=(DOWNLOAD_CONNECT_TIMEOUT, DOWNLOAD_READ_TIMEOUT),
+            ) as response:
+                # Without this, an HTTP error body is written to the ZIP and
+                # only resurfaces later as a BadZipFile, hiding the real cause.
+                response.raise_for_status()
 
-    # Save to ZIP file
-    with open(tmp_file, "wb") as f:
-        f.write(response.content)
+                for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                    zip_file.write(chunk)
 
-    # Unzip ZIP file
-    with ZipFile(tmp_file, "r") as zipObj:
-        for file in zipObj.namelist():
-            if file.startswith("DICOM/"):
-                zipObj.extract(file, tmp_dir)
-
-    # Remove the ZIP file
-    os.unlink(tmp_file)
+        # Unzip ZIP file
+        with ZipFile(tmp_file, "r") as zipObj:
+            for file in zipObj.namelist():
+                if file.startswith("DICOM/"):
+                    zipObj.extract(file, tmp_dir)
+    except BaseException:
+        shutil.rmtree(tmp_dir, True)
+        raise
+    finally:
+        # The ZIP is never needed once it has been extracted (or once the
+        # download has failed), so drop it on every path.
+        if os.path.exists(tmp_file):
+            os.unlink(tmp_file)
 
     return tmp_dir
 
@@ -677,30 +743,27 @@ def extract_all_features(
     current_step: Optional[int] = None,
     steps: Optional[int] = None,
     album_name: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Update the progress of a feature extraction Task
+):
+    """Run the complete Okapy extraction pipeline for one DICOM study.
 
-    :param task: Celery Task associated with the Feature Extraction Task
-    :param dicom_dir: Path to the folder containing all DICOM images
-    :param config_path: Path to the YAML config file with the extraction parameters (TODO - Detail more)
-    :param feature_extraction_id: The ID of the Feature Extraction (global, can include multiple patients)
-    :param feature_extraction_task_id: The ID of the specific Feature Task (for a given study)
-    :param current_step: The current step (out of N steps) in the extraction process (should be 1 at this point)
-    :param steps: The total number of steps in the extraction process (currently 3 - Download, Conversion, Extraction)
-    :param album_name: The name of the Kheops album to which the study belongs (for customizing label extraction)
-    :returns: A dictionary with the extracted features
+    A temporary working directory is created for conversion, preprocessing,
+    and feature-backend outputs. It is removed automatically after the returned
+    feature DataFrame has been materialized.
     """
+
+    del album_name  # Currently unused.
+
     try:
-        # Status update - PROCESS
         if feature_extraction_task_id is None or current_step is None or steps is None:
             raise ValueError(
-                f"extract_all_features requires feature_extraction_task_id, "
-                f"current_step, and steps (got {feature_extraction_task_id}, "
-                f"{current_step}, {steps})"
+                "extract_all_features requires feature_extraction_task_id, "
+                f"current_step, and steps; got "
+                f"{feature_extraction_task_id}, {current_step}, {steps}."
             )
+
         current_step += 1
         status_message = "Processing data"
+
         update_progress(
             task,
             feature_extraction_id,
@@ -710,56 +773,103 @@ def extract_all_features(
             status_message,
         )
 
-        # Get results directly from Okapy
-        converter = ExtractorConverter.from_params(config_path)
+        legacy_config = load_config(config_path)
+        config = migrate_legacy_config(legacy_config)
+        pipeline = build_extraction_pipeline(config)
 
-        conversion_result = converter(dicom_dir, labels=rois)
+        # Extraction workspaces are large, so they live on the shared data
+        # volume (QUANTIMAGE_WORK_DIR) rather than the container's own /tmp.
+        # Create it if needed: tempfile raises if the directory is missing,
+        # and the volume starts out empty on a fresh deployment.
+        workspace_root = os.environ.get("QUANTIMAGE_WORK_DIR")
+        if workspace_root:
+            os.makedirs(workspace_root, exist_ok=True)
 
-        print(f"!!!!!!!!!!!!Final Features!!!!!!!!!")
-        print(conversion_result)
+        with tempfile.TemporaryDirectory(
+            prefix=f"quantimage-extraction-{feature_extraction_task_id}-",
+            dir=workspace_root,
+        ) as temporary_directory:
+            work_dir = Path(temporary_directory)
 
-        result = conversion_result
+            logging.info(
+                "Running Okapy extraction in temporary workspace %s",
+                work_dir,
+            )
 
-        return result
+            features = pipeline.run(
+                input_dir=Path(dicom_dir),
+                work_dir=work_dir,
+                labels=rois or None,
+            )
+
+            # Make sure the returned DataFrame is detached from any files in
+            # the temporary workspace before it is deleted.
+            features = features.copy(deep=True)
+
+        logging.info(
+            "Okapy extraction completed for feature task %s: %d feature rows.",
+            feature_extraction_task_id,
+            len(features),
+        )
+
+        return features
+
+    except SoftTimeLimitExceeded:
+        # The task was revoked because the extraction was cancelled, or it hit
+        # its own soft time limit. Either way, let it propagate untouched: for a
+        # cancellation the reporting below would emit a failure for an
+        # extraction that no longer exists, and its status lookup would fail on
+        # the deleted group result. run_extraction tells the two cases apart and
+        # reports a real timeout from there.
+        raise
 
     except Exception as e:
-
-        # logging.error(e)
-
-        print("!!!!!Caught an error while pre-processing or something!!!!!")
-
-        current_step = 0
-        status_message = "Failure!"
-        print(
-            f"Feature extraction task {feature_extraction_task_id} - {current_step}/{steps} - {status_message}"
+        logging.exception(
+            "Feature extraction failed for task %s.",
+            feature_extraction_task_id,
         )
+
+        failed_step = 0
+        status_message = "Failure!"
 
         meta = {
             "exc_type": type(e).__name__,
             "exc_message": traceback.format_exc().split("\n"),
             "feature_extraction_task_id": feature_extraction_task_id,
-            "current": current_step,
+            "current": failed_step,
             "total": steps,
             "status_message": status_message,
         }
 
-        update_task_state(task, celerystates.FAILURE, meta)
+        update_task_state(
+            task,
+            celerystates.FAILURE,
+            meta,
+        )
 
-        # Send Socket.IO message
         socketio_body = get_socketio_body_feature_task(
             task.request.id,
             feature_extraction_task_id,
             celerystates.FAILURE,
-            task_status_message(current_step, steps, status_message),
+            task_status_message(
+                failed_step,
+                steps,
+                status_message,
+            ),
         )
 
-        # Send Socket.IO message to clients about task
-        socketio.emit(MessageType.FEATURE_TASK_STATUS.value, socketio_body)
+        socketio.emit(
+            MessageType.FEATURE_TASK_STATUS.value,
+            socketio_body,
+        )
 
-        # Send Socket.IO message to clients about extraction
-        send_extraction_status_message(feature_extraction_id, celery, socketio)
+        send_extraction_status_message(
+            feature_extraction_id,
+            celery,
+            socketio,
+        )
 
-        raise e
+        raise
 
     finally:
         db.session.remove()

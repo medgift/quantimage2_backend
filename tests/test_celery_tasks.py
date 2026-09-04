@@ -275,10 +275,12 @@ class TestComputeFeatureImportance:
     def test_classification_importance(self, mock_pi):
         from utils import compute_feature_importance
 
-        # Mock the permutation importance result
+        # compute_feature_importance passes a single scorer to
+        # permutation_importance, so sklearn returns one result object - not a
+        # dict keyed by metric name, which is what it returns for several.
         mock_result = MagicMock()
         mock_result.importances_mean = np.array([0.05, 0.15, 0.10])
-        mock_pi.return_value = {"auc": mock_result}
+        mock_pi.return_value = mock_result
 
         X = pd.DataFrame(
             {"feat_a": [1, 2, 3], "feat_b": [4, 5, 6], "feat_c": [7, 8, 9]}
@@ -293,6 +295,11 @@ class TestComputeFeatureImportance:
         assert "feat_a" in importances
         assert "feat_b" in importances
         assert importances["feat_b"] == 0.15
+
+        # Guard the single-scorer contract itself: passing the whole scoring
+        # dict is what makes this call expensive, and it also changes the shape
+        # of what comes back.
+        assert mock_pi.call_args.kwargs["scoring"] == "roc_auc"
 
 
 # ---------------------------------------------------------------------------

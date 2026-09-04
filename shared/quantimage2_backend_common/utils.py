@@ -149,7 +149,9 @@ def _format_feature_task_with_result(feature_task, result_obj):
             if status != celerystates.FAILURE:
                 status_message = task_status_message_from_result(result)
             else:
-                status_message = result
+                # result may be a raw exception object (e.g. BadZipFile) that is
+                # not JSON serializable — stringify it like fetch_extraction_result does
+                status_message = str(result)
 
     return {
         "id": feature_task.id,
@@ -182,7 +184,9 @@ def format_feature_task(feature_task):
             if status != celerystates.FAILURE:
                 status_message = task_status_message_from_result(result)
             else:
-                status_message = result
+                # result may be a raw exception object (e.g. BadZipFile) that is
+                # not JSON serializable — stringify it like fetch_extraction_result does
+                status_message = str(result)
 
     return {
         "id": feature_task.id,
@@ -212,6 +216,14 @@ def fetch_extraction_result(celery_app, result_id, tasks=None):
         result = celery_app.GroupResult.restore(result_id)
         elapsed = toc()
         print(f"Getting result for extraction result {result_id} took", elapsed)
+
+        # restore() returns None once the group result is gone - which is the
+        # case for a cancelled extraction, and for any task still in flight when
+        # it was cancelled. Report an empty status instead of raising, otherwise
+        # every caller has to guard against it.
+        if result is None:
+            print(f"Group result {result_id} no longer exists")
+            return status
 
         # Make an inventory of errors (if tasks are provided)
         if tasks is not None:
@@ -253,7 +265,9 @@ def fetch_extraction_result(celery_app, result_id, tasks=None):
 def fetch_task_result(task_id):
     print(f"Getting result for task {task_id}")
 
-    response = requests.get("http://flower:3333/api/task/result/" + task_id)
+    response = requests.get(
+        "http://flower:3333/api/task/result/" + task_id, timeout=(5, 30)
+    )
 
     task = CustomResult()
 
