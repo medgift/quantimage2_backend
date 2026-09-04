@@ -817,7 +817,7 @@ def extract_all_features(
         # reports a real timeout from there.
         raise
 
-    except Exception:
+    except Exception as e:
         logging.exception(
             "Feature extraction failed for task %s.",
             feature_extraction_task_id,
@@ -827,7 +827,7 @@ def extract_all_features(
         status_message = "Failure!"
 
         meta = {
-            "exc_type": traceback.format_exc().splitlines()[-1].split(":")[0],
+            "exc_type": type(e).__name__,
             "exc_message": traceback.format_exc().split("\n"),
             "feature_extraction_task_id": feature_extraction_task_id,
             "current": failed_step,
