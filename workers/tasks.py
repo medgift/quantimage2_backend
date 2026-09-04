@@ -777,7 +777,13 @@ def extract_all_features(
         config = migrate_legacy_config(legacy_config)
         pipeline = build_extraction_pipeline(config)
 
+        # Extraction workspaces are large, so they live on the shared data
+        # volume (QUANTIMAGE_WORK_DIR) rather than the container's own /tmp.
+        # Create it if needed: tempfile raises if the directory is missing,
+        # and the volume starts out empty on a fresh deployment.
         workspace_root = os.environ.get("QUANTIMAGE_WORK_DIR")
+        if workspace_root:
+            os.makedirs(workspace_root, exist_ok=True)
 
         with tempfile.TemporaryDirectory(
             prefix=f"quantimage-extraction-{feature_extraction_task_id}-",
