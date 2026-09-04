@@ -745,29 +745,25 @@ def extract_all_features(
     album_name: Optional[str] = None,
 ):
     """Run the complete Okapy extraction pipeline for one DICOM study.
- 
+
     A temporary working directory is created for conversion, preprocessing,
     and feature-backend outputs. It is removed automatically after the returned
     feature DataFrame has been materialized.
     """
- 
+
     del album_name  # Currently unused.
- 
+
     try:
-        if (
-            feature_extraction_task_id is None
-            or current_step is None
-            or steps is None
-        ):
+        if feature_extraction_task_id is None or current_step is None or steps is None:
             raise ValueError(
                 "extract_all_features requires feature_extraction_task_id, "
                 f"current_step, and steps; got "
                 f"{feature_extraction_task_id}, {current_step}, {steps}."
             )
- 
+
         current_step += 1
         status_message = "Processing data"
- 
+
         update_progress(
             task,
             feature_extraction_id,
@@ -776,41 +772,40 @@ def extract_all_features(
             steps,
             status_message,
         )
- 
+
         legacy_config = load_config(config_path)
         config = migrate_legacy_config(legacy_config)
         pipeline = build_extraction_pipeline(config)
- 
+
         workspace_root = os.environ.get("QUANTIMAGE_WORK_DIR")
- 
+
         with tempfile.TemporaryDirectory(
             prefix=f"quantimage-extraction-{feature_extraction_task_id}-",
             dir=workspace_root,
         ) as temporary_directory:
             work_dir = Path(temporary_directory)
- 
+
             logging.info(
                 "Running Okapy extraction in temporary workspace %s",
                 work_dir,
             )
- 
+
             features = pipeline.run(
                 input_dir=Path(dicom_dir),
                 work_dir=work_dir,
                 labels=rois or None,
             )
- 
+
             # Make sure the returned DataFrame is detached from any files in
             # the temporary workspace before it is deleted.
             features = features.copy(deep=True)
- 
+
         logging.info(
-            "Okapy extraction completed for feature task %s: "
-            "%d feature rows.",
+            "Okapy extraction completed for feature task %s: %d feature rows.",
             feature_extraction_task_id,
             len(features),
         )
- 
+
         return features
 
     except SoftTimeLimitExceeded:
@@ -827,10 +822,10 @@ def extract_all_features(
             "Feature extraction failed for task %s.",
             feature_extraction_task_id,
         )
- 
+
         failed_step = 0
         status_message = "Failure!"
- 
+
         meta = {
             "exc_type": traceback.format_exc().splitlines()[-1].split(":")[0],
             "exc_message": traceback.format_exc().split("\n"),
@@ -839,13 +834,13 @@ def extract_all_features(
             "total": steps,
             "status_message": status_message,
         }
- 
+
         update_task_state(
             task,
             celerystates.FAILURE,
             meta,
         )
- 
+
         socketio_body = get_socketio_body_feature_task(
             task.request.id,
             feature_extraction_task_id,
@@ -856,19 +851,19 @@ def extract_all_features(
                 status_message,
             ),
         )
- 
+
         socketio.emit(
             MessageType.FEATURE_TASK_STATUS.value,
             socketio_body,
         )
- 
+
         send_extraction_status_message(
             feature_extraction_id,
             celery,
             socketio,
         )
- 
+
         raise
- 
+
     finally:
         db.session.remove()
