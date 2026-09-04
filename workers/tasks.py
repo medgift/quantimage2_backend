@@ -300,7 +300,6 @@ def train_model(
                 X_test, fitted_model, test_patients
             )
 
-
             # NOTE: train_predictions computation commented out for performance
             # (saving large JSON to DB was causing slowness at 100% test phase).
             # Kept for reference in case we need to re-enable it in the future.

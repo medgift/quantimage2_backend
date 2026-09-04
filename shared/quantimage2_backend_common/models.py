@@ -88,6 +88,13 @@ class BaseModel(db.Model):
             criteria = {}
         if defaults is None:
             defaults = {}
+        # Fast path: non-locking read. A FOR UPDATE lock here would be held
+        # until the surrounding request/task commits, serializing every caller
+        # that touches the same row (e.g. all users of one album).
+        instance = db.session.query(cls).filter_by(**criteria).one_or_none()
+        if instance:
+            return instance, False
+        # Row is missing: take the lock only to guard concurrent creation.
         instance = (
             db.session.query(cls).filter_by(**criteria).with_for_update().one_or_none()
         )
