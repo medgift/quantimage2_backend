@@ -14,13 +14,7 @@ volume_preprocessing:
       order: 1
     standardizer:
       threshold: 0.001
-
   default:
-
-mask_preprocessing:
-  default:
-    binary_bspline_resampler:
-      order: 1
 
 feature_extraction:
   MR_T1:
