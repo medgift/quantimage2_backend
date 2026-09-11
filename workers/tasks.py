@@ -11,7 +11,7 @@ import socket
 import tempfile
 import traceback
 from multiprocessing import current_process
-
+from pathlib import Path
 import joblib
 import requests
 import warnings
@@ -53,7 +53,8 @@ from quantimage2_backend_common.utils import (
     format_model,
 )
 
-from okapy.dicomconverter.converter import ExtractorConverter
+from okapy.config import load_config, migrate_legacy_config
+from okapy.pipeline import build_extraction_pipeline
 
 from utils import (
     calculate_training_metrics,
@@ -742,30 +743,27 @@ def extract_all_features(
     current_step: Optional[int] = None,
     steps: Optional[int] = None,
     album_name: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Update the progress of a feature extraction Task
+):
+    """Run the complete Okapy extraction pipeline for one DICOM study.
 
-    :param task: Celery Task associated with the Feature Extraction Task
-    :param dicom_dir: Path to the folder containing all DICOM images
-    :param config_path: Path to the YAML config file with the extraction parameters (TODO - Detail more)
-    :param feature_extraction_id: The ID of the Feature Extraction (global, can include multiple patients)
-    :param feature_extraction_task_id: The ID of the specific Feature Task (for a given study)
-    :param current_step: The current step (out of N steps) in the extraction process (should be 1 at this point)
-    :param steps: The total number of steps in the extraction process (currently 3 - Download, Conversion, Extraction)
-    :param album_name: The name of the Kheops album to which the study belongs (for customizing label extraction)
-    :returns: A dictionary with the extracted features
+    A temporary working directory is created for conversion, preprocessing,
+    and feature-backend outputs. It is removed automatically after the returned
+    feature DataFrame has been materialized.
     """
+
+    del album_name  # Currently unused.
+
     try:
-        # Status update - PROCESS
         if feature_extraction_task_id is None or current_step is None or steps is None:
             raise ValueError(
-                f"extract_all_features requires feature_extraction_task_id, "
-                f"current_step, and steps (got {feature_extraction_task_id}, "
-                f"{current_step}, {steps})"
+                "extract_all_features requires feature_extraction_task_id, "
+                f"current_step, and steps; got "
+                f"{feature_extraction_task_id}, {current_step}, {steps}."
             )
+
         current_step += 1
         status_message = "Processing data"
+
         update_progress(
             task,
             feature_extraction_id,
@@ -775,17 +773,46 @@ def extract_all_features(
             status_message,
         )
 
-        # Get results directly from Okapy
-        converter = ExtractorConverter.from_params(config_path)
+        legacy_config = load_config(config_path)
+        config = migrate_legacy_config(legacy_config)
+        pipeline = build_extraction_pipeline(config)
 
-        conversion_result = converter(dicom_dir, labels=rois)
+        # Extraction workspaces are large, so they live on the shared data
+        # volume (QUANTIMAGE_WORK_DIR) rather than the container's own /tmp.
+        # Create it if needed: tempfile raises if the directory is missing,
+        # and the volume starts out empty on a fresh deployment.
+        workspace_root = os.environ.get("QUANTIMAGE_WORK_DIR")
+        if workspace_root:
+            os.makedirs(workspace_root, exist_ok=True)
 
-        print(f"!!!!!!!!!!!!Final Features!!!!!!!!!")
-        print(conversion_result)
+        with tempfile.TemporaryDirectory(
+            prefix=f"quantimage-extraction-{feature_extraction_task_id}-",
+            dir=workspace_root,
+        ) as temporary_directory:
+            work_dir = Path(temporary_directory)
 
-        result = conversion_result
+            logging.info(
+                "Running Okapy extraction in temporary workspace %s",
+                work_dir,
+            )
 
-        return result
+            features = pipeline.run(
+                input_dir=Path(dicom_dir),
+                work_dir=work_dir,
+                labels=rois or None,
+            )
+
+            # Make sure the returned DataFrame is detached from any files in
+            # the temporary workspace before it is deleted.
+            features = features.copy(deep=True)
+
+        logging.info(
+            "Okapy extraction completed for feature task %s: %d feature rows.",
+            feature_extraction_task_id,
+            len(features),
+        )
+
+        return features
 
     except SoftTimeLimitExceeded:
         # The task was revoked because the extraction was cancelled, or it hit
@@ -797,43 +824,52 @@ def extract_all_features(
         raise
 
     except Exception as e:
-
-        # logging.error(e)
-
-        print("!!!!!Caught an error while pre-processing or something!!!!!")
-
-        current_step = 0
-        status_message = "Failure!"
-        print(
-            f"Feature extraction task {feature_extraction_task_id} - {current_step}/{steps} - {status_message}"
+        logging.exception(
+            "Feature extraction failed for task %s.",
+            feature_extraction_task_id,
         )
+
+        failed_step = 0
+        status_message = "Failure!"
 
         meta = {
             "exc_type": type(e).__name__,
             "exc_message": traceback.format_exc().split("\n"),
             "feature_extraction_task_id": feature_extraction_task_id,
-            "current": current_step,
+            "current": failed_step,
             "total": steps,
             "status_message": status_message,
         }
 
-        update_task_state(task, celerystates.FAILURE, meta)
+        update_task_state(
+            task,
+            celerystates.FAILURE,
+            meta,
+        )
 
-        # Send Socket.IO message
         socketio_body = get_socketio_body_feature_task(
             task.request.id,
             feature_extraction_task_id,
             celerystates.FAILURE,
-            task_status_message(current_step, steps, status_message),
+            task_status_message(
+                failed_step,
+                steps,
+                status_message,
+            ),
         )
 
-        # Send Socket.IO message to clients about task
-        socketio.emit(MessageType.FEATURE_TASK_STATUS.value, socketio_body)
+        socketio.emit(
+            MessageType.FEATURE_TASK_STATUS.value,
+            socketio_body,
+        )
 
-        # Send Socket.IO message to clients about extraction
-        send_extraction_status_message(feature_extraction_id, celery, socketio)
+        send_extraction_status_message(
+            feature_extraction_id,
+            celery,
+            socketio,
+        )
 
-        raise e
+        raise
 
     finally:
         db.session.remove()
