@@ -44,12 +44,7 @@ volume_preprocessing:
       resampling_spacing: [1.0, 1.0, 1.0]
       order: 3
   default:
-
-mask_preprocessing:
-  default:
-    binary_bspline_resampler:
-      order: 1
-
+  
 feature_extraction:
   MR_T1Pre:
     pyradiomics:
