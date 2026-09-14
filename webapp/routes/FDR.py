@@ -1,9 +1,13 @@
-import json
+import logging
+import traceback
 
-from flask import Blueprint, jsonify, request, Response, g
-from routes.utils import validate_decorate
+from flask import Blueprint, g, jsonify, make_response, request
+
 from quantimage2_backend_common.models import LabelCategory
+from routes.utils import validate_decorate
 from service.FDR import compute_fdr
+
+logger = logging.getLogger(__name__)
 
 # Define blueprint
 bp = Blueprint("fdr", __name__)
@@ -16,33 +20,35 @@ def before_request():
 
 @bp.route("/fdr/simpleFDR", methods=["POST"])
 def simpleFDR():
+    # NOTE: never log `body` — it carries patient IDs and their outcomes.
     body = request.json
-    print(body)
 
     label_category = LabelCategory.find_by_id(body["label_category_id"])
-    print(label_category)
-    user_id = g.user
+    if label_category is None:
+        return make_response(
+            jsonify({"error": f"Label category {body['label_category_id']} not found"}),
+            404,
+        )
 
-    feature_extraction_id = body["extraction_id"]
-    selected_feature_ids = body["selected_feature_ids"]
-    collection_id = body["collection_id"]
-    fdr_threshold_list = body["fdr_threshold_list"]
-    album = body["album"]
-    album_studies = body["album_studies"]
-    gt = body["labels"]
-    training_patients = body["training_patients"]
-
-    results_by_qvalues = compute_fdr(
-        feature_extraction_id,
-        collection_id,
-        album,
-        album_studies,
-        label_category,
-        gt,
-        training_patients,
-        user_id,
-        selected_feature_ids,
-        fdr_threshold_list,
-    )
+    try:
+        results_by_qvalues = compute_fdr(
+            body["extraction_id"],
+            body["collection_id"],
+            body["album"],
+            body["album_studies"],
+            label_category,
+            body["labels"],
+            body["training_patients"],
+            g.user,
+            body["selected_feature_ids"],
+            body["fdr_threshold_list"],
+        )
+    except ValueError as e:
+        # Raised when the request itself is inconsistent (unknown features, no
+        # features to screen), which is the caller's problem, not a server bug.
+        return make_response(jsonify({"error": str(e)}), 400)
+    except Exception as e:
+        traceback.print_exc()
+        return make_response(jsonify({"error": str(e)}), 500)
 
     return jsonify(results_by_qvalues)

@@ -288,6 +288,44 @@ def resolve_collection_clinical_definitions(
     return clin_feature_definitions
 
 
+def _resolve_definitions(full_clin_feature_definitions, collection_id):
+    """Narrow an album's clinical definitions to the ones to actually use."""
+    # Which definitions actually have data: a failed/partial upload can leave a
+    # newer definition with no values, and that empty definition must neither
+    # shadow an older file's data (dedup) nor crash the callers' build loops.
+    ids_with_values = definition_ids_with_values(
+        [d.id for d in full_clin_feature_definitions]
+    )
+
+    if collection_id:
+        feature_collection = FeatureCollection.find_by_id(collection_id)
+        return resolve_collection_clinical_definitions(
+            feature_collection.feature_ids,
+            full_clin_feature_definitions,
+            ids_with_values,
+        )
+
+    # If collection_id is None we use all clinical features. A name present in
+    # several uploaded files must only be used once: keep the newest file's
+    # copy (see service.clinical_features_dedup).
+    return dedupe_definitions_by_name(full_clin_feature_definitions, ids_with_values)
+
+
+def resolve_clinical_definitions(user_id: str, collection_id, album) -> List:
+    """Clinical definitions to use for an album, one per feature name.
+
+    Shared by the training matrix below and the univariate screening in
+    ``service.FDR`` so the two can never disagree about which clinical columns
+    exist. Requires an app context (it queries the DB).
+    """
+    return _resolve_definitions(
+        ClinicalFeatureDefinition.find_by_user_id_and_album_id(
+            user_id, album["album_id"]
+        ),
+        collection_id,
+    )
+
+
 def get_clinical_features(
     user_id: str, collection_id: str, radiomics_patient_ids: List[str], album: str
 ):
@@ -297,27 +335,9 @@ def get_clinical_features(
         )
     )
 
-    # Which definitions actually have data: a failed/partial upload can leave a
-    # newer definition with no values, and that empty definition must neither
-    # shadow an older file's data (dedup) nor crash the build loop below.
-    ids_with_values = definition_ids_with_values(
-        [d.id for d in full_clin_feature_definitions]
+    clin_feature_definitions = _resolve_definitions(
+        full_clin_feature_definitions, collection_id
     )
-
-    if collection_id:
-        feature_collection = FeatureCollection.find_by_id(collection_id)
-        clin_feature_definitions = resolve_collection_clinical_definitions(
-            feature_collection.feature_ids,
-            full_clin_feature_definitions,
-            ids_with_values,
-        )
-
-    else:  # If collection_id is None we are training with all clinical features
-        # A name present in several uploaded files must only be used once:
-        # keep the newest file's copy (see service.clinical_features_dedup).
-        clin_feature_definitions = dedupe_definitions_by_name(
-            full_clin_feature_definitions, ids_with_values
-        )
 
     if len(clin_feature_definitions) == 0:
         return pandas.DataFrame()
