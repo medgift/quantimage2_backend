@@ -52,7 +52,6 @@ def get_features_labels(
 
     if collection_id:
         collection = FeatureCollection.find_by_id(collection_id)
-        print("Collection", collection)
         header, features_df = transform_studies_collection_features_to_df(
             collection, studies
         )
@@ -61,7 +60,6 @@ def get_features_labels(
 
     # Get Labels DataFrame
     # TODO - Allow choosing a mode (Patient only or Patient + ROI)
-    print(gt)
     labels_df = pandas.DataFrame(gt, columns=["PatientID", *outcome_columns])
 
     labels_df_indexed = labels_df.set_index("PatientID", drop=True)
@@ -314,9 +312,10 @@ def _resolve_definitions(full_clin_feature_definitions, collection_id):
 def resolve_clinical_definitions(user_id: str, collection_id, album) -> List:
     """Clinical definitions to use for an album, one per feature name.
 
-    Shared by the training matrix below and the univariate screening in
-    ``service.FDR`` so the two can never disagree about which clinical columns
-    exist. Requires an app context (it queries the DB).
+    Applies the same rule as the training matrix below. The univariate
+    screening in ``service.FDR`` does not use it: screening tests exactly the
+    clinical copies the user selected, which can differ from a saved
+    collection. Requires an app context (it queries the DB).
     """
     return _resolve_definitions(
         ClinicalFeatureDefinition.find_by_user_id_and_album_id(

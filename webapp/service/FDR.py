@@ -39,19 +39,26 @@ from statsmodels.stats.multitest import multipletests
 
 from quantimage2_backend_common.const import (
     CLINICAL_FEATURE_ID_SEPARATOR,
+    FEATURE_ID_SEPARATOR,
     MODEL_TYPES,
 )
 from quantimage2_backend_common.models import (
+    ClinicalFeatureDefinition,
     ClinicalFeatureMissingValues,
     ClinicalFeatureTypes,
     ClinicalFeatureValue,
+    FeatureCollection,
 )
+from service.clinical_features_dedup import definition_ids_with_values
 from service.feature_transformation import (
     OUTCOME_FIELD_CLASSIFICATION,
     OUTCOME_FIELD_SURVIVAL_EVENT,
     OUTCOME_FIELD_SURVIVAL_TIME,
 )
-from service.machine_learning import get_features_labels, resolve_clinical_definitions
+from service.machine_learning import (
+    get_features_labels,
+    resolve_collection_clinical_definitions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +140,11 @@ def compute_fdr(
     """Screen ``selected_feature_ids`` and report what survives each q-value."""
     model_type = MODEL_TYPES(label_category.label_type)
 
+    # dict.fromkeys keeps the caller's order while dropping any duplicate, which
+    # would otherwise produce a duplicated column and be counted twice by the
+    # multiple-testing correction.
+    selected_feature_ids = list(dict.fromkeys(selected_feature_ids))
+
     features_df, labels_df, feature_metadata = assemble_features_for_collection(
         extraction_id,
         collection_id,
@@ -142,27 +154,43 @@ def compute_fdr(
         gt,
         training_patients,
         user_id,
+        selected_feature_ids,
     )
 
-    missing = set(selected_feature_ids) - set(features_df.columns)
-    if missing:
-        raise ValueError(f"Selected features not found in dataset: {sorted(missing)}")
+    built_ids = [f for f in selected_feature_ids if f in features_df.columns]
+    unbuilt_ids = [f for f in selected_feature_ids if f not in features_df.columns]
 
-    # dict.fromkeys keeps the caller's order while dropping any duplicate, which
-    # would otherwise produce a duplicated column and be counted twice by the
-    # multiple-testing correction.
-    selected_feature_ids = list(dict.fromkeys(selected_feature_ids))
-    features_df = features_df[selected_feature_ids]
+    # A radiomics ID without a column means the request doesn't match the
+    # extraction. A clinical ID can legitimately have none: its definition may
+    # have no stored values or no longer exist, and when one name is selected
+    # from two files only one copy is kept. Skip those instead of failing.
+    unknown_radiomics = [f for f in unbuilt_ids if FEATURE_ID_SEPARATOR in f]
+    if unknown_radiomics:
+        raise ValueError(f"Selected features not found in dataset: {unknown_radiomics}")
+
     feature_metadata = {
         feature: metadata
         for feature, metadata in feature_metadata.items()
         if feature in set(selected_feature_ids)
     }
 
-    univariate_results_df = compute_univariate_tests(
-        features_df, labels_df, feature_metadata, model_type
-    )
-    univariate_results_df = apply_fdr_correction(univariate_results_df)
+    results = []
+    # compute_univariate_tests raises when there is nothing at all to screen.
+    if built_ids or not unbuilt_ids:
+        results.append(
+            compute_univariate_tests(
+                features_df[built_ids], labels_df, feature_metadata, model_type
+            )
+        )
+    if unbuilt_ids:
+        skipped_result = _skipped("clinical feature is not in the training data")
+        results.append(
+            pd.DataFrame(
+                [skipped_result._asdict()] * len(unbuilt_ids),
+                index=pd.Index(unbuilt_ids, name="feature"),
+            )
+        )
+    univariate_results_df = apply_fdr_correction(pd.concat(results))
 
     skipped = univariate_results_df["skipped_reason"].notna().sum()
     if skipped:
@@ -219,6 +247,7 @@ def assemble_features_for_collection(
     gt,
     training_patients,
     user_id,
+    selected_feature_ids,
 ):
     """Build the (features, labels, metadata) triple the screening runs on."""
     if model_type == MODEL_TYPES.CLASSIFICATION:
@@ -229,7 +258,11 @@ def assemble_features_for_collection(
         raise NotImplementedError(f"No univariate screening for {model_type}")
 
     features_df, labels_df_indexed = get_features_labels(
-        extraction_id, collection_id, studies, gt, outcome_columns=outcome_columns
+        extraction_id,
+        _radiomics_source_collection_id(collection_id, selected_feature_ids),
+        studies,
+        gt,
+        outcome_columns=outcome_columns,
     )
 
     features_df = features_df.loc[features_df.index.isin(training_patients)]
@@ -254,7 +287,7 @@ def assemble_features_for_collection(
     # collection holding only clinical features (where features_df carries just
     # the PatientID column) still produces rows.
     clinical_features_df, clinical_metadata = get_clinical_features(
-        user_id, collection_id, training_patients, album
+        user_id, selected_feature_ids, training_patients, album
     )
     feature_metadata.update(clinical_metadata)
 
@@ -278,19 +311,66 @@ def assemble_features_for_collection(
     return features_df, labels_df_indexed, feature_metadata
 
 
+def _radiomics_source_collection_id(collection_id, selected_feature_ids):
+    """The collection to read radiomics values from, or None for the extraction.
+
+    On a collection page the user can tick features the collection does not
+    hold. Reading the collection is cheaper, so keep it while it holds every
+    selected radiomics feature.
+    """
+    if not collection_id:
+        return None
+
+    selected_radiomics = {f for f in selected_feature_ids if FEATURE_ID_SEPARATOR in f}
+    collection = FeatureCollection.find_by_id(collection_id)
+    if collection is None or not selected_radiomics.issubset(collection.feature_ids):
+        return None
+
+    return collection_id
+
+
+def _selected_clinical_definitions(user_id, selected_feature_ids, album):
+    """Definition rows for the clinical IDs in ``selected_feature_ids``.
+
+    Resolved from the selection rather than from a saved collection or the
+    album-wide newest-file rule, so screening tests the copies the user ticked:
+    "1::Age" stays file 1's Age even when a newer file also has Age.
+    """
+    clinical_ids = [f for f in selected_feature_ids if FEATURE_ID_SEPARATOR not in f]
+    if not clinical_ids:
+        return []
+
+    album_definitions = ClinicalFeatureDefinition.find_by_user_id_and_album_id(
+        user_id, album["album_id"]
+    )
+    try:
+        return resolve_collection_clinical_definitions(
+            clinical_ids,
+            album_definitions,
+            definition_ids_with_values([d.id for d in album_definitions]),
+        )
+    except ValueError:
+        # None of the selected IDs matches a definition (e.g. its file was
+        # deleted); compute_fdr reports them as skipped.
+        return []
+
+
 def get_clinical_features(
-    user_id: str, collection_id: str, radiomics_patient_ids: List[str], album
+    user_id: str,
+    selected_feature_ids: List[str],
+    radiomics_patient_ids: List[str],
+    album,
 ):
-    """Clinical feature columns for the given patients, plus their metadata.
+    """Columns for the selected clinical features, plus their metadata.
 
     Always returns a ``(DataFrame, dict)`` pair; the frame has no columns when
-    the album has no usable clinical features.
+    no usable clinical feature is selected.
     """
     radiomics_index = pd.Index(radiomics_patient_ids, name="PatientID")
     empty = (pd.DataFrame(index=radiomics_index), {})
 
-    clin_feature_definitions = resolve_clinical_definitions(
-        user_id, collection_id, album
+    clin_feature_definitions = _selected_clinical_definitions(
+        user_id, selected_feature_ids, album
     )
     if not clin_feature_definitions:
         return empty
@@ -312,11 +392,13 @@ def get_clinical_features(
             # patients didn't match the album). It carries no data, so skip it.
             continue
 
-        df = pd.DataFrame.from_dict([v.to_dict() for v in values])[
-            ["patient_id", "value"]
-        ]
+        df = pd.DataFrame.from_dict([v.to_dict() for v in values])
+        # Older uploads could store several rows for one (patient, definition)
+        # pair, and reindex rejects duplicate labels. Keep the most recently
+        # inserted value, which is what a re-upload keeps today.
+        df = df.sort_values("id").drop_duplicates(subset="patient_id", keep="last")
         df = df.rename(columns={"value": col_name, "patient_id": "PatientID"})
-        df = df.set_index("PatientID").reindex(radiomics_index)
+        df = df.set_index("PatientID")[[col_name]].reindex(radiomics_index)
 
         df[col_name] = correct_type_of_clinical_values(
             df[col_name], clin_feature.feat_type

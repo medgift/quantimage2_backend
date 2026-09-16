@@ -394,3 +394,144 @@ class TestFdrCorrection:
         assert corrected["pval_adj"].isna().all()
         # NaN <= threshold is False, so nothing is ever selected.
         assert len(corrected[corrected["pval_adj"] <= 0.05].index) == 0
+
+
+def _radiomics_id(feature_name):
+    from quantimage2_backend_common.const import FEATURE_ID_SEPARATOR
+
+    return FEATURE_ID_SEPARATOR.join(["CT", "GTV", feature_name])
+
+
+class TestScreenedFeatures:
+    """Screening reads exactly the features the user ticked, which on a
+    collection page can differ from what the collection saved."""
+
+    COLLECTION_ID = 7
+
+    def _radiomics_source(self, selected_feature_ids, collection_feature_ids):
+        """The collection radiomics values are read from (None: the extraction)."""
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from service.FDR import (
+            OUTCOME_FIELD_CLASSIFICATION,
+            assemble_features_for_collection,
+        )
+
+        patients = [f"P{i}" for i in range(6)]
+        index = pd.Index(patients, name="PatientID")
+        features = pd.DataFrame(
+            {feature: np.arange(6.0) for feature in selected_feature_ids},
+            index=index,
+        )
+        features.insert(0, "PatientID", patients)
+        labels = pd.DataFrame({OUTCOME_FIELD_CLASSIFICATION: [0, 1] * 3}, index=index)
+
+        with patch(
+            "service.FDR.get_features_labels", return_value=(features, labels)
+        ) as get_features_labels, patch(
+            "service.FDR.FeatureCollection.find_by_id",
+            return_value=SimpleNamespace(feature_ids=collection_feature_ids),
+        ):
+            assemble_features_for_collection(
+                1,
+                self.COLLECTION_ID,
+                {"album_id": "album"},
+                [],
+                MODEL_TYPES.CLASSIFICATION,
+                [],
+                patients,
+                "user",
+                selected_feature_ids,
+            )
+
+        return get_features_labels.call_args.args[1]
+
+    def test_feature_outside_the_collection_is_read_from_the_extraction(self):
+        mean = _radiomics_id("original_firstorder_Mean")
+        median = _radiomics_id("original_firstorder_Median")
+
+        assert self._radiomics_source([mean, median], [mean, "1::Age"]) is None
+
+    def test_features_inside_the_collection_are_read_from_it(self):
+        mean = _radiomics_id("original_firstorder_Mean")
+
+        source = self._radiomics_source([mean], [mean, "1::Age"])
+
+        assert source == self.COLLECTION_ID
+
+    def test_clinical_columns_are_the_selected_copies(self):
+        """Selecting file 1's Age screens that copy even though file 2 also has
+        Age, and never adds file 2's copy."""
+        from types import SimpleNamespace
+        from unittest.mock import Mock, patch
+
+        from service.FDR import get_clinical_features
+
+        patients = ["P1", "P2", "P3"]
+        definitions = [
+            SimpleNamespace(
+                id=definition_id,
+                name="Age",
+                clinical_feature_file_id=file_id,
+                feat_type="Number",
+                missing_values="None",
+            )
+            for definition_id, file_id in [(10, 1), (20, 2)]
+        ]
+
+        def stored_values(definition_ids):
+            # A copy's values start at its definition ID: file 1's Age is 10, 11, 12.
+            (definition_id,) = definition_ids
+            return [
+                Mock(
+                    **{
+                        "to_dict.return_value": {
+                            "id": definition_id + i,
+                            "clinical_feature_definition_id": definition_id,
+                            "patient_id": patient,
+                            "value": str(definition_id + i),
+                        }
+                    }
+                )
+                for i, patient in enumerate(patients)
+            ]
+
+        with patch(
+            "service.FDR.ClinicalFeatureDefinition.find_by_user_id_and_album_id",
+            return_value=definitions,
+        ), patch(
+            "service.FDR.definition_ids_with_values", return_value={10, 20}
+        ), patch(
+            "service.FDR.ClinicalFeatureValue.find_by_clinical_feature_definition_ids",
+            side_effect=stored_values,
+        ):
+            clinical_df, metadata = get_clinical_features(
+                "user",
+                [_radiomics_id("original_firstorder_Mean"), "1::Age"],
+                patients,
+                {"album_id": "album"},
+            )
+
+        assert list(clinical_df.columns) == ["1::Age"]
+        assert list(metadata) == ["1::Age"]
+        assert list(clinical_df["1::Age"]) == [10, 11, 12]
+
+    def test_no_selected_clinical_feature_builds_no_clinical_column(self):
+        from unittest.mock import patch
+
+        from service.FDR import get_clinical_features
+
+        with patch(
+            "service.FDR.ClinicalFeatureDefinition.find_by_user_id_and_album_id"
+        ) as find_definitions:
+            clinical_df, metadata = get_clinical_features(
+                "user",
+                [_radiomics_id("original_firstorder_Mean")],
+                ["P1"],
+                {"album_id": "album"},
+            )
+
+        assert clinical_df.columns.empty
+        assert metadata == {}
+        find_definitions.assert_not_called()

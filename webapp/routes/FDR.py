@@ -3,7 +3,11 @@ import traceback
 
 from flask import Blueprint, g, jsonify, make_response, request
 
-from quantimage2_backend_common.models import LabelCategory
+from quantimage2_backend_common.models import (
+    FeatureCollection,
+    FeatureExtraction,
+    LabelCategory,
+)
 from routes.utils import validate_decorate
 from service.FDR import compute_fdr
 
@@ -18,22 +22,38 @@ def before_request():
     validate_decorate(request)
 
 
+def _not_found(message):
+    return make_response(jsonify({"error": message}), 404)
+
+
 @bp.route("/fdr/simpleFDR", methods=["POST"])
 def simpleFDR():
     # NOTE: never log `body` — it carries patient IDs and their outcomes.
     body = request.json
 
+    # Every object below is loaded by an ID taken from the request, and none of
+    # the loaders filter by user, so check ownership here. Answer 404 rather
+    # than 403 so a caller can't probe which IDs exist for other users.
     label_category = LabelCategory.find_by_id(body["label_category_id"])
-    if label_category is None:
-        return make_response(
-            jsonify({"error": f"Label category {body['label_category_id']} not found"}),
-            404,
-        )
+    if label_category is None or label_category.user_id != g.user:
+        return _not_found(f"Label category {body['label_category_id']} not found")
+
+    extraction = FeatureExtraction.find_by_id(body["extraction_id"])
+    if extraction is None or extraction.user_id != g.user:
+        return _not_found(f"Feature extraction {body['extraction_id']} not found")
+
+    # A collection has no owner column: it belongs to whoever owns its
+    # extraction, so it must hang off the extraction checked above.
+    collection_id = body["collection_id"]
+    if collection_id:
+        collection = FeatureCollection.find_by_id(collection_id)
+        if collection is None or collection.feature_extraction_id != extraction.id:
+            return _not_found(f"Feature collection {collection_id} not found")
 
     try:
         results_by_qvalues = compute_fdr(
-            body["extraction_id"],
-            body["collection_id"],
+            extraction.id,
+            collection_id,
             body["album"],
             body["album_studies"],
             label_category,
