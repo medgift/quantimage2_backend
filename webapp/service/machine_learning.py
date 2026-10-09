@@ -47,6 +47,7 @@ def get_features_labels(
     studies,
     gt,
     outcome_columns=[OUTCOME_FIELD_CLASSIFICATION],
+    impute=True,
 ):
     extraction = FeatureExtraction.find_by_id(extraction_id)
 
@@ -91,7 +92,8 @@ def get_features_labels(
 
     # TODO - This will be done in Melampus also in the future
     # Impute mean for NaNs
-    features_df = features_df.fillna(features_df.mean(numeric_only=True))
+    if impute:
+        features_df = features_df.fillna(features_df.mean(numeric_only=True))
 
     return features_df, labels_df_indexed
 

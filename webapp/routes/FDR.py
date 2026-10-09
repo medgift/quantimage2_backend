@@ -50,6 +50,18 @@ def simpleFDR():
         if collection is None or collection.feature_extraction_id != extraction.id:
             return _not_found(f"Feature collection {collection_id} not found")
 
+    # The extraction, the labels and the clinical features (looked up by the
+    # body's album) must all describe the same album, or the screening mixes
+    # unrelated patients and outcomes.
+    album_id = body["album"]["album_id"]
+    if extraction.album_id != album_id or label_category.album_id != album_id:
+        return make_response(
+            jsonify(
+                {"error": "Extraction and label category must belong to the album"}
+            ),
+            400,
+        )
+
     try:
         results_by_qvalues = compute_fdr(
             extraction.id,

@@ -9,6 +9,7 @@ import json
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 
 from quantimage2_backend_common.const import CLINICAL_FEATURE_ID_SEPARATOR
 
@@ -30,14 +31,14 @@ def _patch_decode_token():
     )
 
 
-def _patch_radiomics():
+def _patch_radiomics(classes=("0", "1")):
     """Stand in for get_features_labels, which reads extraction feature files."""
     index = pd.Index(PATIENTS, name="PatientID")
     features = pd.DataFrame(
         {"PatientID": PATIENTS, RADIOMICS_ID: [float(i) for i in range(1, 9)]},
         index=index,
     )
-    labels = pd.DataFrame({"Outcome": ["0", "1"] * 4}, index=index)
+    labels = pd.DataFrame({"Outcome": list(classes) * 4}, index=index)
     return patch("service.FDR.get_features_labels", return_value=(features, labels))
 
 
@@ -68,18 +69,18 @@ def _tested_features(response):
     return {feature["feature"] for feature in response.get_json()[0]["features"]}
 
 
-def _make_extraction(user_id=USER):
+def _make_extraction(user_id=USER, album_id=ALBUM):
     from quantimage2_backend_common.models import FeatureExtraction
 
-    extraction = FeatureExtraction(user_id=user_id, album_id=ALBUM)
+    extraction = FeatureExtraction(user_id=user_id, album_id=album_id)
     extraction.save_to_db()
     return extraction
 
 
-def _make_label_category(user_id=USER):
+def _make_label_category(user_id=USER, album_id=ALBUM):
     from quantimage2_backend_common.models import LabelCategory
 
-    label_category = LabelCategory(ALBUM, "Classification", "Outcome", user_id)
+    label_category = LabelCategory(album_id, "Classification", "Outcome", user_id)
     label_category.save_to_db()
     return label_category
 
@@ -170,6 +171,68 @@ class TestOwnership:
             response = _post(client, body)
         assert response.status_code == 200
         compute_fdr.assert_called_once()
+
+
+class TestRequestConsistency:
+    """Objects the caller owns must still describe the album being screened."""
+
+    def _assert_rejected(self, client, body):
+        with patch("routes.FDR.compute_fdr") as compute_fdr:
+            response = _post(client, body)
+        assert response.status_code == 400
+        compute_fdr.assert_not_called()
+
+    def test_extraction_from_another_album(self, client, db_session):
+        body = _body(
+            _make_extraction(album_id="alb-other"),
+            _make_label_category(),
+            [RADIOMICS_ID],
+        )
+        self._assert_rejected(client, body)
+
+    def test_label_category_from_another_album(self, client, db_session):
+        body = _body(
+            _make_extraction(),
+            _make_label_category(album_id="alb-other"),
+            [RADIOMICS_ID],
+        )
+        self._assert_rejected(client, body)
+
+    @pytest.mark.parametrize("threshold", [1.5, -0.1, "nan", None])
+    def test_invalid_fdr_threshold(self, client, db_session, threshold):
+        body = _body(_make_extraction(), _make_label_category(), [RADIOMICS_ID])
+        # json.dumps writes float("nan") as NaN, which Flask parses back.
+        body["fdr_threshold_list"] = [
+            float(threshold) if threshold == "nan" else threshold
+        ]
+
+        with _patch_radiomics():
+            response = _post(client, body)
+
+        assert response.status_code == 400
+
+
+class TestOutcomeLabels:
+    def test_text_classes_are_screened(self, client, db_session):
+        """Classes such as "no"/"yes" must not be coerced to NaN, which left
+        no patients and skipped every feature."""
+        body = _body(_make_extraction(), _make_label_category(), [RADIOMICS_ID])
+
+        with _patch_radiomics(classes=("no", "yes")):
+            response = _post(client, body)
+
+        assert response.status_code == 200
+        assert _tested_features(response) == {RADIOMICS_ID}
+
+    def test_radiomics_matrix_is_not_imputed(self, client, db_session):
+        """Imputing before the training filter would average in test
+        patients; missing values are deleted pairwise instead."""
+        body = _body(_make_extraction(), _make_label_category(), [RADIOMICS_ID])
+
+        with _patch_radiomics() as get_features_labels:
+            _post(client, body)
+
+        assert get_features_labels.call_args.kwargs["impute"] is False
 
 
 class TestClinicalFeaturesInScreening:

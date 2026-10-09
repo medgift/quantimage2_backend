@@ -139,6 +139,7 @@ def compute_fdr(
 ):
     """Screen ``selected_feature_ids`` and report what survives each q-value."""
     model_type = MODEL_TYPES(label_category.label_type)
+    validate_fdr_thresholds(fdr_threshold_list)
 
     # dict.fromkeys keeps the caller's order while dropping any duplicate, which
     # would otherwise produce a duplicated column and be counted twice by the
@@ -205,6 +206,26 @@ def compute_fdr(
     return build_threshold_results(univariate_results_df, fdr_threshold_list)
 
 
+def validate_fdr_thresholds(fdr_threshold_list):
+    """Reject q-values outside [0, 1].
+
+    A q above 1 selects every tested feature and NaN selects none, and both
+    would be reported as if they were a real FDR level.
+    """
+    invalid = [
+        q
+        for q in fdr_threshold_list
+        if isinstance(q, bool)
+        or not isinstance(q, (int, float))
+        or not math.isfinite(q)
+        or not 0 <= q <= 1
+    ]
+    if not fdr_threshold_list or invalid:
+        raise ValueError(
+            f"FDR thresholds must be finite numbers in [0, 1], got {invalid or 'none'}"
+        )
+
+
 def build_threshold_results(univariate_results_df, fdr_threshold_list):
     """The response body: what survives each q-value the frontend asks about.
 
@@ -263,16 +284,24 @@ def assemble_features_for_collection(
         studies,
         gt,
         outcome_columns=outcome_columns,
+        # Mean imputation there would average over every labelled patient,
+        # test patients included, and leak them into the training p-values.
+        # Missing radiomics values are deleted pairwise per feature instead,
+        # as clinical ones already are.
+        impute=False,
     )
 
     features_df = features_df.loc[features_df.index.isin(training_patients)]
     labels_df_indexed = labels_df_indexed.loc[
         labels_df_indexed.index.isin(training_patients)
     ]
-    labels_df_indexed = labels_df_indexed.apply(pd.to_numeric, errors="coerce")
+    # Only survival time and event must be numbers. Classification tests just
+    # compare classes, which may be text ("yes"/"no"); coercing those would
+    # turn every label into NaN and skip every feature.
+    if model_type == MODEL_TYPES.SURVIVAL:
+        labels_df_indexed = labels_df_indexed.apply(pd.to_numeric, errors="coerce")
 
-    # get_features_labels already mean-imputes the radiomics matrix, and every
-    # radiomics feature is a continuous measurement.
+    # Every radiomics feature is a continuous measurement.
     feature_metadata = {
         feature: {
             "feat_type": ClinicalFeatureTypes.NUMBER.value,
