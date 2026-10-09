@@ -588,3 +588,30 @@ class TestResolveCollectionClinicalDefinitions:
             ["1::Age", "Age"], self._defs()
         )
         assert len(result) == 1 and result[0].id == 10
+
+
+class TestClinicalFeaturesFilterRoute:
+    def test_missing_strings_count_as_missing(self, client):
+        """Blanks and "N/A" are no data: a column holding only those is dropped,
+        and so is one with data for only 1 patient in 10."""
+        clinical_feature_map = {
+            f"P{i}": {
+                "Mixed": "" if i % 2 else "N/A",
+                "Sparse": "1" if i == 0 else "",
+                "Age": str(40 + i),
+            }
+            for i in range(10)
+        }
+
+        with _patch_validate_decorate(), _patch_decode_token():
+            response = client.post(
+                "/clinical-features/filter",
+                data=json.dumps({"clinical_feature_map": clinical_feature_map}),
+                content_type="application/json",
+            )
+
+        assert response.status_code == 200
+        body = response.get_json()
+        assert "Mixed" in body["only_nulls"]
+        assert set(body["too_little_data"]) == {"Mixed", "Sparse"}
+        assert "Age" not in body["only_nulls"]

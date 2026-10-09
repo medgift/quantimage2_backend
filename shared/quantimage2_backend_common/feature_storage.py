@@ -1,3 +1,5 @@
+import numpy as np
+
 from quantimage2_backend_common.models import (
     Modality,
     ROI,
@@ -13,13 +15,29 @@ OKAPY_FEATURE_NAME_FIELD = "feature_name"
 OKAPY_FEATURE_VALUE_FIELD = "feature_value"
 
 
+def to_real_value(value):
+    """Drop round-off imaginary parts from a feature value.
+
+    PyRadiomics computes shape features with numpy.linalg.eigvals, which can
+    return complex eigenvalues with ~1e-17 imaginary parts depending on the
+    CPU-specific OpenBLAS kernel. MySQL rejects complex values for the FLOAT
+    column, failing the whole study. Genuinely complex values are stored as NULL.
+    """
+    if isinstance(value, complex) or np.iscomplexobj(value):
+        real = np.real_if_close(value, tol=1000)
+        return float(real) if np.isrealobj(real) else None
+    return value
+
+
 def store_features(feature_extraction_task_id, feature_extraction_id, features):
 
     feature_extraction = FeatureExtraction.find_by_id(feature_extraction_id)
-    
+
     # If extraction was deleted (cancelled), skip storing features
     if not feature_extraction:
-        print(f"Feature extraction {feature_extraction_id} not found (likely cancelled), skipping storage")
+        print(
+            f"Feature extraction {feature_extraction_id} not found (likely cancelled), skipping storage"
+        )
         return
 
     # Store or retrieve metadata (modalities, ROIs & feature definitions) first
@@ -52,7 +70,7 @@ def store_features(feature_extraction_task_id, feature_extraction_id, features):
     # Build instances to save in bulk
     for idx, row in features.iterrows():
         feature_value_instance = {
-            "value": row[OKAPY_FEATURE_VALUE_FIELD],
+            "value": to_real_value(row[OKAPY_FEATURE_VALUE_FIELD]),
             "feature_definition_id": definitions_map[row[OKAPY_FEATURE_NAME_FIELD]],
             "feature_extraction_task_id": feature_extraction_task_id,
             "modality_id": modalities_map[row[OKAPY_MODALITY_FIELD]],

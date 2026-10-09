@@ -146,6 +146,7 @@ def app():
     from routes.navigation_history import bp as navigation_bp
     from routes.albums import bp as albums_bp
     from routes.clinical_features import bp as clinical_features_bp
+    from routes.FDR import bp as fdr_bp
 
     with test_app.app_context():
         test_app.register_blueprint(features_bp)
@@ -158,6 +159,7 @@ def app():
         test_app.register_blueprint(navigation_bp)
         test_app.register_blueprint(albums_bp)
         test_app.register_blueprint(clinical_features_bp)
+        test_app.register_blueprint(fdr_bp)
 
     # Attach mock Celery + SocketIO to the app
     test_app.my_celery = MagicMock()
