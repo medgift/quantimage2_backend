@@ -288,6 +288,37 @@ def delete_extraction_rows(db, extraction_id: int):
     )
 
 
+def extraction_problem(db, extraction_id: int, expected_tasks: int) -> Optional[str]:
+    """Why the extraction can't be kept as the only one, or None if it's complete.
+
+    An extraction row is saved before its tasks are created, so a failed or
+    still-running extraction can be the latest one. Require one task per
+    reference patient, each with the same (non-zero) number of feature values.
+    """
+    counts = [
+        row[1]
+        for row in db.session.execute(
+            db.text(
+                "SELECT t.id, COUNT(fv.id) FROM feature_extraction_task t "
+                "LEFT JOIN feature_value fv ON fv.feature_extraction_task_id = t.id "
+                "WHERE t.feature_extraction_id = :extraction_id GROUP BY t.id"
+            ),
+            {"extraction_id": extraction_id},
+        )
+    ]
+    if len(counts) != expected_tasks:
+        return f"has {len(counts)} tasks, expected {expected_tasks}"
+    empty = sum(c == 0 for c in counts)
+    if empty:
+        return f"{empty} tasks without feature values"
+    if len(set(counts)) > 1:
+        return (
+            f"tasks have different numbers of feature values "
+            f"({min(counts)} to {max(counts)})"
+        )
+    return None
+
+
 def prepare_user(report: UserReport, refs: dict, dry_run: bool):
     from quantimage2_backend_common.models import (
         FeatureCollection,
@@ -339,6 +370,18 @@ def prepare_user(report: UserReport, refs: dict, dry_run: bool):
     if not extractions:
         report.errors.append("no feature extraction on this album")
     latest, older = (extractions[0], extractions[1:]) if extractions else (None, [])
+
+    # Safety check before deleting anything (dry run included): the extraction
+    # we keep must be complete, otherwise skip this user entirely.
+    if latest is not None:
+        problem = extraction_problem(db, latest.id, len(refs["outcomes"]))
+        if problem:
+            report.extraction_id = latest.id
+            report.errors.append(
+                f"latest extraction {latest.id} {problem}: user skipped, "
+                f"nothing deleted"
+            )
+            return
     report.extraction_id = latest.id if latest else None
 
     # Cleaning
