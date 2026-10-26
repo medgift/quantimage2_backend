@@ -415,7 +415,7 @@ class TestParseExtractionConfigPresets:
 
 @pytest.mark.unit
 class TestParseExtractionConfigPrecedence:
-    def test_modality_resampler_overrides_common_which_overrides_default(self):
+    def test_resampler_is_own_section_else_default_merged_over_common(self):
         config = {
             "general": {"padding": 10},
             "volume_preprocessing": {
@@ -449,10 +449,11 @@ class TestParseExtractionConfigPrecedence:
             "order": 1,
             "interpolation": "linear",
         }
+        # PT has no section of its own -> default, merged over common
         assert by_modality["PT"]["resampling"] == {
-            "spacing": [2.0, 2.0, 2.0],
-            "order": 3,
-            "interpolation": "cubic",
+            "spacing": [4.0, 4.0, 4.0],
+            "order": 0,
+            "interpolation": "nearest",
         }
 
     def test_default_resampler_is_used_when_neither_modality_nor_common_has_one(self):
@@ -492,7 +493,7 @@ class TestParseExtractionConfigPrecedence:
         assert result["modalities"][0]["resampling"] is None
         assert result["modalities"][0]["normalization"] is None
 
-    def test_normalization_follows_modality_then_common_then_default(self):
+    def test_normalization_is_selected_sections_else_common(self):
         config = {
             "general": {"padding": 10},
             "volume_preprocessing": {
@@ -516,10 +517,11 @@ class TestParseExtractionConfigPrecedence:
             "type": "combined_standardizer",
             "params": {"threshold": 0.2},
         }
-        # Nothing on MR itself -> common
+        # No MR section -> default is the selected section, and its
+        # normalizer wins over common's
         assert by_modality["MR"]["normalization"] == {
-            "type": "masked_standardizer",
-            "params": {"threshold": 0.5},
+            "type": "combined_standardizer",
+            "params": {"threshold": 0.9},
         }
 
     @pytest.mark.parametrize(
@@ -595,6 +597,351 @@ class TestParseExtractionConfigPrecedence:
         result = _svc().parse_extraction_config(config)
 
         assert [m["modality"] for m in result["modalities"]] == ["CT", "MR_T2", "PT"]
+
+
+def _resampler(spacing=None, order=None):
+    params = {}
+    if spacing is not None:
+        params["resampling_spacing"] = spacing
+    if order is not None:
+        params["order"] = order
+    return {"bspline_resampler": params}
+
+
+def _pyrad_section(name, feature_class, bin_width):
+    return {
+        "pyradiomics": {
+            name: {
+                "imageType": {"Original": {}},
+                "featureClass": {feature_class: None},
+                "setting": {"binWidth": bin_width},
+            }
+        }
+    }
+
+
+def _pyrad_row_extractor(name, feature_class, bin_width):
+    return {
+        "backend": "pyradiomics",
+        "name": name,
+        "image_types": ["Original"],
+        "feature_classes": [feature_class],
+        "settings": {"binWidth": bin_width},
+    }
+
+
+@pytest.mark.unit
+class TestOkapyResolution:
+    """Clarification 10: section selection is key > modality prefix > default,
+    common is merged/prepended, rows come from the extraction's modalities."""
+
+    def test_modality_prefix_falls_back_to_prefix_section(self):
+        config = {
+            "general": {"padding": 5},
+            "volume_preprocessing": {
+                "default": {
+                    **_resampler([4.0, 4.0, 4.0], 0),
+                    "combined_standardizer": {"threshold": 0.9},
+                },
+                "MR": {
+                    **_resampler([0.8, 0.8, 3.0], 1),
+                    "standardizer": {"threshold": 0.01},
+                },
+                "MR_T2": _resampler([0.5, 0.5, 0.5], 3),
+            },
+            "feature_extraction": {
+                "default": _pyrad_section("fallback", "shape", 1),
+                "MR": _pyrad_section("mr", "glcm", 5),
+            },
+        }
+
+        result = _svc().parse_extraction_config(
+            config, modalities=["MR_T2", "MR_T1Pre"]
+        )
+
+        assert result["status"] == "ok"
+        assert result["modalities"] == [
+            {
+                "modality": "MR_T1Pre",
+                "resampling": {
+                    "spacing": [0.8, 0.8, 3.0],
+                    "order": 1,
+                    "interpolation": "linear",
+                },
+                "normalization": {
+                    "type": "standardizer",
+                    "params": {"threshold": 0.01},
+                },
+                "extractors": [_pyrad_row_extractor("mr", "glcm", 5)],
+            },
+            {
+                # Exact key beats the prefix for volume_preprocessing; no
+                # MR_T2 feature_extraction key -> MR prefix section
+                "modality": "MR_T2",
+                "resampling": {
+                    "spacing": [0.5, 0.5, 0.5],
+                    "order": 3,
+                    "interpolation": "cubic",
+                },
+                "normalization": None,
+                "extractors": [_pyrad_row_extractor("mr", "glcm", 5)],
+            },
+        ]
+
+    def test_key_with_null_value_suppresses_default(self):
+        config = {
+            "general": {"padding": 5},
+            "volume_preprocessing": {
+                "CT": None,
+                "default": {
+                    **_resampler([4.0, 4.0, 4.0], 0),
+                    "combined_standardizer": {"threshold": 0.9},
+                },
+            },
+            "feature_extraction": {
+                "CT": None,
+                "default": _pyrad_section("fallback", "shape", 1),
+            },
+        }
+
+        result = _svc().parse_extraction_config(config, modalities=["CT"])
+
+        assert result["modalities"] == [
+            {
+                "modality": "CT",
+                "resampling": None,
+                "normalization": None,
+                "extractors": [],
+            }
+        ]
+
+    def test_prefix_key_with_null_value_suppresses_default(self):
+        config = {
+            "general": {"padding": 5},
+            "volume_preprocessing": {
+                "MR": None,
+                "default": _resampler([4.0, 4.0, 4.0], 0),
+            },
+            "feature_extraction": {
+                "MR": None,
+                "default": _pyrad_section("fallback", "shape", 1),
+            },
+        }
+
+        result = _svc().parse_extraction_config(config, modalities=["MR_T1"])
+
+        [row] = result["modalities"]
+        assert row["modality"] == "MR_T1"
+        assert row["resampling"] is None
+        assert row["extractors"] == []
+
+    def test_resampler_is_deep_merged_over_common(self):
+        config = {
+            "general": {"padding": 5},
+            "volume_preprocessing": {
+                "common": _resampler([1.0, 1.0, 1.0], 3),
+                "CT": _resampler(spacing=[2.0, 2.0, 2.0]),
+                "PT": _resampler(order=0),
+            },
+            "feature_extraction": {"CT": None, "PT": None},
+        }
+
+        result = _svc().parse_extraction_config(config, modalities=["CT", "PT"])
+
+        by_modality = {m["modality"]: m for m in result["modalities"]}
+        assert by_modality["CT"]["resampling"] == {
+            "spacing": [2.0, 2.0, 2.0],
+            "order": 3,
+            "interpolation": "cubic",
+        }
+        assert by_modality["PT"]["resampling"] == {
+            "spacing": [1.0, 1.0, 1.0],
+            "order": 0,
+            "interpolation": "nearest",
+        }
+
+    def test_resampler_only_in_selected_section_is_used_as_is(self):
+        config = {
+            "general": {"padding": 5},
+            "volume_preprocessing": {
+                "common": {"standardizer": {"threshold": 0.1}},
+                "CT": _resampler([3.0, 3.0, 3.0], 1),
+            },
+            "feature_extraction": {"CT": None},
+        }
+
+        result = _svc().parse_extraction_config(config, modalities=["CT"])
+
+        assert result["modalities"][0]["resampling"] == {
+            "spacing": [3.0, 3.0, 3.0],
+            "order": 1,
+            "interpolation": "linear",
+        }
+
+    def test_selected_normalizer_wins_over_common_else_common_is_used(self):
+        config = {
+            "general": {"padding": 5},
+            "volume_preprocessing": {
+                "common": {"standardizer": {"threshold": 0.001}},
+                "CT": {"masked_standardizer": {"threshold": 0.5}},
+                "PT": _resampler([2.0, 2.0, 2.0], 1),
+            },
+            "feature_extraction": {"CT": None, "PT": None},
+        }
+
+        result = _svc().parse_extraction_config(config, modalities=["CT", "PT", "MR"])
+
+        by_modality = {m["modality"]: m for m in result["modalities"]}
+        assert by_modality["CT"]["normalization"] == {
+            "type": "masked_standardizer",
+            "params": {"threshold": 0.5},
+        }
+        # PT's section has no normalizer -> common's
+        assert by_modality["PT"]["normalization"] == {
+            "type": "standardizer",
+            "params": {"threshold": 0.001},
+        }
+        # MR: no section, no default -> common's
+        assert by_modality["MR"]["normalization"] == {
+            "type": "standardizer",
+            "params": {"threshold": 0.001},
+        }
+
+    def test_common_extractors_come_first_then_selected_sections(self):
+        config = {
+            "general": {"padding": 5},
+            "feature_extraction": {
+                "common": _pyrad_section("shared", "shape", 1),
+                "CT": _pyrad_section("ct", "glcm", 25),
+                "default": _pyrad_section("fallback", "firstorder", 3),
+            },
+        }
+
+        result = _svc().parse_extraction_config(config, modalities=["CT", "PT"])
+
+        by_modality = {m["modality"]: m for m in result["modalities"]}
+        assert by_modality["CT"]["extractors"] == [
+            _pyrad_row_extractor("shared", "shape", 1),
+            _pyrad_row_extractor("ct", "glcm", 25),
+        ]
+        assert by_modality["PT"]["extractors"] == [
+            _pyrad_row_extractor("shared", "shape", 1),
+            _pyrad_row_extractor("fallback", "firstorder", 3),
+        ]
+
+    def test_modality_without_feature_section_gets_default_extractors(self):
+        config = {
+            "general": {"padding": 5},
+            "volume_preprocessing": {"common": _resampler([1.0, 1.0, 1.0], 1)},
+            "feature_extraction": {
+                "CT": _pyrad_section("ct", "glcm", 25),
+                "default": _pyrad_section("fallback", "firstorder", 3),
+            },
+        }
+
+        result = _svc().parse_extraction_config(config, modalities=["PT"])
+
+        assert result["modalities"] == [
+            {
+                "modality": "PT",
+                "resampling": LINEAR_1MM,
+                "normalization": None,
+                "extractors": [_pyrad_row_extractor("fallback", "firstorder", 3)],
+            }
+        ]
+
+    def test_rows_come_from_the_modalities_argument(self):
+        result = _svc().parse_extraction_config(_yaml(PETCT_YAML), modalities=["CT"])
+
+        assert result == {
+            "status": "ok",
+            "general": EXPECTED_PETCT_CONFIG["general"],
+            "modalities": [EXPECTED_PETCT_CONFIG["modalities"][0]],
+        }
+
+    def test_rows_from_modalities_argument_are_sorted(self):
+        result = _svc().parse_extraction_config(
+            _yaml(PETCT_YAML), modalities=["PT", "CT"]
+        )
+
+        assert result == EXPECTED_PETCT_CONFIG
+
+    def test_extracted_modality_missing_from_yaml_still_gets_a_row(self):
+        result = _svc().parse_extraction_config(
+            _yaml(PETCT_YAML), modalities=["MR", "CT"]
+        )
+
+        assert [m["modality"] for m in result["modalities"]] == ["CT", "MR"]
+        mr = result["modalities"][1]
+        # default is null in the preset -> only common's resampler, no
+        # extractors
+        assert mr == {
+            "modality": "MR",
+            "resampling": LINEAR_1MM,
+            "normalization": None,
+            "extractors": [],
+        }
+
+    @pytest.mark.parametrize("modalities", [None, []])
+    def test_no_modalities_falls_back_to_yaml_keys(self, modalities):
+        result = _svc().parse_extraction_config(
+            _yaml(PETCT_YAML), modalities=modalities
+        )
+
+        assert result == EXPECTED_PETCT_CONFIG
+
+    def test_modalities_argument_does_not_change_non_ok_shape(self):
+        assert _svc().parse_extraction_config(None, modalities=["CT"]) == {
+            "status": "invalid",
+            **NOT_OK_CONFIG_SHAPE,
+        }
+        assert _svc().parse_extraction_config(
+            {"general": {"padding": 5}}, modalities=["CT"]
+        ) == {"status": "unrecognized", **NOT_OK_CONFIG_SHAPE}
+
+    @pytest.mark.parametrize(
+        "config",
+        [
+            {"volume_preprocessing": {"common": _resampler([1.0, 1.0, 1.0], 1)}},
+            {"volume_preprocessing": {"default": {}}},
+            {"feature_extraction": {"default": None}},
+            {"feature_extraction": {"common": _pyrad_section("s", "shape", 1)}},
+        ],
+    )
+    def test_only_common_or_default_sections_is_ok(self, config):
+        result = _svc().parse_extraction_config(config)
+
+        assert result["status"] == "ok"
+        assert result["modalities"] == []
+
+    def test_only_common_section_with_modalities_gives_rows(self):
+        config = {"volume_preprocessing": {"common": _resampler([1.0, 1.0, 1.0], 1)}}
+
+        result = _svc().parse_extraction_config(config, modalities=["CT"])
+
+        assert result["status"] == "ok"
+        assert result["modalities"] == [
+            {
+                "modality": "CT",
+                "resampling": LINEAR_1MM,
+                "normalization": None,
+                "extractors": [],
+            }
+        ]
+
+    @pytest.mark.parametrize(
+        "config",
+        [
+            {"volume_preprocessing": {}, "feature_extraction": {}},
+            {"volume_preprocessing": None, "feature_extraction": None},
+            {"volume_preprocessing": {"CT": "resampler"}},
+            {"feature_extraction": {"CT": ["pyradiomics"], "common": 3}},
+        ],
+    )
+    def test_sections_without_mapping_or_null_values_are_unrecognized(self, config):
+        result = _svc().parse_extraction_config(config)
+
+        assert result == {"status": "unrecognized", **NOT_OK_CONFIG_SHAPE}
 
 
 @pytest.mark.unit
@@ -1548,3 +1895,53 @@ class TestExistingExtractionRoutesRegression:
 
         assert response.status_code == 200
         assert response.get_data(as_text=True) == PETCT_YAML
+
+
+@pytest.mark.integration
+class TestSummaryRouteOkapyRows:
+    def test_ct_only_extraction_with_petct_config_has_single_ct_row(
+        self, client, app, db_session, configs_base
+    ):
+        path = _write_config(configs_base, USER, PETCT_YAML)
+        with app.app_context():
+            extraction_id = _make_extraction(
+                config_file=path,
+                feature_names=["original_firstorder_Mean"],
+                modalities=["CT"],
+                rois=["GTV_T"],
+            )
+
+        response = _get_summary(client, extraction_id)
+
+        assert response.status_code == 200
+        assert response.get_json()["config"] == {
+            "status": "ok",
+            "general": EXPECTED_PETCT_CONFIG["general"],
+            "modalities": [EXPECTED_PETCT_CONFIG["modalities"][0]],
+        }
+
+    def test_route_rows_use_prefix_fallback_for_extracted_modalities(
+        self, client, app, db_session, configs_base
+    ):
+        path = _write_config(configs_base, USER, MRI_YAML)
+        with app.app_context():
+            extraction_id = _make_extraction(
+                config_file=path, modalities=["MR_T1", "MR_T1Pre"]
+            )
+
+        response = _get_summary(client, extraction_id)
+
+        assert response.status_code == 200
+        rows = response.get_json()["config"]["modalities"]
+        assert [r["modality"] for r in rows] == ["MR_T1", "MR_T1Pre"]
+        # MR_T1Pre: no own key, no "MR" key, default is null -> no extractors,
+        # common's resampler and standardizer
+        assert rows[1] == {
+            "modality": "MR_T1Pre",
+            "resampling": LINEAR_1MM,
+            "normalization": {"type": "standardizer", "params": {"threshold": 0.001}},
+            "extractors": [],
+        }
+        assert rows[0]["extractors"] == [
+            _pyrad_extractor({"binWidth": 0.3, "voxelArrayShift": 10})
+        ]
