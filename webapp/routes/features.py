@@ -25,6 +25,7 @@ from quantimage2_backend_common.utils import (
     format_extraction,
     read_config_file,
 )
+from service.extraction_summary import build_extraction_summary
 from service.feature_extraction import (
     run_feature_extraction,
     get_studies_from_album,
@@ -79,6 +80,18 @@ def extraction_by_id(id):
         feature_extraction.update(**request.json)
 
         return jsonify(format_extraction(feature_extraction, tasks=True))
+
+
+# Overview of an extraction: configuration choices, features and dataset counts
+@bp.route("/extractions/<int:extraction_id>/summary")
+def extraction_summary(extraction_id):
+    feature_extraction = FeatureExtraction.find_by_id(extraction_id)
+
+    # 404 (not 403) for another user's extraction, so IDs cannot be probed
+    if feature_extraction is None or feature_extraction.user_id != g.user:
+        return jsonify({"error": "Feature extraction not found"}), 404
+
+    return jsonify(build_extraction_summary(feature_extraction))
 
 
 # Cancel a feature extraction in progress
