@@ -20,14 +20,10 @@ services:
     env_file:
       - .env
 
+  # Not exposed through Traefik: reach it via `ssh -L 8888:localhost:8888 <vm>`
   phpmyadmin:
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=prod"
-      - "traefik.http.routers.quantimage2-backend-phpmyadmin.rule=Host(`${TRAEFIK_URL_PHPMYADMIN}`)"
-    networks:
-      - default
-      - prod
+    ports:
+      - 127.0.0.1:8888:80
 
   keycloak:
     environment:

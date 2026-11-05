@@ -41,6 +41,7 @@ from routes.charts import bp as charts_bp
 from routes.navigation_history import bp as navigation_bp
 from routes.albums import bp as albums_bp
 from routes.clinical_features import bp as clinical_features_bp
+from routes.FDR import bp as fdr_bp
 
 print("App is Starting!")
 
@@ -153,6 +154,7 @@ def setup_app(app):
         app.register_blueprint(navigation_bp)
         app.register_blueprint(albums_bp)
         app.register_blueprint(clinical_features_bp)
+        app.register_blueprint(fdr_bp)
 
 
 if __name__ == "__main__":

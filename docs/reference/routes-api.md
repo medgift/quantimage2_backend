@@ -49,6 +49,7 @@ def create_endpoint():
 | GET | `/extractions/album/<album_id>` | Latest extraction for album |
 | GET | `/extractions/<id>/feature-details` | Features as multipart (tabular + chart) |
 | GET | `/extractions/<id>/status` | Extraction progress |
+| GET | `/extractions/<id>/summary` | Overview: parsed config (per extracted modality, resolved like okapy), feature counts, study/split counts. Owner-only (404 otherwise), no patient IDs |
 | POST | `/models/<album_id>` | Train ML model |
 | GET | `/models/<album_id>` | List models for album |
 | POST | `/models/compare` | Compare two models (permutation test) |

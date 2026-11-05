@@ -1,0 +1,35 @@
+# Config for webapp/scripts/prepare_class_users.py (paths relative to this file).
+
+# Reference outcomes: the CSV uploaded in the Outcomes tab
+# (PatientID,Outcome or PatientID,Time,Event). Its patients minus the test
+# patients become the training set.
+outcomes_csv: hecktor_outcomes.csv
+
+# Name of the outcome to check. Leave empty to use the album's selected outcome.
+outcome_name:
+
+# Reference clinical features: the CSV uploaded in the Clinical Features tab.
+# Leave empty to skip the clinical features check.
+clinical_features_csv: hecktor_clinical_features.csv
+
+# Patients of the test set (one PatientID per line).
+test_patients_csv: hecktor_test_patients.csv
+
+# Users to prepare. The album is the one of the user's latest feature
+# extraction; add `album_id: <id>` under a user to force another album.
+users:
+  - email: hecktor1@hevs.ch
+  - email: hecktor2@hevs.ch
+  - email: hecktor3@hevs.ch
+  - email: hecktor4@hevs.ch
+  - email: hecktor5@hevs.ch
+  - email: hecktor6@hevs.ch
+  - email: hecktor7@hevs.ch
+  - email: hecktor8@hevs.ch
+  - email: hecktor9@hevs.ch
+  - email: hecktor10@hevs.ch
+  - email: hecktor11@hevs.ch
+  - email: hecktor12@hevs.ch
+  - email: hecktor13@hevs.ch
+  - email: hecktor14@hevs.ch
+  - email: hecktor15@hevs.ch

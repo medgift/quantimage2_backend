@@ -1,5 +1,5 @@
 general:
-  padding: 10
+  padding: 5
   submodalities: True
   result_format: "long"
   combine_segmentation: False

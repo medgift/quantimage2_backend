@@ -14,7 +14,10 @@ from quantimage2_backend_common.const import CLINICAL_FEATURE_ID_SEPARATOR
 from quantimage2_backend_common.kheops_utils import dicomFields
 from routes.utils import validate_decorate
 from quantimage2_backend_common.models import ClinicalFeatureTypes
-from service.clinical_features_dedup import compute_clinical_duplicate_advisories
+from service.clinical_features_dedup import (
+    compute_clinical_duplicate_advisories,
+    is_missing_value,
+)
 from service.feature_extraction import get_studies_from_album
 
 from service.feature_transformation import PATIENT_ID_FIELD
@@ -162,21 +165,22 @@ def clinical_features_filter():
         clinical_features_df = load_df_from_request_dict(
             request.json["clinical_feature_map"]
         )
-        nulls_df = pd.DataFrame()
+        missing_df = pd.DataFrame()
 
         response = {}
         response["only_one_value"] = []
         date_columns = []
 
-        # Computing features with no data at all (using strings because we are not guarantee to get nulls from the request)
         for column in clinical_features_df.columns:
             if (
                 column == "__parsed_extra"
             ):  # This happens when papa parse encounters some funkyness in the CSV
                 continue
-            nulls_df[column] = (
-                clinical_features_df[column].astype(str).apply(lambda x: len(x))
-            )  # we first create a dataframe with the same shape as the clinical features - but with the length of the string in each cell - len == 0 -> no data.
+            # Count a cell as missing the way training does (None, NaN, "N/A",
+            # "none", ...). Measuring string length counted nothing as missing:
+            # load_df_from_request_dict has already turned "" and "N/A" into
+            # None, which astype(str) renders as "None".
+            missing_df[column] = clinical_features_df[column].map(is_missing_value)
 
             # Number of unique values per feature
             n_unique = clinical_features_df[column].unique()
@@ -186,13 +190,13 @@ def clinical_features_filter():
             if "date" in column.lower():
                 date_columns.append(column)
 
-        columns_with_only_nulls = (nulls_df == 0).sum() == len(clinical_features_df)
+        columns_with_only_nulls = missing_df.sum() == len(clinical_features_df)
         response["only_nulls"] = columns_with_only_nulls[
             columns_with_only_nulls
         ].index.tolist()
 
         # Dropping features with too little data
-        percent_nulls = ((nulls_df == 0).sum() / len(clinical_features_df)) >= 0.9
+        percent_nulls = (missing_df.sum() / len(clinical_features_df)) >= 0.9
         response["too_little_data"] = percent_nulls[percent_nulls].index.tolist()
 
         # Columns that have date in the name

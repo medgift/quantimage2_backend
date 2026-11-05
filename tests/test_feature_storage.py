@@ -5,6 +5,7 @@ Covers store_features(), store_extraction_associations(), and feature
 retrieval via FeatureValue model methods.
 """
 
+import numpy as np
 import pandas as pd
 import pytest
 from unittest.mock import MagicMock, patch
@@ -155,6 +156,83 @@ class TestStoreFeatures:
         modality_names = {m.name for m in found.modalities}
         assert "CT_ASSOC" in modality_names
         assert "PT_ASSOC" in modality_names
+
+    def test_store_features_complex_values_stored_as_real(self, app, db_session):
+        """Round-off complex values (PyRadiomics eigvals on some CPUs) are stored
+        as plain floats instead of failing the insert."""
+        from quantimage2_backend_common.feature_storage import store_features
+        from quantimage2_backend_common.models import FeatureValue
+
+        extraction, task = self._create_extraction(db_session)
+
+        # One complex value upcasts the whole column, as seen in production
+        features_df = pd.DataFrame(
+            {
+                "patient": ["P1", "P1", "P1"],
+                "modality": ["PT", "PT", "PT"],
+                "VOI": ["GTV", "GTV", "GTV"],
+                "feature_name": [
+                    "original_shape_Elongation",
+                    "original_shape_Maximum3DDiameter",
+                    "original_firstorder_SUVpeak",
+                ],
+                "feature_value": [
+                    0.9999999999999999 - 4.298538814446003e-17j,
+                    43.80140952712024 + 0j,
+                    2.4599379991230212,
+                ],
+            }
+        )
+        assert features_df["feature_value"].dtype.kind == "c"
+
+        store_features(task.id, extraction.id, features_df)
+
+        values = sorted(
+            fv.value
+            for fv in FeatureValue.query.filter_by(
+                feature_extraction_task_id=task.id
+            ).all()
+        )
+        assert values == pytest.approx(
+            [0.9999999999999999, 2.4599379991230212, 43.80140952712024]
+        )
+        assert all(isinstance(v, float) for v in values)
+
+
+# ---------------------------------------------------------------------------
+# to_real_value
+# ---------------------------------------------------------------------------
+
+
+class TestToRealValue:
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            (0.9999999999999999 - 4.298538814446003e-17j, 0.9999999999999999),
+            (
+                np.complex128(36.3646715290083 + 7.815747602101081e-16j),
+                36.3646715290083,
+            ),
+            (43.80140952712024 + 0j, 43.80140952712024),
+        ],
+    )
+    def test_round_off_imaginary_part_dropped(self, value, expected):
+        from quantimage2_backend_common.feature_storage import to_real_value
+
+        result = to_real_value(value)
+        assert type(result) is float
+        assert result == expected
+
+    def test_genuinely_complex_becomes_none(self):
+        from quantimage2_backend_common.feature_storage import to_real_value
+
+        assert to_real_value(1 + 1j) is None
+
+    @pytest.mark.parametrize("value", [2.5, np.float64(2.5), 0, None])
+    def test_real_values_unchanged(self, value):
+        from quantimage2_backend_common.feature_storage import to_real_value
+
+        assert to_real_value(value) is value
 
 
 # ---------------------------------------------------------------------------
