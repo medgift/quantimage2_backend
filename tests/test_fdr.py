@@ -535,3 +535,68 @@ class TestScreenedFeatures:
         assert clinical_df.columns.empty
         assert metadata == {}
         find_definitions.assert_not_called()
+
+
+def _get_clinical_features_with(selected_ids, definitions, values_by_definition):
+    """Run get_clinical_features against stubbed definitions and stored values."""
+    from types import SimpleNamespace
+    from unittest.mock import Mock, patch
+
+    from service.FDR import get_clinical_features
+
+    patients = list(next(iter(values_by_definition.values())))
+    definitions = [
+        SimpleNamespace(
+            id=definition_id,
+            name=name,
+            clinical_feature_file_id=file_id,
+            feat_type=feat_type,
+            missing_values="None",
+        )
+        for definition_id, file_id, name, feat_type in definitions
+    ]
+
+    def stored_values(definition_ids):
+        (definition_id,) = definition_ids
+        return [
+            Mock(
+                **{
+                    "to_dict.return_value": {
+                        "id": i,
+                        "patient_id": patient,
+                        "value": value,
+                    }
+                }
+            )
+            for i, (patient, value) in enumerate(
+                values_by_definition[definition_id].items()
+            )
+        ]
+
+    with patch(
+        "service.FDR.ClinicalFeatureDefinition.find_by_user_id_and_album_id",
+        return_value=definitions,
+    ), patch(
+        "service.FDR.definition_ids_with_values",
+        return_value={d.id for d in definitions},
+    ), patch(
+        "service.FDR.ClinicalFeatureValue.find_by_clinical_feature_definition_ids",
+        side_effect=stored_values,
+    ):
+        return get_clinical_features(
+            "user", selected_ids, patients, {"album_id": "album"}
+        )
+
+
+class TestClinicalMissingValues:
+    @pytest.mark.parametrize("placeholder", ["n/a", "None", "nan", "  ", ""])
+    def test_categorical_missing_placeholders_are_missing(self, placeholder):
+        clinical_df, metadata = _get_clinical_features_with(
+            ["1::Sex"],
+            [(10, 1, "Sex", "Categorical")],
+            {10: {"P1": "M", "P2": "F", "P3": placeholder}},
+        )
+
+        column = clinical_df["1::Sex"]
+        assert column.isna().tolist() == [False, False, True]
+        assert metadata["1::Sex"]["univariate_category"] == "binary"

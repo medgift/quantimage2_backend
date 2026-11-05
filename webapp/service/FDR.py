@@ -49,7 +49,10 @@ from quantimage2_backend_common.models import (
     ClinicalFeatureValue,
     FeatureCollection,
 )
-from service.clinical_features_dedup import definition_ids_with_values
+from service.clinical_features_dedup import (
+    definition_ids_with_values,
+    is_missing_value,
+)
 from service.feature_transformation import (
     OUTCOME_FIELD_CLASSIFICATION,
     OUTCOME_FIELD_SURVIVAL_EVENT,
@@ -169,10 +172,11 @@ def compute_fdr(
     if unknown_radiomics:
         raise ValueError(f"Selected features not found in dataset: {unknown_radiomics}")
 
+    selected_set = set(selected_feature_ids)
     feature_metadata = {
         feature: metadata
         for feature, metadata in feature_metadata.items()
-        if feature in set(selected_feature_ids)
+        if feature in selected_set
     }
 
     results = []
@@ -476,7 +480,9 @@ def apply_missing_value_strategy(series, strategy):
 
 
 def correct_type_of_clinical_values(series: pd.Series, feat_type: str) -> pd.Series:
-    series = series.copy()
+    # Stored placeholders ("n/a", "none", "nan", blanks) are missing values, not
+    # categories: mask them so imputation and pairwise deletion handle them.
+    series = series.mask(series.map(is_missing_value))
 
     if feat_type == ClinicalFeatureTypes.CATEGORICAL.value:
         return series.astype("string")
