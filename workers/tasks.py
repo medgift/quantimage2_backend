@@ -105,6 +105,11 @@ TRAINING_TIME_LIMIT = int(
     os.environ.get("TRAINING_TIME_LIMIT", TRAINING_SOFT_TIME_LIMIT + 600)
 )
 
+# Hard limit of the short extraction status callbacks. They inherit
+# task_acks_late, so they must stay below the broker visibility_timeout or a
+# hung run would be redelivered (#54).
+CALLBACK_TIME_LIMIT = 600
+
 
 @celeryd_after_setup.connect
 def setup(sender, instance, **kwargs):
@@ -588,9 +593,11 @@ def run_extraction(
         db.session.remove()
 
 
-# Short status callback, but it inherits task_acks_late: bound it below the
-# broker visibility_timeout so a hung run is never redelivered (#54).
-@celery.task(name="quantimage2tasks.finalize_extraction", bind=True, time_limit=600)
+@celery.task(
+    name="quantimage2tasks.finalize_extraction",
+    bind=True,
+    time_limit=CALLBACK_TIME_LIMIT,
+)
 def finalize_extraction(task, results, feature_extraction_id):
     send_extraction_status_message(
         feature_extraction_id, celery, socketio, send_extraction=True
@@ -598,10 +605,10 @@ def finalize_extraction(task, results, feature_extraction_id):
     db.session.remove()
 
 
-# Short status callback, but it inherits task_acks_late: bound it below the
-# broker visibility_timeout so a hung run is never redelivered (#54).
 @celery.task(
-    name="quantimage2tasks.finalize_extraction_task", bind=True, time_limit=600
+    name="quantimage2tasks.finalize_extraction_task",
+    bind=True,
+    time_limit=CALLBACK_TIME_LIMIT,
 )
 def finalize_extraction_task(
     task, result, feature_extraction_id, feature_extraction_task_id

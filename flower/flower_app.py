@@ -12,9 +12,10 @@ import os
 
 from celery import Celery
 
+# Set in env_files/common.env, like for the workers
 app = Celery(
     "flower",
-    broker=os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0"),
-    backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://redis:6379/0"),
+    broker=os.environ["CELERY_BROKER_URL"],
+    backend=os.environ["CELERY_RESULT_BACKEND"],
 )
 app.conf.broker_transport_options = {"visibility_timeout": 43200}  # 12 h

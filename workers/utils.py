@@ -64,22 +64,16 @@ def _abort_on_soft_time_limit(signum, frame):
 def fit_grid_search(grid, X, y):
     """Run ``grid.fit(X, y)`` without swallowing Celery's soft time limit.
 
-    The prefork pool signals the soft limit with SIGUSR1, and billiard's handler
-    raises ``SoftTimeLimitExceeded`` wherever the process is. When the fits run
-    in this process (``n_jobs=1``), GridSearchCV's default ``error_score=np.nan``
-    catches it (in fit and in scoring) and goes on with the next candidate, so
-    the training would run until the hard limit kills it without any status
-    message. While the search runs, the signal raises an exception sklearn does
-    not catch, which stops it at once; a ``SoftTimeLimitExceeded`` recorded as a
-    failed fit anyway is re-raised too. Other warnings are shown as usual.
+    The prefork pool signals the soft limit with SIGUSR1. With in-process fits
+    (``n_jobs=1``), GridSearchCV's ``error_score=np.nan`` would catch billiard's
+    ``SoftTimeLimitExceeded`` (in fit and in scoring) and carry on until the hard
+    limit kills the task silently. While the search runs, the signal raises a
+    ``BaseException`` sklearn does not catch instead; a ``SoftTimeLimitExceeded``
+    recorded as a failed fit anyway is re-raised too.
     """
-    soft_signal = getattr(signal, "SIGUSR1", None)
-    previous_handler = None
-    if (
-        soft_signal is not None
-        and threading.current_thread() is threading.main_thread()
-    ):
-        previous_handler = signal.signal(soft_signal, _abort_on_soft_time_limit)
+    installed = threading.current_thread() is threading.main_thread()
+    if installed:
+        previous_handler = signal.signal(signal.SIGUSR1, _abort_on_soft_time_limit)
 
     try:
         with warnings.catch_warnings(record=True) as caught:
@@ -89,18 +83,19 @@ def fit_grid_search(grid, X, y):
             except _SoftTimeLimitAbort:
                 raise SoftTimeLimitExceeded("soft time limit during grid search")
     finally:
-        if previous_handler is not None:
-            signal.signal(soft_signal, previous_handler)
+        if installed:
+            signal.signal(signal.SIGUSR1, previous_handler)
         for w in caught:
             warnings.showwarning(w.message, w.category, w.filename, w.lineno)
 
-    for w in caught:
-        if issubclass(w.category, FitFailedWarning) and (
-            SoftTimeLimitExceeded.__name__ in str(w.message)
-        ):
-            raise SoftTimeLimitExceeded(
-                "soft time limit during grid search (recorded as a failed fit)"
-            )
+    if any(
+        issubclass(w.category, FitFailedWarning)
+        and SoftTimeLimitExceeded.__name__ in str(w.message)
+        for w in caught
+    ):
+        raise SoftTimeLimitExceeded(
+            "soft time limit during grid search (recorded as a failed fit)"
+        )
 
     return fitted
 
