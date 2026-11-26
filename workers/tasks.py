@@ -65,6 +65,9 @@ from utils import (
     compute_predictions,
     compute_risk_scores,
     validate_metrics_no_nan,
+    fake_score,
+    fit_grid_search,
+    resolve_n_jobs,
 )
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
@@ -94,6 +97,14 @@ DOWNLOAD_CONNECT_TIMEOUT = 30
 DOWNLOAD_READ_TIMEOUT = 300
 DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 
+# Training time limits. When the soft limit is reached, SoftTimeLimitExceeded
+# is raised inside train_model and reported as a failed training; the hard
+# limit kills the process if it does not stop in time.
+TRAINING_SOFT_TIME_LIMIT = int(os.environ.get("TRAINING_SOFT_TIME_LIMIT", 21600))
+TRAINING_TIME_LIMIT = int(
+    os.environ.get("TRAINING_TIME_LIMIT", TRAINING_SOFT_TIME_LIMIT + 600)
+)
+
 
 @celeryd_after_setup.connect
 def setup(sender, instance, **kwargs):
@@ -113,7 +124,17 @@ def setup(sender, instance, **kwargs):
     flask_app.app_context().push()
 
 
-@celery.task(name="quantimage2tasks.train", bind=True)
+# acks_late=False: the message is acknowledged when the training starts, so
+# Redis never redelivers a long training past its visibility timeout and runs
+# it twice (#54). A training lost in a worker crash is not re-run; the user
+# resubmits it.
+@celery.task(
+    name="quantimage2tasks.train",
+    bind=True,
+    acks_late=False,
+    soft_time_limit=TRAINING_SOFT_TIME_LIMIT,
+    time_limit=TRAINING_TIME_LIMIT,
+)
 def train_model(
     self,
     *,
@@ -148,20 +169,6 @@ def train_model(
     # TODO - This is a hack, would be best to find a better solution such as Dask
     current_process()._config["daemon"] = False
 
-    # Fake scorer allowing to send progress reports
-    def fake_score(y_true, y_pred, training_id=None):
-        # Create basic Flask app and push an app context to allow DB operations
-        training_flask_app = create_app()
-        training_flask_app.app_context().push()
-
-        training_socketio = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
-        socketio_body = {
-            "training-id": training_id,
-            "phase": TRAINING_PHASES.TRAINING.value,
-        }
-        training_socketio.emit(MessageType.TRAINING_STATUS.value, socketio_body)
-        return 0
-
     tic()
 
     # Add fake scorer for progress monitoring
@@ -171,6 +178,9 @@ def train_model(
     }
 
     try:
+        # Split the cores between the worker's training slots (-1 → auto)
+        n_jobs = resolve_n_jobs(n_jobs)
+
         # Run grid search on the defined pipeline & search space
         grid = GridSearchCV(
             pipeline,
@@ -183,7 +193,7 @@ def train_model(
             verbose=100,
         )
 
-        fitted_model = grid.fit(X_train, y_train_encoded)
+        fitted_model = fit_grid_search(grid, X_train, y_train_encoded)
 
         elapsed = toc()
 
@@ -253,6 +263,7 @@ def train_model(
                 fitted_model.scoring,
                 label_category.label_type,
                 random_seed,
+                n_jobs=n_jobs,
             )
             elapsed = toc()
             print(f"[TIMING] Computing feature importance took {elapsed:.2f}s")
@@ -577,7 +588,9 @@ def run_extraction(
         db.session.remove()
 
 
-@celery.task(name="quantimage2tasks.finalize_extraction", bind=True)
+# Short status callback, but it inherits task_acks_late: bound it below the
+# broker visibility_timeout so a hung run is never redelivered (#54).
+@celery.task(name="quantimage2tasks.finalize_extraction", bind=True, time_limit=600)
 def finalize_extraction(task, results, feature_extraction_id):
     send_extraction_status_message(
         feature_extraction_id, celery, socketio, send_extraction=True
@@ -585,7 +598,11 @@ def finalize_extraction(task, results, feature_extraction_id):
     db.session.remove()
 
 
-@celery.task(name="quantimage2tasks.finalize_extraction_task", bind=True)
+# Short status callback, but it inherits task_acks_late: bound it below the
+# broker visibility_timeout so a hung run is never redelivered (#54).
+@celery.task(
+    name="quantimage2tasks.finalize_extraction_task", bind=True, time_limit=600
+)
 def finalize_extraction_task(
     task, result, feature_extraction_id, feature_extraction_task_id
 ):

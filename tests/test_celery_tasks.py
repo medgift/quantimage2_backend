@@ -504,8 +504,30 @@ class TestCeleryTaskRegistration:
         conf = tasks.celery.conf
         assert conf.worker_prefetch_multiplier == 1
         assert conf.task_acks_late is True
-        assert conf.broker_transport_options["visibility_timeout"] == 21600
+        assert conf.broker_transport_options["visibility_timeout"] == 43200
         assert "visibility_timeout" not in conf.result_backend_transport_options
+
+    @pytest.mark.skipif(
+        not importlib.util.find_spec("okapy"),
+        reason="okapy not available (workers-only dependency)",
+    )
+    def test_visibility_timeout_exceeds_train_hard_time_limit(self):
+        """Reserved trainings must not outlive the visibility timeout.
+
+        Even with acks_late=False, each worker slot holds one reserved,
+        unacknowledged training until a slot frees up - which can take as
+        long as the hard time limit of the trainings already running.
+        """
+        import tasks
+
+        if os.environ.get("CELERY_CONFIG_MODULE") != "celeryconfig":
+            pytest.skip("celeryconfig not wired via CELERY_CONFIG_MODULE here")
+
+        visibility_timeout = tasks.celery.conf.broker_transport_options[
+            "visibility_timeout"
+        ]
+        assert tasks.train_model.time_limit is not None
+        assert visibility_timeout > tasks.train_model.time_limit
 
 
 # ---------------------------------------------------------------------------
@@ -539,9 +561,9 @@ def celeryconfig_module(monkeypatch):
 class TestCeleryConfig:
     """Broker/worker settings that prevent redelivery of long tasks (#54)."""
 
-    def test_broker_visibility_timeout_is_six_hours(self, celeryconfig_module):
+    def test_broker_visibility_timeout_is_twelve_hours(self, celeryconfig_module):
         opts = celeryconfig_module.broker_transport_options
-        assert opts.get("visibility_timeout") == 21600
+        assert opts.get("visibility_timeout") == 43200
 
     def test_broker_visibility_timeout_exceeds_extraction_hard_limit(
         self, celeryconfig_module

@@ -2,6 +2,9 @@ import os
 import math
 import re
 import logging
+import signal
+import threading
+import warnings
 from time import time
 from typing import Any
 
@@ -11,12 +14,113 @@ from numpy import argmax
 from sklearn.metrics import get_scorer, roc_curve
 from sklearn.utils import resample
 from sklearn.inspection import permutation_importance
+from sklearn.exceptions import FitFailedWarning
+from celery.exceptions import SoftTimeLimitExceeded
 from scipy import stats
+from flask_socketio import SocketIO
 
 from config_workers import MODELS_BASE_DIR
+from quantimage2_backend_common.const import TRAINING_PHASES
 from quantimage2_backend_common.utils import MessageType
 
 logger = logging.getLogger(__name__)
+
+# Socket.IO client used by fake_score, created on first use in each process.
+_socketio = None
+
+
+def resolve_n_jobs(requested: int | None) -> int:
+    """Number of parallel jobs one training may use.
+
+    A positive ``requested`` value is an explicit override and is returned
+    unchanged. ``None`` or a value <= 0 (e.g. scikit-learn's ``-1``, "all
+    cores") means auto: the cores available to this process divided by the
+    number of training slots of the worker, so concurrent trainings don't
+    oversubscribe the CPU. Never less than 1.
+    """
+    if requested is not None and requested > 0:
+        return requested
+
+    if hasattr(os, "sched_getaffinity"):
+        available_cores = len(os.sched_getaffinity(0))
+    else:
+        available_cores = os.cpu_count() or 1
+
+    worker_slots = int(os.environ.get("CELERY_WORKER_CONCURRENCY", 1))
+    if worker_slots <= 0:
+        # Celery treats a concurrency of 0 as one slot per CPU
+        worker_slots = available_cores
+    return max(1, available_cores // worker_slots)
+
+
+class _SoftTimeLimitAbort(BaseException):
+    """Soft time limit raised past sklearn's ``except Exception`` handlers."""
+
+
+def _abort_on_soft_time_limit(signum, frame):
+    raise _SoftTimeLimitAbort()
+
+
+def fit_grid_search(grid, X, y):
+    """Run ``grid.fit(X, y)`` without swallowing Celery's soft time limit.
+
+    The prefork pool signals the soft limit with SIGUSR1, and billiard's handler
+    raises ``SoftTimeLimitExceeded`` wherever the process is. When the fits run
+    in this process (``n_jobs=1``), GridSearchCV's default ``error_score=np.nan``
+    catches it (in fit and in scoring) and goes on with the next candidate, so
+    the training would run until the hard limit kills it without any status
+    message. While the search runs, the signal raises an exception sklearn does
+    not catch, which stops it at once; a ``SoftTimeLimitExceeded`` recorded as a
+    failed fit anyway is re-raised too. Other warnings are shown as usual.
+    """
+    soft_signal = getattr(signal, "SIGUSR1", None)
+    previous_handler = None
+    if (
+        soft_signal is not None
+        and threading.current_thread() is threading.main_thread()
+    ):
+        previous_handler = signal.signal(soft_signal, _abort_on_soft_time_limit)
+
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", FitFailedWarning)
+            try:
+                fitted = grid.fit(X, y)
+            except _SoftTimeLimitAbort:
+                raise SoftTimeLimitExceeded("soft time limit during grid search")
+    finally:
+        if previous_handler is not None:
+            signal.signal(soft_signal, previous_handler)
+        for w in caught:
+            warnings.showwarning(w.message, w.category, w.filename, w.lineno)
+
+    for w in caught:
+        if issubclass(w.category, FitFailedWarning) and (
+            SoftTimeLimitExceeded.__name__ in str(w.message)
+        ):
+            raise SoftTimeLimitExceeded(
+                "soft time limit during grid search (recorded as a failed fit)"
+            )
+
+    return fitted
+
+
+def fake_score(y_true, y_pred, training_id=None):
+    """Scorer that only reports training progress (always returns 0).
+
+    Called once per grid-search fit, inside the joblib worker processes, so it
+    lives at module level (picklable) and reuses one Socket.IO client per
+    process instead of building an app and a client on every call.
+    """
+    global _socketio
+    if _socketio is None:
+        _socketio = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
+
+    _socketio.emit(
+        MessageType.TRAINING_STATUS.value,
+        {"training-id": training_id, "phase": TRAINING_PHASES.TRAINING.value},
+    )
+    return 0
 
 
 def _count_nan(obj: Any) -> int:
@@ -243,7 +347,6 @@ def run_bootstrap(
                 }
                 socket_io.emit(MessageType.TRAINING_STATUS.value, socketio_body)
 
-
     return all_scores, n_bootstrap
 
 
@@ -315,7 +418,7 @@ def get_optimal_threshold(y, positive_probabilities):
 
 
 def compute_feature_importance(
-    X_test, y_test, model, scoring, label_category, random_seed
+    X_test, y_test, model, scoring, label_category, random_seed, n_jobs=1
 ):
     # Only pass the single relevant scorer to permutation_importance instead
     # of the full scoring dict — computing importance for unused metrics is
@@ -342,6 +445,7 @@ def compute_feature_importance(
         scoring=importance_scoring,
         n_repeats=5,
         random_state=random_seed,
+        n_jobs=n_jobs,
     )
 
     return pd.Series(result.importances_mean, index=X_test.columns).to_dict()
