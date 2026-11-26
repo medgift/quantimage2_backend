@@ -301,6 +301,78 @@ class TestComputeFeatureImportance:
         # of what comes back.
         assert mock_pi.call_args.kwargs["scoring"] == "roc_auc"
 
+    @staticmethod
+    def _inputs():
+        X = pd.DataFrame(
+            {"feat_a": [1, 2, 3], "feat_b": [4, 5, 6], "feat_c": [7, 8, 9]}
+        )
+        y = np.array([0, 1, 0])
+        return X, y
+
+    @staticmethod
+    def _result():
+        mock_result = MagicMock()
+        mock_result.importances_mean = np.array([0.05, 0.15, 0.10])
+        return mock_result
+
+    @patch("utils.permutation_importance")
+    def test_feature_importance_runs_single_core_by_default(self, mock_pi):
+        """Without an explicit budget, permutation importance stays on 1 core.
+
+        Callers that don't know the worker's CPU budget must not accidentally
+        fan out (e.g. n_jobs=-1 would oversubscribe concurrent trainings).
+        """
+        from utils import compute_feature_importance
+
+        mock_pi.return_value = self._result()
+        X, y = self._inputs()
+
+        compute_feature_importance(
+            X, y, MagicMock(), {"auc": "roc_auc"}, "Classification", 42
+        )
+
+        assert mock_pi.call_count == 1
+        assert "n_jobs" in mock_pi.call_args.kwargs
+        assert mock_pi.call_args.kwargs["n_jobs"] == 1
+
+    @patch("utils.permutation_importance")
+    def test_feature_importance_forwards_explicit_n_jobs(self, mock_pi):
+        from utils import compute_feature_importance
+
+        mock_pi.return_value = self._result()
+        X, y = self._inputs()
+
+        importances = compute_feature_importance(
+            X, y, MagicMock(), {"auc": "roc_auc"}, "Classification", 42, n_jobs=6
+        )
+
+        assert mock_pi.call_args.kwargs["n_jobs"] == 6
+        # The rest of the call is unchanged by the new keyword
+        assert mock_pi.call_args.kwargs["scoring"] == "roc_auc"
+        assert mock_pi.call_args.kwargs["random_state"] == 42
+        assert importances == {"feat_a": 0.05, "feat_b": 0.15, "feat_c": 0.10}
+
+    @patch("utils.permutation_importance")
+    def test_survival_feature_importance_forwards_n_jobs(self, mock_pi):
+        from utils import compute_feature_importance
+
+        mock_pi.return_value = self._result()
+        X, y = self._inputs()
+        c_index_scorer = MagicMock(name="c_index_scorer")
+
+        compute_feature_importance(
+            X,
+            y,
+            MagicMock(),
+            {"c-index": c_index_scorer},
+            "Survival",
+            7,
+            n_jobs=3,
+        )
+
+        assert mock_pi.call_args.kwargs["n_jobs"] == 3
+        assert mock_pi.call_args.kwargs["scoring"] is c_index_scorer
+
 
 # ---------------------------------------------------------------------------
 # Celery task registration (basic sanity checks)
@@ -347,3 +419,165 @@ class TestCeleryTaskRegistration:
         # These are set as decorator arguments
         assert run_extraction.time_limit == 7200
         assert run_extraction.soft_time_limit == 6600
+
+    @pytest.mark.skipif(
+        not importlib.util.find_spec("okapy"),
+        reason="okapy not available (workers-only dependency)",
+    )
+    def test_extract_task_still_acks_late(self):
+        """Extraction keeps acks_late so a crashed extraction is redelivered."""
+        from tasks import run_extraction
+
+        assert run_extraction.acks_late is True
+
+    @pytest.mark.skipif(
+        not importlib.util.find_spec("okapy"),
+        reason="okapy not available (workers-only dependency)",
+    )
+    def test_train_task_does_not_ack_late(self):
+        """Regression #54: a long training must not be redelivered.
+
+        With acks_late, the message of a training running longer than the
+        broker visibility timeout is handed to another worker slot and the
+        same training runs twice concurrently.
+        """
+        from tasks import train_model
+
+        assert train_model.acks_late is False
+
+    @pytest.mark.skipif(
+        not importlib.util.find_spec("okapy"),
+        reason="okapy not available (workers-only dependency)",
+    )
+    def test_train_task_has_finite_time_limits(self):
+        """Training must have a soft limit that fires before the hard kill."""
+        from tasks import train_model
+
+        assert isinstance(train_model.soft_time_limit, (int, float))
+        assert isinstance(train_model.time_limit, (int, float))
+        assert 0 < train_model.soft_time_limit < train_model.time_limit
+
+    @pytest.mark.skipif(
+        not importlib.util.find_spec("okapy"),
+        reason="okapy not available (workers-only dependency)",
+    )
+    def test_visibility_timeout_exceeds_every_acks_late_task_time_limit(self):
+        """No acks_late task may outlive the broker visibility timeout.
+
+        If it does, Redis redelivers the still-running message and the task
+        runs twice. Checks the configuration as applied to the real app.
+        """
+        import tasks
+
+        conf = tasks.celery.conf
+        if os.environ.get("CELERY_CONFIG_MODULE") != "celeryconfig":
+            pytest.skip("celeryconfig not wired via CELERY_CONFIG_MODULE here")
+
+        visibility_timeout = conf.broker_transport_options["visibility_timeout"]
+        own_tasks = {
+            name: task
+            for name, task in tasks.celery.tasks.items()
+            if name.startswith("quantimage2tasks.")
+        }
+        assert "quantimage2tasks.extract" in own_tasks
+        assert "quantimage2tasks.train" in own_tasks
+
+        checked = []
+        for name, task in own_tasks.items():
+            if task.acks_late:
+                assert task.time_limit is not None, name
+                assert visibility_timeout > task.time_limit, name
+                checked.append(name)
+        assert "quantimage2tasks.extract" in checked
+
+    @pytest.mark.skipif(
+        not importlib.util.find_spec("okapy"),
+        reason="okapy not available (workers-only dependency)",
+    )
+    def test_worker_app_uses_redelivery_safe_config(self):
+        """The real worker app picks up the fixed celeryconfig values."""
+        import tasks
+
+        if os.environ.get("CELERY_CONFIG_MODULE") != "celeryconfig":
+            pytest.skip("celeryconfig not wired via CELERY_CONFIG_MODULE here")
+
+        conf = tasks.celery.conf
+        assert conf.worker_prefetch_multiplier == 1
+        assert conf.task_acks_late is True
+        assert conf.broker_transport_options["visibility_timeout"] == 21600
+        assert "visibility_timeout" not in conf.result_backend_transport_options
+
+
+# ---------------------------------------------------------------------------
+# Celery configuration (workers/celeryconfig.py)
+# ---------------------------------------------------------------------------
+
+_KEEPALIVE_OPTIONS = {
+    "retry_on_timeout": True,
+    "socket_keepalive": True,
+    "socket_keepalive_options": {4: 60, 5: 10, 6: 5},
+    "health_check_interval": 30,
+}
+
+
+@pytest.fixture
+def celeryconfig_module(monkeypatch):
+    """Import a fresh ``celeryconfig`` and restore sys.modules afterwards."""
+    import sys
+
+    monkeypatch.setenv("CELERY_WORKER_CONCURRENCY", "4")
+    saved = sys.modules.pop("celeryconfig", None)
+    try:
+        yield importlib.import_module("celeryconfig")
+    finally:
+        if saved is not None:
+            sys.modules["celeryconfig"] = saved
+        else:
+            sys.modules.pop("celeryconfig", None)
+
+
+class TestCeleryConfig:
+    """Broker/worker settings that prevent redelivery of long tasks (#54)."""
+
+    def test_broker_visibility_timeout_is_six_hours(self, celeryconfig_module):
+        opts = celeryconfig_module.broker_transport_options
+        assert opts.get("visibility_timeout") == 21600
+
+    def test_broker_visibility_timeout_exceeds_extraction_hard_limit(
+        self, celeryconfig_module
+    ):
+        """Extraction (acks_late, hard limit 7200 s) must never be redelivered
+        while still running."""
+        opts = celeryconfig_module.broker_transport_options
+        assert opts.get("visibility_timeout", 3600) > 7200
+
+    def test_result_backend_has_no_visibility_timeout(self, celeryconfig_module):
+        opts = celeryconfig_module.result_backend_transport_options
+        assert "visibility_timeout" not in opts
+
+    def test_broker_and_result_backend_options_are_separate_objects(
+        self, celeryconfig_module
+    ):
+        assert (
+            celeryconfig_module.broker_transport_options
+            is not celeryconfig_module.result_backend_transport_options
+        )
+
+    @pytest.mark.parametrize(
+        "attr", ["broker_transport_options", "result_backend_transport_options"]
+    )
+    def test_keepalive_options_preserved(self, celeryconfig_module, attr):
+        opts = getattr(celeryconfig_module, attr)
+        for key, value in _KEEPALIVE_OPTIONS.items():
+            assert opts.get(key) == value, f"{attr}[{key!r}]"
+
+    def test_prefetch_multiplier_is_one(self, celeryconfig_module):
+        """Regression #54: reserved-but-unstarted messages are exposed to the
+        visibility timeout too; a slot must only hold the task it runs."""
+        assert celeryconfig_module.worker_prefetch_multiplier == 1
+
+    def test_task_acks_late_stays_enabled_globally(self, celeryconfig_module):
+        assert celeryconfig_module.task_acks_late is True
+
+    def test_acks_on_failure_or_timeout_kept(self, celeryconfig_module):
+        assert celeryconfig_module.task_acks_on_failure_or_timeout is True
