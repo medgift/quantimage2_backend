@@ -124,8 +124,10 @@ the worker's available cores divided by `CELERY_WORKER_CONCURRENCY` (min 1;
 a concurrency of 0 counts as one slot per core, as in Celery); a
 positive value is an explicit override. The resolved value is used by
 `GridSearchCV` and `permutation_importance`. The progress scorer
-`utils.fake_score` is module-level (picklable into loky workers) and reuses one
-cached Socket.IO client per process.
+`utils.fake_score` is module-level and reuses one cached Socket.IO client per
+process. Loky workers unpickle it by reference (`utils.fake_score`), so they
+must be able to import `utils`: the worker image sets `PYTHONPATH=/usr/src/app`
+(`workers/Dockerfile`); Celery only adds its cwd to its own process.
 
 ### Rules for New Tasks
 

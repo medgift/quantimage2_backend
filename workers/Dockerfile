@@ -47,5 +47,10 @@ RUN pip install --no-cache-dir -c requirements-constraints.txt git+https://githu
 # Copy source code
 COPY ./workers .
 
+# Make the worker modules (utils, ...) importable in every process, not only in
+# the Celery worker (which adds its cwd itself): joblib/loky grid-search
+# processes unpickle the progress scorer utils.fake_score by module reference.
+ENV PYTHONPATH=/usr/src/app
+
 # Start app
 CMD ["celery", "--app=tasks", "worker", "--pool=prefork", "--loglevel=INFO"]
