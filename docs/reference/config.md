@@ -37,7 +37,7 @@
 
 | Variable | Value | Purpose |
 |---|---|---|
-| `CELERY_WORKER_CONCURRENCY` | `4` | Training slots; also the divisor of the per-training CPU budget (`resolve_n_jobs`) |
+| `CELERY_WORKER_CONCURRENCY` | `2` | Training slots; also the divisor of the per-training CPU budget (`resolve_n_jobs`). Raise it for teaching sessions (more trainings at once, fewer cores each) |
 | `TRAINING_SOFT_TIME_LIMIT` | unset → `21600` | Optional. Training soft time limit (s); reported as a failed training |
 | `TRAINING_TIME_LIMIT` | unset → soft + `600` | Optional. Training hard time limit (s); keep soft < hard < broker `visibility_timeout` (43200) |
 

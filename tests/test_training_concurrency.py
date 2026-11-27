@@ -620,9 +620,9 @@ def _read_env_file(name):
 
 
 class TestEnvFiles:
-    def test_training_worker_runs_four_slots(self):
+    def test_training_worker_runs_two_slots(self):
         values = _read_env_file("workers-training.env")
-        assert values.get("CELERY_WORKER_CONCURRENCY") == "4"
+        assert values.get("CELERY_WORKER_CONCURRENCY") == "2"
 
     def test_webapp_still_requests_all_cores_per_grid_search(self):
         """The webapp keeps -1; the worker turns it into a per-slot budget."""
