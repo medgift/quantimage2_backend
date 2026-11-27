@@ -17,4 +17,8 @@ EXPOSE 3333
 # Run as a non-root user by default, run as user with least privileges.
 USER nobody
 
-ENTRYPOINT ["flower", "--broker=redis://redis:6379/0", "--result-backend=redis://redis:6379/0", "--port=3333"]
+# Celery app carrying the broker visibility_timeout (see flower_app.py)
+WORKDIR /app
+COPY flower_app.py /app/flower_app.py
+
+ENTRYPOINT ["celery", "--app=flower_app", "flower", "--port=3333"]

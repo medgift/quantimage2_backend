@@ -2,6 +2,9 @@ import os
 import math
 import re
 import logging
+import signal
+import threading
+import warnings
 from time import time
 from typing import Any
 
@@ -11,12 +14,138 @@ from numpy import argmax
 from sklearn.metrics import get_scorer, roc_curve
 from sklearn.utils import resample
 from sklearn.inspection import permutation_importance
+from sklearn.exceptions import FitFailedWarning
+from celery.exceptions import SoftTimeLimitExceeded
+from sksurv.exceptions import NoComparablePairException
 from scipy import stats
+from flask_socketio import SocketIO
 
 from config_workers import MODELS_BASE_DIR
+from quantimage2_backend_common.const import TRAINING_PHASES
 from quantimage2_backend_common.utils import MessageType
 
 logger = logging.getLogger(__name__)
+
+# Socket.IO client used by fake_score, created on first use in each process.
+_socketio = None
+
+
+class TrainingDataError(ValueError):
+    """A training problem the user can fix in their data or split.
+
+    Its message is shown to the user as is, without a traceback.
+    """
+
+
+def _survival_event_count(y):
+    """Number of events in a survival target, None if ``y`` is not one.
+
+    A survival target is a structured array whose first field is the event flag.
+    """
+    names = getattr(getattr(y, "dtype", None), "names", None)
+    if not names:
+        return None
+    return int(np.sum(y[names[0]]))
+
+
+def check_survival_test_set_has_events(y_test, n_test_patients: int) -> None:
+    """Fail before training when the test set cannot be evaluated at all."""
+    if _survival_event_count(y_test) == 0:
+        raise TrainingDataError(
+            f"The test set has no events: all {n_test_patients} test patients "
+            f"are censored, so the survival model cannot be evaluated (the "
+            f"c-index needs at least one event). Please use a larger test set or "
+            f"a different training/test split."
+        )
+
+
+def resolve_n_jobs(requested: int | None) -> int:
+    """Number of parallel jobs one training may use.
+
+    A positive ``requested`` value is an explicit override and is returned
+    unchanged. ``None`` or a value <= 0 (e.g. scikit-learn's ``-1``, "all
+    cores") means auto: the cores available to this process divided by the
+    number of training slots of the worker, so concurrent trainings don't
+    oversubscribe the CPU. Never less than 1.
+    """
+    if requested is not None and requested > 0:
+        return requested
+
+    if hasattr(os, "sched_getaffinity"):
+        available_cores = len(os.sched_getaffinity(0))
+    else:
+        available_cores = os.cpu_count() or 1
+
+    worker_slots = int(os.environ.get("CELERY_WORKER_CONCURRENCY", 1))
+    if worker_slots <= 0:
+        # Celery treats a concurrency of 0 as one slot per CPU
+        worker_slots = available_cores
+    return max(1, available_cores // worker_slots)
+
+
+class _SoftTimeLimitAbort(BaseException):
+    """Soft time limit raised past sklearn's ``except Exception`` handlers."""
+
+
+def _abort_on_soft_time_limit(signum, frame):
+    raise _SoftTimeLimitAbort()
+
+
+def fit_grid_search(grid, X, y):
+    """Run ``grid.fit(X, y)`` without swallowing Celery's soft time limit.
+
+    The prefork pool signals the soft limit with SIGUSR1. With in-process fits
+    (``n_jobs=1``), GridSearchCV's ``error_score=np.nan`` would catch billiard's
+    ``SoftTimeLimitExceeded`` (in fit and in scoring) and carry on until the hard
+    limit kills the task silently. While the search runs, the signal raises a
+    ``BaseException`` sklearn does not catch instead; a ``SoftTimeLimitExceeded``
+    recorded as a failed fit anyway is re-raised too.
+    """
+    installed = threading.current_thread() is threading.main_thread()
+    if installed:
+        previous_handler = signal.signal(signal.SIGUSR1, _abort_on_soft_time_limit)
+
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", FitFailedWarning)
+            try:
+                fitted = grid.fit(X, y)
+            except _SoftTimeLimitAbort:
+                raise SoftTimeLimitExceeded("soft time limit during grid search")
+    finally:
+        if installed:
+            signal.signal(signal.SIGUSR1, previous_handler)
+        for w in caught:
+            warnings.showwarning(w.message, w.category, w.filename, w.lineno)
+
+    if any(
+        issubclass(w.category, FitFailedWarning)
+        and SoftTimeLimitExceeded.__name__ in str(w.message)
+        for w in caught
+    ):
+        raise SoftTimeLimitExceeded(
+            "soft time limit during grid search (recorded as a failed fit)"
+        )
+
+    return fitted
+
+
+def fake_score(y_true, y_pred, training_id=None):
+    """Scorer that only reports training progress (always returns 0).
+
+    Called once per grid-search fit, inside the joblib worker processes, so it
+    lives at module level (picklable) and reuses one Socket.IO client per
+    process instead of building an app and a client on every call.
+    """
+    global _socketio
+    if _socketio is None:
+        _socketio = SocketIO(message_queue=os.environ["SOCKET_MESSAGE_QUEUE"])
+
+    _socketio.emit(
+        MessageType.TRAINING_STATUS.value,
+        {"training-id": training_id, "phase": TRAINING_PHASES.TRAINING.value},
+    )
+    return 0
 
 
 def _count_nan(obj: Any) -> int:
@@ -73,7 +202,7 @@ def validate_metrics_no_nan(
             f"Please increase the test set size and try again."
         )
         logger.error(msg)
-        raise ValueError(msg)
+        raise TrainingDataError(msg)
 
 
 def mean_confidence_interval_student(mean, std, n_samples, confidence=0.95):
@@ -224,9 +353,27 @@ def run_bootstrap(
                 stratify=[o[0] for o in y_test],
             )
 
-        scores = calculate_scores(
-            y_test_resampled, predictions_resampled, probabilities_resampled, scoring
-        )
+        if _survival_event_count(y_test_resampled) == 0:
+            raise TrainingDataError(
+                "The test set has too few events for the bootstrap: some "
+                "resamples contain only censored patients, so the c-index cannot "
+                "be computed. Please use a larger test set (with more events) and "
+                "try again."
+            )
+        try:
+            scores = calculate_scores(
+                y_test_resampled,
+                predictions_resampled,
+                probabilities_resampled,
+                scoring,
+            )
+        except NoComparablePairException as e:
+            raise TrainingDataError(
+                "The test set has too few events to compute the c-index "
+                "(concordance index): no two test patients can be compared, "
+                "because that needs an event before another patient's time. "
+                "Please use a larger test set (with more events) and try again."
+            ) from e
 
         all_scores.append(scores)
 
@@ -242,7 +389,6 @@ def run_bootstrap(
                     "total": n_bootstrap,
                 }
                 socket_io.emit(MessageType.TRAINING_STATUS.value, socketio_body)
-
 
     return all_scores, n_bootstrap
 
@@ -315,7 +461,7 @@ def get_optimal_threshold(y, positive_probabilities):
 
 
 def compute_feature_importance(
-    X_test, y_test, model, scoring, label_category, random_seed
+    X_test, y_test, model, scoring, label_category, random_seed, n_jobs=1
 ):
     # Only pass the single relevant scorer to permutation_importance instead
     # of the full scoring dict — computing importance for unused metrics is
@@ -342,6 +488,7 @@ def compute_feature_importance(
         scoring=importance_scoring,
         n_repeats=5,
         random_state=random_seed,
+        n_jobs=n_jobs,
     )
 
     return pd.Series(result.importances_mean, index=X_test.columns).to_dict()

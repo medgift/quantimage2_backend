@@ -22,7 +22,7 @@
 
 | Variable | Value | Purpose |
 |---|---|---|
-| `GRID_SEARCH_CONCURRENCY` | `-1` | GridSearchCV parallelism (all cores) |
+| `GRID_SEARCH_CONCURRENCY` | `-1` | Per-training parallelism: `-1` = auto (worker cores ÷ `CELERY_WORKER_CONCURRENCY`), positive = explicit override |
 
 ### Workers (env_files/workers.env)
 
@@ -32,6 +32,14 @@
 | `CELERY_WORKER_CONCURRENCY_TRAINING` | `4` | Training worker concurrency |
 | `CELERY_CONFIG_MODULE` | `celeryconfig` | Celery config module |
 | `C_FORCE_ROOT` | `true` | Allow Celery to run as root |
+
+### Training worker (env_files/workers-training.env)
+
+| Variable | Value | Purpose |
+|---|---|---|
+| `CELERY_WORKER_CONCURRENCY` | `2` | Training slots; also the divisor of the per-training CPU budget (`resolve_n_jobs`). Raise it for teaching sessions (more trainings at once, fewer cores each) |
+| `TRAINING_SOFT_TIME_LIMIT` | unset → `21600` | Optional. Training soft time limit (s); reported as a failed training |
+| `TRAINING_TIME_LIMIT` | unset → soft + `600` | Optional. Training hard time limit (s); keep soft < hard < broker `visibility_timeout` (43200) |
 
 ### Secrets
 

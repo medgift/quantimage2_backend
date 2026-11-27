@@ -30,7 +30,27 @@ result_backend_transport_options = _redis_transport_options
 # Apply the same keepalive to the broker (where tasks are queued).
 # Without this, the broker connection can silently drop under the same
 # conditions that caused tasks to get stuck.
-broker_transport_options = _redis_transport_options
+#
+# visibility_timeout: with acks_late, a message still unacknowledged after this
+# many seconds is assumed lost and redelivered to another worker, while the
+# first copy keeps running. The Redis default (3600 s) made every training
+# longer than 1 h run again in parallel (#54). It must stay above:
+#   - the hard time_limit of every acks_late task (run_extraction, 7200 s);
+#   - the hard time_limit of train (TRAINING_TIME_LIMIT, default 22200 s):
+#     train is acked when it starts, but a training reserved by a busy worker
+#     (prefetch) stays unacked until a slot frees, which can take that long.
+# Every process that consumes from the broker restores with its own value, so
+# Flower must use the same one (flower/flower_app.py).
+# Set on a copy so the result backend does not get it.
+broker_transport_options = {
+    **_redis_transport_options,
+    "visibility_timeout": 43200,  # 12 h
+}
+
+# Reserve only one message per worker process beyond the ones running.
+# Reserved messages stay unacknowledged until they start, so a larger prefetch
+# buffer exposes queued tasks to the visibility timeout too.
+worker_prefetch_multiplier = 1
 
 # Ensure proper task state tracking
 task_track_started = True
