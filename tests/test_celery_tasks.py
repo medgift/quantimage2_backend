@@ -228,41 +228,68 @@ class TestComputePredictions:
         assert "probabilities" in probabilities["P1"]
 
 
+def _fitted_survival_search(analyzer):
+    """Fitted GridSearchCV shaped like production: best_estimator_ is a
+    Pipeline with "preprocessor"/"analyzer" steps."""
+    from sklearn.model_selection import GridSearchCV
+    from sksurv.util import Surv
+
+    from quantimage2_backend_common.modeling_utils import (
+        SurvivalRepeatedStratifiedKFold,
+        c_index_score,
+    )
+
+    rng = np.random.default_rng(0)
+    X = pd.DataFrame(rng.standard_normal((60, 3)), columns=["f1", "f2", "f3"])
+    t = rng.exponential(np.exp(-X["f1"].to_numpy()))
+    c = rng.uniform(0, 3, len(X))
+    y = Surv.from_arrays(t <= c, np.minimum(t, c), name_event="Event", name_time="Time")
+
+    grid = GridSearchCV(
+        Pipeline([("preprocessor", None), ("analyzer", None)]),
+        [{"preprocessor": [StandardScaler()], "analyzer": [analyzer]}],
+        scoring={"c-index": make_scorer(c_index_score)},
+        refit="c-index",
+        cv=SurvivalRepeatedStratifiedKFold(n_splits=3, n_repeats=1, random_state=0),
+        n_jobs=1,
+    )
+    return grid.fit(X, y), X
+
+
 class TestComputeRiskScores:
     def test_compute_risk_scores_cox(self):
+        from sksurv.linear_model import CoxPHSurvivalAnalysis
         from utils import compute_risk_scores
 
-        model = MagicMock()
-        model.predict.return_value = np.array([1.5, -0.5, 0.8])
-        # Simulate CoxPH analyzer
-        analyzer_mock = MagicMock()
-        analyzer_mock.__class__.__name__ = "CoxPHSurvivalAnalysis"
-        model.best_estimator_ = {"analyzer": analyzer_mock}
-
-        X = pd.DataFrame({"f1": [1, 2, 3]})
-        patients = ["P1", "P2", "P3"]
+        model, X = _fitted_survival_search(CoxPHSurvivalAnalysis())
+        patients = [f"P{i}" for i in range(len(X))]
 
         risk_scores = compute_risk_scores(X, model, patients)
-        assert risk_scores["P1"]["risk_score"] == 1.5
-        assert risk_scores["P2"]["risk_score"] == -0.5
+
+        # CoxPH predicts log hazard ratios: already risk scores
+        expected = model.predict(X)
+        assert list(risk_scores) == patients
+        for patient, pred in zip(patients, expected):
+            score = risk_scores[patient]["risk_score"]
+            assert type(score) is float
+            assert score == float(pred)
 
     def test_compute_risk_scores_ipc_ridge(self):
+        from sksurv.linear_model import IPCRidge
         from utils import compute_risk_scores
 
-        model = MagicMock()
-        model.predict.return_value = np.array([100.0, 200.0, 50.0])
-        # Simulate IPCRidge analyzer
-        analyzer_mock = MagicMock()
-        analyzer_mock.__class__.__name__ = "IPCRidge"
-        model.best_estimator_ = {"analyzer": analyzer_mock}
-
-        X = pd.DataFrame({"f1": [1, 2, 3]})
-        patients = ["P1", "P2", "P3"]
+        model, X = _fitted_survival_search(IPCRidge())
+        patients = [f"P{i}" for i in range(len(X))]
 
         risk_scores = compute_risk_scores(X, model, patients)
-        # IPCRidge negates the predictions
-        assert risk_scores["P1"]["risk_score"] == -100.0
-        assert risk_scores["P2"]["risk_score"] == -200.0
+
+        # IPCRidge predicts survival time: risk score is its negation
+        expected = model.predict(X)
+        assert list(risk_scores) == patients
+        for patient, pred in zip(patients, expected):
+            score = risk_scores[patient]["risk_score"]
+            assert type(score) is float
+            assert score == -float(pred)
 
 
 # ---------------------------------------------------------------------------

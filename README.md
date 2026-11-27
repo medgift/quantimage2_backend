@@ -2,6 +2,12 @@
 
 ## Changelog
 
+### 3.4.2
+
+- **IPCRidge scored with an inverted c-index (#57)** — `IPCRidge` predicts (log) survival time, where higher means longer survival, but the c-index treated every prediction as a risk score, so IPCRidge scored about 1 − its real c-index (≈0.3 instead of ≈0.7) and practically never won the survival grid search. When it did win, its test c-index, bootstrap values and feature importances were inverted. The grid-search scorer (`CIndexScorer`), the test-set bootstrap and the permutation feature importance now negate the predictions of estimators that sksurv marks as predicting time (`_predict_risk_score = False`), like sksurv's own `score()`. Per-patient risk scores shown to users were already correct and are unchanged. **Models already trained** with IPCRidge in their grid keep their stored metrics; retrain them if needed.
+- **No silent zero test metrics** — `calculate_scores` raises a `TypeError` for a scorer without `_score_func` instead of saving 0 as the metric.
+- **Deploy notes** — Image tags bumped to 3.4.2. No database migration. Restart `backend` and `celery_training` (the shared package changed).
+
 ### 3.4.1
 
 - **Trainings no longer run twice (#54)** — A training that ran longer than Redis's 1 h visibility timeout was redelivered every hour and the copies ran in parallel (in production, 3 trainings became 39 runs). The `train` task now sets `acks_late=False`, so its message is acknowledged when it starts. **Behavior change:** a training lost in a worker crash is no longer retried; resubmit it. The broker gets `visibility_timeout = 43200` s (12 h: above the hard limit of every `acks_late` task and of `train`, since a training reserved by a busy worker stays unacknowledged until a slot frees; the result backend options are unchanged), `worker_prefetch_multiplier = 1`, and the two extraction finalize callbacks get a 600 s hard limit.

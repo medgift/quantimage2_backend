@@ -22,6 +22,7 @@ from flask_socketio import SocketIO
 
 from config_workers import MODELS_BASE_DIR
 from quantimage2_backend_common.const import TRAINING_PHASES
+from quantimage2_backend_common.modeling_utils import to_risk_scores
 from quantimage2_backend_common.utils import MessageType
 
 logger = logging.getLogger(__name__)
@@ -319,7 +320,9 @@ def run_bootstrap(
     socket_io=None,
 ):
 
-    all_test_predictions = model.predict(X_test)
+    # Survival models that predict survival time (e.g. IPCRidge) are negated so
+    # the c-index always receives risk scores; classifiers are unchanged
+    all_test_predictions = to_risk_scores(model, model.predict(X_test))
     all_test_predictions_probabilities = None
 
     try:
@@ -406,14 +409,12 @@ def calculate_scores(y_true, y_pred, y_pred_proba, scoring):
         score_kwargs = getattr(scorer, "_kwargs", {})
 
         if score_func is None:
-            # Fallback: scorer may be a callable without _score_func
-            # Use it directly on predictions
-            scores[score_name] = (
-                scorer._score_func(y_true, y_pred)
-                if hasattr(scorer, "_score_func")
-                else 0
+            # Scores are computed on stored predictions, so the scorer must expose
+            # its metric: never save a made-up value as a test metric
+            raise TypeError(
+                f"Scorer {score_name!r} ({type(scorer).__name__}) has no "
+                "_score_func, so it cannot be computed from predictions"
             )
-            continue
 
         if y_pred_proba is not None:
             try:
@@ -511,20 +512,10 @@ def compute_predictions(X, model, patients):
 
 def compute_risk_scores(X, model, patients):
     risk_scores = {}
-    model_risk_scores = model.predict(X)
+    # IPCRidge predicts survival times: negate them so higher = higher risk
+    model_risk_scores = to_risk_scores(model, model.predict(X))
 
-    # Check if this is an IPCRidge model - these predict survival times, not hazard ratios
-    model_name = model.best_estimator_["analyzer"].__class__.__name__
-
-    for patient, pred in zip(patients, model_risk_scores):
-        if model_name == "IPCRidge":
-            # IPCRidge outputs survival times - convert to risk scores by negating
-            # Higher survival time = lower risk, so we negate to get risk scores
-            risk_score = -pred.item()
-        else:
-            # CoxPH/Coxnet output log hazard ratios - higher values = higher risk
-            risk_score = pred.item()
-
-        risk_scores[patient] = {"risk_score": risk_score}
+    for patient, risk_score in zip(patients, model_risk_scores):
+        risk_scores[patient] = {"risk_score": risk_score.item()}
 
     return risk_scores
