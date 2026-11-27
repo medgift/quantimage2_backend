@@ -16,6 +16,7 @@ from sklearn.utils import resample
 from sklearn.inspection import permutation_importance
 from sklearn.exceptions import FitFailedWarning
 from celery.exceptions import SoftTimeLimitExceeded
+from sksurv.exceptions import NoComparablePairException
 from scipy import stats
 from flask_socketio import SocketIO
 
@@ -27,6 +28,35 @@ logger = logging.getLogger(__name__)
 
 # Socket.IO client used by fake_score, created on first use in each process.
 _socketio = None
+
+
+class TrainingDataError(ValueError):
+    """A training problem the user can fix in their data or split.
+
+    Its message is shown to the user as is, without a traceback.
+    """
+
+
+def _survival_event_count(y):
+    """Number of events in a survival target, None if ``y`` is not one.
+
+    A survival target is a structured array whose first field is the event flag.
+    """
+    names = getattr(getattr(y, "dtype", None), "names", None)
+    if not names:
+        return None
+    return int(np.sum(y[names[0]]))
+
+
+def check_survival_test_set_has_events(y_test, n_test_patients: int) -> None:
+    """Fail before training when the test set cannot be evaluated at all."""
+    if _survival_event_count(y_test) == 0:
+        raise TrainingDataError(
+            f"The test set has no events: all {n_test_patients} test patients "
+            f"are censored, so the survival model cannot be evaluated (the "
+            f"c-index needs at least one event). Please use a larger test set or "
+            f"a different training/test split."
+        )
 
 
 def resolve_n_jobs(requested: int | None) -> int:
@@ -172,7 +202,7 @@ def validate_metrics_no_nan(
             f"Please increase the test set size and try again."
         )
         logger.error(msg)
-        raise ValueError(msg)
+        raise TrainingDataError(msg)
 
 
 def mean_confidence_interval_student(mean, std, n_samples, confidence=0.95):
@@ -323,9 +353,27 @@ def run_bootstrap(
                 stratify=[o[0] for o in y_test],
             )
 
-        scores = calculate_scores(
-            y_test_resampled, predictions_resampled, probabilities_resampled, scoring
-        )
+        if _survival_event_count(y_test_resampled) == 0:
+            raise TrainingDataError(
+                "The test set has too few events for the bootstrap: some "
+                "resamples contain only censored patients, so the c-index cannot "
+                "be computed. Please use a larger test set (with more events) and "
+                "try again."
+            )
+        try:
+            scores = calculate_scores(
+                y_test_resampled,
+                predictions_resampled,
+                probabilities_resampled,
+                scoring,
+            )
+        except NoComparablePairException as e:
+            raise TrainingDataError(
+                "The test set has too few events to compute the c-index "
+                "(concordance index): no two test patients can be compared, "
+                "because that needs an event before another patient's time. "
+                "Please use a larger test set (with more events) and try again."
+            ) from e
 
         all_scores.append(scores)
 

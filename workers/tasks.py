@@ -68,6 +68,8 @@ from utils import (
     fake_score,
     fit_grid_search,
     resolve_n_jobs,
+    TrainingDataError,
+    check_survival_test_set_has_events,
 )
 
 warnings.filterwarnings("ignore", message="Failed to parse headers")
@@ -183,6 +185,14 @@ def train_model(
     }
 
     try:
+        # A survival test set without events can't be evaluated: fail before
+        # spending the grid search on it
+        if is_train_test and label_category.label_type == "Survival":
+            check_survival_test_set_has_events(
+                y_test_encoded,
+                len(test_patients) if test_patients else len(y_test_encoded),
+            )
+
         # Split the cores between the worker's training slots (-1 → auto)
         n_jobs = resolve_n_jobs(n_jobs)
 
@@ -259,6 +269,15 @@ def train_model(
             )
 
             test_scores_values = scores
+
+            # NaN metrics mean the test set was too small for the survival
+            # bootstrap: fail before computing anything else or saving a model
+            validate_metrics_no_nan(
+                test_metrics,
+                test_bootstrap_values,
+                test_scores_values,
+                n_test_patients=len(test_patients) if test_patients else 0,
+            )
 
             tic()
             test_feature_importances = compute_feature_importance(
@@ -337,16 +356,6 @@ def train_model(
         elapsed = toc()
         print(f"[TIMING] compute_predictions/risk_scores took {elapsed:.2f}s")
 
-        # Validate metrics before saving — NaN values indicate the test set
-        # was too small for survival bootstrap (all-censored resamples).
-        if is_train_test:
-            validate_metrics_no_nan(
-                test_metrics,
-                test_bootstrap_values,
-                test_scores_values,
-                n_test_patients=len(test_patients) if test_patients else 0,
-            )
-
         db_model = Model(
             model_name,
             best_algorithm,
@@ -392,6 +401,14 @@ def train_model(
         }
         elapsed = toc()
         print(f"[TIMING] format_model took {elapsed:.2f}s")
+    except TrainingDataError as e:
+        # User-fixable problem: show the message, not a traceback
+        socketio_body = {
+            "training-id": training_id,
+            "failed": True,
+            "error": str(e),
+        }
+        logging.error(e, exc_info=True)
     except Exception as e:
         socketio_body = {
             "training-id": training_id,
