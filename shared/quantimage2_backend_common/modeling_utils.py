@@ -49,10 +49,8 @@ class CIndexScorer:
 
     _score_func = staticmethod(c_index_score)
 
-    @property
-    def _kwargs(self):
-        # A fresh dict each time: no state shared between instances
-        return {}
+    def __init__(self):
+        self._kwargs = {}
 
     def __call__(self, estimator, X, y):
         return c_index_score(y, to_risk_scores(estimator, estimator.predict(X)))
